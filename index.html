@@ -22,15 +22,15 @@
             </div>
             <div class="setting">
                 <label for="data-url">Data Source URL (TSV/CSV):</label>
-                <input type="text" id="data-url" value="https://docs.google.com/spreadsheets/d/e/2PACX-1vQ2HFUKCizfGsGyyMBuv1SzKryj0v-86BfUughqEUhJ3OCHVSLFNqXWSYE_YhwS8cFWFnRgFsK2mnoV/pub?gid=1054010468&single=true&output=tsv">
+                <input type="text" id="data-url" value="https://docs.google.com/spreadsheets/d/e/2PACX-1vSW_KeHCyth3-9kWtpYHXl9aPVwoOhurjGINbJ4oNHWGoQMjSHyZl0J9LeraGDt51ZUjIsqrv9DXO27/pub?gid=2060234086&single=true&output=tsv">
             </div>
             <div class="setting">
-                <label for="front-column">Front Column:</label>
-                <select id="front-column"></select>
+                <label>Front Column(s):</label>
+                <div id="front-column-checkboxes" class="column-checkbox-group"></div>
             </div>
             <div class="setting">
-                <label for="back-column">Back Column:</label>
-                <select id="back-column"></select>
+                <label>Back Column(s):</label>
+                <div id="back-column-checkboxes" class="column-checkbox-group"></div>
             </div>
             <div class="setting">
                 <label for="font-selector">Font:</label>
@@ -50,6 +50,14 @@
                 <input type="checkbox" id="tts-back">
                 <label for="tts-back">Text-to-Speech on Back</label>
                 <select id="tts-back-lang"></select>
+            </div>
+            <div class="setting">
+                <label for="tts-rate">Reading Speed:</label>
+                <input type="range" id="tts-rate" min="0.1" max="2" value="1" step="0.1">
+            </div>
+            <div class="setting">
+                <input type="checkbox" id="alternate-uppercase">
+                <label for="alternate-uppercase">Alternate Uppercase on Front</label>
             </div>
             <button id="load-data">Load Data</button>
             <button id="save-config">Save Configuration</button>
@@ -74,6 +82,8 @@
         <button id="i-know">I know this (k)</button>
         <button id="i-dont-know">I don't know this (j)</button>
     </div>
+
+    <div id="card-stats"></div>
 
     <script src="app.js"></script>
 </body>

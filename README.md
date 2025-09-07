@@ -10,7 +10,6 @@ This web-app allows users to practice from custom data sources (TSV or CSV) with
 
 ### Data and Configuration
 *   **Load from any URL:** Practice from any publicly accessible TSV or CSV file.
-    *   For example, a published Google Sheet: https://docs.google.com/spreadsheets/d/e/2PACX-1vQ2HFUKCizfGsGyyMBuv1SzKryj0v-86BfUughqEUhJ3OCHVSLFNqXWSYE_YhwS8cFWFnRgFsK2mnoV/pub?gid=1054010468&single=true&output=tsv
 *   **Flexible Columns:** The first row of your data source is interpreted as column names, which you can then select for the front and back of your cards.
 *   **Named Configurations:** Save your settings (URL, columns, font, TTS) under a specific name for quick access later. The current configuration's name is always displayed at the top of the screen.
 *   **Settings Panel:** All configuration is handled in a clean, modal overlay, accessible via the gear icon (⚙️) in the upper-right corner.
