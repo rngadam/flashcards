@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Flashcards</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div id="settings">
+        <h2>Settings</h2>
+        <div class="setting">
+            <label for="config-name">Configuration Name:</label>
+            <input type="text" id="config-name" placeholder="e.g., Spanish Vocabulary">
+        </div>
+        <div class="setting">
+            <label for="data-url">Data Source URL (TSV/CSV):</label>
+            <input type="text" id="data-url" value="https://docs.google.com/spreadsheets/d/e/2PACX-1vQ2HFUKCizfGsGyyMBuv1SzKryj0v-86BfUughqEUhJ3OCHVSLFNqXWSYE_YhwS8cFWFnRgFsK2mnoV/pub?gid=1054010468&single=true&output=tsv">
+        </div>
+        <div class="setting">
+            <label for="front-column">Front Column:</label>
+            <select id="front-column"></select>
+        </div>
+        <div class="setting">
+            <label for="back-column">Back Column:</label>
+            <select id="back-column"></select>
+        </div>
+        <div class="setting">
+            <label for="font-selector">Font:</label>
+            <select id="font-selector">
+                <option value="Arial">Arial</option>
+                <option value="Verdana">Verdana</option>
+                <option value="Times New Roman">Times New Roman</option>
+                <option value="Courier New">Courier New</option>
+            </select>
+        </div>
+        <div class="setting">
+            <input type="checkbox" id="tts-front">
+            <label for="tts-front">Text-to-Speech on Front</label>
+        </div>
+        <div class="setting">
+            <input type="checkbox" id="tts-back">
+            <label for="tts-back">Text-to-Speech on Back</label>
+        </div>
+        <button id="load-data">Load Data</button>
+        <button id="save-config">Save Configuration</button>
+        <div class="setting">
+            <label for="config-selector">Load Configuration:</label>
+            <select id="config-selector"></select>
+        </div>
+    </div>
+
+    <div id="card-container">
+        <div id="card">
+            <div class="card-face card-front"></div>
+            <div class="card-face card-back"></div>
+        </div>
+    </div>
+
+    <div id="controls">
+        <button id="prev-card">Previous (←)</button>
+        <button id="flip-card">Flip (Space)</button>
+        <button id="next-card">Next (→)</button>
+        <button id="i-know">I know this (k)</button>
+        <button id="i-dont-know">I don't know this (j)</button>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
