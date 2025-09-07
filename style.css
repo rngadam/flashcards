@@ -94,6 +94,10 @@ body.is-flipping {
     transition: transform 0.6s;
 }
 
+#card.no-animation {
+    transition: none;
+}
+
 #card.flipped {
     transform: rotateY(180deg);
 }
@@ -113,6 +117,7 @@ body.is-flipping {
     box-sizing: border-box;
     word-wrap: break-word;
     text-align: center;
+    white-space: pre-wrap;
 }
 
 .card-back {
@@ -128,4 +133,10 @@ button {
     font-size: 1em;
     margin: 0 10px;
     cursor: pointer;
+}
+
+.hotkey-hint {
+    color: #666;
+    font-size: 0.9em;
+    margin-left: 15px;
 }
