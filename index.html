@@ -9,7 +9,18 @@
 <body>
     <div id="top-bar">
         <h1 id="config-title"></h1>
-        <button id="settings-button">⚙️</button>
+        <div>
+            <button id="history-button">📜</button>
+            <button id="settings-button">⚙️</button>
+        </div>
+    </div>
+
+    <div id="history-modal" class="hidden">
+        <div id="history-panel">
+            <button id="close-history-button">X</button>
+            <h2>History</h2>
+            <div id="history-table-container"></div>
+        </div>
     </div>
 
     <div id="settings-modal" class="hidden">

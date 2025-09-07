@@ -3,6 +3,10 @@
 const settingsButton = document.getElementById('settings-button');
 const closeSettingsButton = document.getElementById('close-settings-button');
 const settingsModal = document.getElementById('settings-modal');
+    const historyButton = document.getElementById('history-button');
+    const closeHistoryButton = document.getElementById('close-history-button');
+    const historyModal = document.getElementById('history-modal');
+    const historyTableContainer = document.getElementById('history-table-container');
 const configTitle = document.getElementById('config-title');
 const loadDataButton = document.getElementById('load-data');
 const saveConfigButton = document.getElementById('save-config');
@@ -47,6 +51,8 @@ let useUppercase = false;
 // --- Event Listeners ---
 if (settingsButton) settingsButton.addEventListener('click', () => settingsModal.classList.remove('hidden'));
 if (closeSettingsButton) closeSettingsButton.addEventListener('click', () => settingsModal.classList.add('hidden'));
+    if (historyButton) historyButton.addEventListener('click', renderHistoryTable);
+    if (closeHistoryButton) closeHistoryButton.addEventListener('click', () => historyModal.classList.add('hidden'));
 if (loadDataButton) loadDataButton.addEventListener('click', loadData);
 if (saveConfigButton) saveConfigButton.addEventListener('click', saveConfig);
 if (configSelector) configSelector.addEventListener('change', () => loadSelectedConfig(configSelector.value));
@@ -107,9 +113,21 @@ function parseData(text) {
         headers = rows[0].split(',');
         cardData = rows.slice(1).map(row => row.split(','));
     }
-    cardStatus = new Array(cardData.length).fill(0); // 0 = unseen, >0 = known level
-    viewCount = new Array(cardData.length).fill(0);
-    lastViewed = new Array(cardData.length).fill(null);
+
+        const statsData = JSON.parse(localStorage.getItem('card-stats-data')) || {};
+
+        cardStatus = new Array(cardData.length);
+        viewCount = new Array(cardData.length);
+        lastViewed = new Array(cardData.length);
+
+        cardData.forEach((card, index) => {
+            const cardKey = card[0]; // Use first column as key
+            const stats = statsData[cardKey] || { status: 0, viewCount: 0, lastViewed: null };
+            cardStatus[index] = stats.status;
+            viewCount[index] = stats.viewCount;
+            lastViewed[index] = stats.lastViewed;
+        });
+
     viewHistory = []; // Reset history for new deck
     populateColumnSelectors();
 }
@@ -249,6 +267,8 @@ function displayCard(index, isNavigatingBack = false) {
         <span>View Count: ${viewCount[currentCardIndex]}</span> |
         <span>Last seen: ${timeAgo}</span>
     `;
+
+        saveCardStats();
 }
 
 function showNextCard({forceNew = false} = {}) {
@@ -279,12 +299,54 @@ function showPrevCard() {
     }
 }
 
+    function renderHistoryTable() {
+        if (!historyTableContainer) return;
+
+        const statsData = JSON.parse(localStorage.getItem('card-stats-data')) || {};
+        let tableHTML = '<table><thead><tr>';
+        headers.forEach(header => {
+            tableHTML += `<th>${header}</th>`;
+        });
+        tableHTML += '<th>Retention Score</th><th>View Count</th><th>Last Seen</th></tr></thead><tbody>';
+
+        cardData.forEach((card, index) => {
+            const cardKey = card[0];
+            const stats = statsData[cardKey] || { status: 0, viewCount: 0, lastViewed: null };
+            tableHTML += '<tr>';
+            card.forEach(cell => {
+                tableHTML += `<td>${cell}</td>`;
+            });
+            tableHTML += `<td>${stats.status}</td>`;
+            tableHTML += `<td>${stats.viewCount}</td>`;
+            tableHTML += `<td>${formatTimeAgo(stats.lastViewed)}</td>`;
+            tableHTML += '</tr>';
+        });
+
+        tableHTML += '</tbody></table>';
+        historyTableContainer.innerHTML = tableHTML;
+        historyModal.classList.remove('hidden');
+    }
+
+function saveCardStats() {
+    const statsData = {};
+    cardData.forEach((card, index) => {
+        const cardKey = card[0];
+        statsData[cardKey] = {
+            status: cardStatus[index],
+            viewCount: viewCount[index],
+            lastViewed: lastViewed[index],
+        };
+    });
+    localStorage.setItem('card-stats-data', JSON.stringify(statsData));
+}
+
 function markCardAsKnown(known) {
     if (known) {
         cardStatus[currentCardIndex]++;
     } else {
         cardStatus[currentCardIndex] = 0; // Reset progress
     }
+    saveCardStats();
 }
 
 function saveConfig() {
@@ -361,9 +423,7 @@ function loadSelectedConfig(configName) {
         } else {
             card.classList.remove('no-animation');
         }
-        // Per instructions, ensure we start from the first card.
-        // Note: displayCard(0) is also called in loadData, making this redundant but harmless.
-        displayCard(0);
+            // The displayCard(0) call is now in loadData, so we don't need it here.
         localStorage.setItem('flashcard-last-config', configName);
     });
 }
@@ -407,8 +467,7 @@ function populateVoices() {
 let replayRate = 1.0;
 
 function speak(text, voiceName, rate) {
-    if (!('speechSynthesis' in window)) {
-        alert('Text-to-speech not supported in this browser.');
+        if (!('speechSynthesis' in window) || speechSynthesis.speaking) {
         return;
     }
     const utterance = new SpeechSynthesisUtterance(text);
