@@ -42,20 +42,20 @@ document.addEventListener('DOMContentLoaded', () => {
     let useUppercase = false;
 
     // --- Event Listeners ---
-    settingsButton.addEventListener('click', () => settingsModal.classList.remove('hidden'));
-    closeSettingsButton.addEventListener('click', () => settingsModal.classList.add('hidden'));
-    loadDataButton.addEventListener('click', loadData);
-    saveConfigButton.addEventListener('click', saveConfig);
-    configSelector.addEventListener('change', () => loadSelectedConfig(configSelector.value));
-    flipCardButton.addEventListener('click', flipCard);
-    nextCardButton.addEventListener('click', () => showNextCard());
-    prevCardButton.addEventListener('click', showPrevCard);
-    iKnowButton.addEventListener('click', () => { markCardAsKnown(true); showNextCard(); });
-    iDontKnowButton.addEventListener('click', () => { markCardAsKnown(false); showNextCard({forceNew: true}); });
-    frontColumnCheckboxes.addEventListener('change', () => displayCard(currentCardIndex));
-    backColumnCheckboxes.addEventListener('change', () => displayCard(currentCardIndex));
-    fontSelector.addEventListener('change', () => {
-        cardContainer.style.fontFamily = fontSelector.value;
+    if (settingsButton) settingsButton.addEventListener('click', () => settingsModal.classList.remove('hidden'));
+    if (closeSettingsButton) closeSettingsButton.addEventListener('click', () => settingsModal.classList.add('hidden'));
+    if (loadDataButton) loadDataButton.addEventListener('click', loadData);
+    if (saveConfigButton) saveConfigButton.addEventListener('click', saveConfig);
+    if (configSelector) configSelector.addEventListener('change', () => loadSelectedConfig(configSelector.value));
+    if (flipCardButton) flipCardButton.addEventListener('click', flipCard);
+    if (nextCardButton) nextCardButton.addEventListener('click', () => showNextCard());
+    if (prevCardButton) prevCardButton.addEventListener('click', showPrevCard);
+    if (iKnowButton) iKnowButton.addEventListener('click', () => { markCardAsKnown(true); showNextCard(); });
+    if (iDontKnowButton) iDontKnowButton.addEventListener('click', () => { markCardAsKnown(false); showNextCard({forceNew: true}); });
+    if (frontColumnCheckboxes) frontColumnCheckboxes.addEventListener('change', () => displayCard(currentCardIndex));
+    if (backColumnCheckboxes) backColumnCheckboxes.addEventListener('change', () => displayCard(currentCardIndex));
+    if (fontSelector) fontSelector.addEventListener('change', () => {
+        if (cardContainer) cardContainer.style.fontFamily = fontSelector.value;
     });
     document.addEventListener('keydown', handleHotkeys);
 
