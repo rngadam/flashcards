@@ -7,16 +7,19 @@ document.addEventListener('DOMContentLoaded', () => {
     const loadDataButton = document.getElementById('load-data');
     const saveConfigButton = document.getElementById('save-config');
     const dataUrlInput = document.getElementById('data-url');
-    const frontColumnSelect = document.getElementById('front-column');
-    const backColumnSelect = document.getElementById('back-column');
+    const frontColumnCheckboxes = document.getElementById('front-column-checkboxes');
+    const backColumnCheckboxes = document.getElementById('back-column-checkboxes');
     const fontSelector = document.getElementById('font-selector');
     const ttsFrontCheckbox = document.getElementById('tts-front');
     const ttsBackCheckbox = document.getElementById('tts-back');
     const ttsFrontLangSelect = document.getElementById('tts-front-lang');
     const ttsBackLangSelect = document.getElementById('tts-back-lang');
+    const ttsRateSlider = document.getElementById('tts-rate');
+    const alternateUppercaseCheckbox = document.getElementById('alternate-uppercase');
     const configNameInput = document.getElementById('config-name');
     const configSelector = document.getElementById('config-selector');
     const cardContainer = document.getElementById('card-container');
+    const cardStats = document.getElementById('card-stats');
     const cardFront = document.querySelector('.card-front');
     const cardBack = document.querySelector('.card-back');
     const flipCardButton = document.getElementById('flip-card');
@@ -32,8 +35,11 @@ document.addEventListener('DOMContentLoaded', () => {
     let currentCardIndex = 0;
     let configs = {};
     let cardStatus = []; // for spaced repetition
+    let viewCount = [];
+    let lastViewed = [];
     let voices = [];
     let viewHistory = [];
+    let useUppercase = false;
 
     // --- Event Listeners ---
     settingsButton.addEventListener('click', () => settingsModal.classList.remove('hidden'));
@@ -46,8 +52,8 @@ document.addEventListener('DOMContentLoaded', () => {
     prevCardButton.addEventListener('click', showPrevCard);
     iKnowButton.addEventListener('click', () => { markCardAsKnown(true); showNextCard(); });
     iDontKnowButton.addEventListener('click', () => { markCardAsKnown(false); showNextCard({forceNew: true}); });
-    frontColumnSelect.addEventListener('change', () => displayCard(currentCardIndex));
-    backColumnSelect.addEventListener('change', () => displayCard(currentCardIndex));
+    frontColumnCheckboxes.addEventListener('change', () => displayCard(currentCardIndex));
+    backColumnCheckboxes.addEventListener('change', () => displayCard(currentCardIndex));
     fontSelector.addEventListener('change', () => {
         cardContainer.style.fontFamily = fontSelector.value;
     });
@@ -90,32 +96,87 @@ document.addEventListener('DOMContentLoaded', () => {
             cardData = rows.slice(1).map(row => row.split(','));
         }
         cardStatus = new Array(cardData.length).fill(0); // 0 = unseen, >0 = known level
+        viewCount = new Array(cardData.length).fill(0);
+        lastViewed = new Array(cardData.length).fill(null);
         viewHistory = []; // Reset history for new deck
         populateColumnSelectors();
     }
 
     function populateColumnSelectors() {
-        frontColumnSelect.innerHTML = '';
-        backColumnSelect.innerHTML = '';
+        frontColumnCheckboxes.innerHTML = '';
+        backColumnCheckboxes.innerHTML = '';
         headers.forEach((header, index) => {
-            const option1 = new Option(header, index);
-            const option2 = new Option(header, index);
-            frontColumnSelect.add(option1);
-            backColumnSelect.add(option2);
+            const idFront = `front-col-${index}`;
+            const checkboxFront = `<div><input type="checkbox" id="${idFront}" value="${index}"><label for="${idFront}">${header}</label></div>`;
+            frontColumnCheckboxes.insertAdjacentHTML('beforeend', checkboxFront);
+
+            const idBack = `back-col-${index}`;
+            const checkboxBack = `<div><input type="checkbox" id="${idBack}" value="${index}"><label for="${idBack}">${header}</label></div>`;
+            backColumnCheckboxes.insertAdjacentHTML('beforeend', checkboxBack);
         });
+
+        // Default to first and second columns
+        if (headers.length > 0) {
+            frontColumnCheckboxes.querySelector('input').checked = true;
+        }
         if (headers.length > 1) {
-            frontColumnSelect.value = 0;
-            backColumnSelect.value = 1;
+            backColumnCheckboxes.querySelectorAll('input')[1].checked = true;
         }
     }
 
     function flipCard() {
         card.classList.toggle('flipped');
+        document.body.classList.add('is-flipping');
+        setTimeout(() => {
+            document.body.classList.remove('is-flipping');
+        }, 600); // Corresponds to the animation duration
+
         if (card.classList.contains('flipped') && ttsBackCheckbox.checked) {
             speak(cardBack.textContent, ttsBackLangSelect.value);
         } else if (!card.classList.contains('flipped') && ttsFrontCheckbox.checked) {
             speak(cardFront.textContent, ttsFrontLangSelect.value);
         }
+    }
+
+    function adjustFontSize(element) {
+        const container = element.parentElement;
+        let min = 10, max = 150; // Min and max font sizes
+        let bestSize = min;
+
+        while (min <= max) {
+            let mid = Math.floor((min + max) / 2);
+            element.style.fontSize = `${mid}px`;
+            if (element.scrollWidth <= container.clientWidth && element.scrollHeight <= container.clientHeight) {
+                bestSize = mid; // This size fits, try for a larger one
+                min = mid + 1;
+            } else {
+                max = mid - 1; // This size is too big, try a smaller one
+            }
+        }
+        element.style.fontSize = `${bestSize}px`;
+    }
+
+    function formatTimeAgo(timestamp) {
+        if (!timestamp) return 'never';
+        const now = Date.now();
+        const seconds = Math.floor((now - timestamp) / 1000);
+
+        if (seconds < 60) return `${seconds} seconds ago`;
+
+        const minutes = Math.floor(seconds / 60);
+        if (minutes < 60) return `${minutes} minutes ago`;
+
+        const hours = Math.floor(minutes / 60);
+        if (hours < 24) return `${hours} hours ago`;
+
+        const days = Math.floor(hours / 24);
+        if (days < 30) return `${days} days ago`;
+
+        const months = Math.floor(days / 30);
+        if (months < 12) return `${months} months ago`;
+
+        const years = Math.floor(months / 12);
+        return `${years} years ago`;
     }
 
     function displayCard(index, isNavigatingBack = false) {
@@ -126,14 +187,47 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         currentCardIndex = index;
-        const frontColumn = frontColumnSelect.value;
-        const backColumn = backColumnSelect.value;
-        cardFront.textContent = cardData[currentCardIndex][frontColumn];
-        cardBack.textContent = cardData[currentCardIndex][backColumn];
+        replayRate = 1.0; // Reset replay rate for new card
+
+        // Update stats
+        viewCount[currentCardIndex]++;
+        lastViewed[currentCardIndex] = Date.now();
+
+        const frontColumns = Array.from(frontColumnCheckboxes.querySelectorAll('input:checked')).map(cb => parseInt(cb.value));
+        const backColumns = Array.from(backColumnCheckboxes.querySelectorAll('input:checked')).map(cb => parseInt(cb.value));
+
+        let frontText = frontColumns.map(colIndex => cardData[currentCardIndex][colIndex]).join('\n');
+        if (alternateUppercaseCheckbox.checked) {
+            if (useUppercase) {
+                frontText = frontText.toUpperCase();
+            }
+            useUppercase = !useUppercase; // Alternate for the next card
+        }
+        cardFront.textContent = frontText;
+        cardBack.textContent = backColumns.map(colIndex => cardData[currentCardIndex][colIndex]).join('\n');
+
+        // Reset font size before adjusting
+        cardFront.style.fontSize = '';
+        cardBack.style.fontSize = '';
+
+        // Adjust font size after a short delay to allow rendering
+        setTimeout(() => {
+            adjustFontSize(cardFront);
+            adjustFontSize(cardBack);
+        }, 50);
+
         card.classList.remove('flipped');
         if (ttsFrontCheckbox.checked) {
             speak(cardFront.textContent, ttsFrontLangSelect.value);
         }
+
+        // Render stats
+        const timeAgo = formatTimeAgo(lastViewed[currentCardIndex]);
+        cardStats.innerHTML = `
+            <span>Retention Score: ${cardStatus[currentCardIndex]}</span> |
+            <span>View Count: ${viewCount[currentCardIndex]}</span> |
+            <span>Last seen: ${timeAgo}</span>
+        `;
     }
 
     function showNextCard({forceNew = false} = {}) {
@@ -178,15 +272,20 @@ document.addEventListener('DOMContentLoaded', () => {
             alert('Please enter a configuration name.');
             return;
         }
+        const frontColumns = Array.from(frontColumnCheckboxes.querySelectorAll('input:checked')).map(cb => parseInt(cb.value));
+        const backColumns = Array.from(backColumnCheckboxes.querySelectorAll('input:checked')).map(cb => parseInt(cb.value));
+
         configs[configName] = {
             dataUrl: dataUrlInput.value,
-            frontColumn: frontColumnSelect.value,
-            backColumn: backColumnSelect.value,
+            frontColumns: frontColumns,
+            backColumns: backColumns,
             font: fontSelector.value,
             ttsFront: ttsFrontCheckbox.checked,
             ttsBack: ttsBackCheckbox.checked,
             ttsFrontLang: ttsFrontLangSelect.value,
             ttsBackLang: ttsBackLangSelect.value,
+            ttsRate: ttsRateSlider.value,
+            alternateUppercase: alternateUppercaseCheckbox.checked,
         };
         localStorage.setItem('flashcard-configs', JSON.stringify(configs));
         localStorage.setItem('flashcard-last-config', configName);
@@ -209,10 +308,26 @@ document.addEventListener('DOMContentLoaded', () => {
         configTitle.textContent = configName;
 
         loadData().then(() => {
-            frontColumnSelect.value = config.frontColumn;
-            backColumnSelect.value = config.backColumn;
+            frontColumnCheckboxes.querySelectorAll('input').forEach(cb => cb.checked = false);
+            backColumnCheckboxes.querySelectorAll('input').forEach(cb => cb.checked = false);
+
+            if (config.frontColumns) {
+                config.frontColumns.forEach(colIndex => {
+                    const cb = frontColumnCheckboxes.querySelector(`input[value="${colIndex}"]`);
+                    if (cb) cb.checked = true;
+                });
+            }
+            if (config.backColumns) {
+                config.backColumns.forEach(colIndex => {
+                    const cb = backColumnCheckboxes.querySelector(`input[value="${colIndex}"]`);
+                    if (cb) cb.checked = true;
+                });
+            }
+
             ttsFrontLangSelect.value = config.ttsFrontLang;
             ttsBackLangSelect.value = config.ttsBackLang;
+            ttsRateSlider.value = config.ttsRate || 1;
+            alternateUppercaseCheckbox.checked = config.alternateUppercase || false;
             // Per instructions, ensure we start from the first card.
             // Note: displayCard(0) is also called in loadData, making this redundant but harmless.
             displayCard(0);
@@ -256,7 +371,9 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    function speak(text, voiceName) {
+    let replayRate = 1.0;
+
+    function speak(text, voiceName, rate) {
         if (!('speechSynthesis' in window)) {
             alert('Text-to-speech not supported in this browser.');
             return;
@@ -268,6 +385,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 utterance.voice = voice;
             }
         }
+        utterance.rate = rate || ttsRateSlider.value;
         window.speechSynthesis.speak(utterance);
     }
 
@@ -293,6 +411,12 @@ document.addEventListener('DOMContentLoaded', () => {
             case 'j':
                 markCardAsKnown(false);
                 showNextCard({forceNew: true});
+                break;
+            case 'f':
+                const text = card.classList.contains('flipped') ? cardBack.textContent : cardFront.textContent;
+                const voiceName = card.classList.contains('flipped') ? ttsBackLangSelect.value : ttsFrontLangSelect.value;
+                replayRate = Math.max(0.1, replayRate - 0.2); // Decrease rate, with a floor
+                speak(text, voiceName, replayRate);
                 break;
         }
     }
