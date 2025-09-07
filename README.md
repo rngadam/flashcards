@@ -1,36 +1,34 @@
-# flashcards
+# Flashcards
 
-Flashcards practice
+A rich, single-page web application for practicing flashcards using spaced repetition.
 
 ## Overview
 
-Rich web-app that can use spaced repetition to practice from user-specified CSV or TSV source with flexible configuration.
+This web-app allows users to practice from custom data sources (TSV or CSV) with flexible configuration options. It saves your configurations to local browser storage, so your decks are always ready for you. On startup, the app automatically loads your last-used configuration. If no configurations are saved, the settings panel will appear, prompting you to create one.
 
 ## Features
 
-Data sources:
+### Data and Configuration
+*   **Load from any URL:** Practice from any publicly accessible TSV or CSV file.
+    *   For example, a published Google Sheet: https://docs.google.com/spreadsheets/d/e/2PACX-1vQ2HFUKCizfGsGyyMBuv1SzKryj0v-86BfUughqEUhJ3OCHVSLFNqXWSYE_YhwS8cFWFnRgFsK2mnoV/pub?gid=1054010468&single=true&output=tsv
+*   **Flexible Columns:** The first row of your data source is interpreted as column names, which you can then select for the front and back of your cards.
+*   **Named Configurations:** Save your settings (URL, columns, font, TTS) under a specific name for quick access later. The current configuration's name is always displayed at the top of the screen.
+*   **Settings Panel:** All configuration is handled in a clean, modal overlay, accessible via the gear icon (⚙️) in the upper-right corner.
 
-* Take an arbitrary URL to a TSV or CSV file
-  * Example: https://docs.google.com/spreadsheets/d/e/2PACX-1vQ2HFUKCizfGsGyyMBuv1SzKryj0v-86BfUughqEUhJ3OCHVSLFNqXWSYE_YhwS8cFWFnRgFsK2mnoV/pub?gid=1054010468&single=true&output=tsv
-* Interpret TSV/CSV file as a table where the first row defines column-names
+### Display and Interaction
+*   **Maximized View:** Cards use the maximum available screen real estate for a focused experience.
+*   **Configurable Font:** Choose from several fonts to suit your preference.
+*   **Full Hotkey Support:**
+    *   **Previous (←):** Go to the previously viewed card. This is history-aware, not just the previous card in the list.
+    *   **Flip (Space):** Flip the current card.
+    *   **Next (→):** Go to the next card based on the spaced repetition algorithm.
+    *   **I know this (k):** Mark the card as known and advance to the next card.
+    *   **I don't know this (j):** Mark the card as not known and advance to a different low-score card.
 
-Card deck configuration:
+### Spaced Repetition
+*   **Intelligent Practice:** The app tracks which cards you know and which you don't. It prioritizes showing you cards you have the most trouble with.
+*   **Smart "Don't Know" Logic:** When you mark a card as not known, its score is reset, and the app will show you a *different* card from the pool of least-known cards, preventing immediate repeats.
 
-* Name configuration (for quick selection)
-* Data source URL
-* Selected column to show on the front of the cards
-* Selected column to show on the back of the card
-* Configurable font
-* Optionally text-to-speech front and/or back using Web Speech API
-
-Display:
-
-* Maximize use of screen real estate to show centered, full-size
-* Use of hotkeys to flip card, navigation, etc
-
-Spaced repetition
-
-* Track cards that were successfully recognized versus those that were not (use front value as the key
-* Present cards at regular time spacing, prioritizing older cards first.
-
- Config is saved to local browser storage.
+### Text-to-Speech (TTS)
+*   **Optional TTS:** Enable text-to-speech for the front and/or back of the cards.
+*   **Configurable Languages:** Select the specific language and voice for both the front and back of the cards independently from a list of available system voices. This is perfect for language learning (e.g., a Greek voice for the front and an English voice for the back).
