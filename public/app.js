@@ -33,6 +33,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let configs = {};
     let cardStatus = []; // for spaced repetition
     let voices = [];
+    let viewHistory = [];
 
     // --- Event Listeners ---
     settingsButton.addEventListener('click', () => settingsModal.classList.remove('hidden'));
@@ -54,22 +55,28 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
     // --- Functions ---
-    async function loadData() {
+    function loadData() {
         const url = dataUrlInput.value;
         if (!url) {
             alert('Please enter a data source URL.');
-            return;
+            return Promise.reject('No URL provided');
         }
 
-        try {
-            const response = await fetch(url);
-            if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-            const text = await response.text();
-            parseData(text);
-            settingsModal.classList.add('hidden');
-        } catch (error) {
-            alert(`Failed to load data: ${error.message}`);
-        }
+        return fetch(url)
+            .then(response => {
+                if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+                return response.text();
+            })
+            .then(text => {
+                parseData(text);
+                if (cardData.length > 0) {
+                    displayCard(0);
+                }
+                settingsModal.classList.add('hidden');
+            })
+            .catch(error => {
+                alert(`Failed to load data: ${error.message}`);
+            });
     }
 
     function parseData(text) {
@@ -83,8 +90,8 @@ document.addEventListener('DOMContentLoaded', () => {
             cardData = rows.slice(1).map(row => row.split(','));
         }
         cardStatus = new Array(cardData.length).fill(0); // 0 = unseen, >0 = known level
+        viewHistory = []; // Reset history for new deck
         populateColumnSelectors();
-        displayCard(0);
     }
 
     function populateColumnSelectors() {
@@ -111,8 +118,13 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    function displayCard(index) {
+    function displayCard(index, isNavigatingBack = false) {
         if (cardData.length === 0 || index < 0 || index >= cardData.length) return;
+
+        if (!isNavigatingBack && index !== currentCardIndex) {
+            viewHistory.push(currentCardIndex);
+        }
+
         currentCardIndex = index;
         const frontColumn = frontColumnSelect.value;
         const backColumn = backColumnSelect.value;
@@ -125,7 +137,10 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function showNextCard({forceNew = false} = {}) {
-        if (cardData.length === 0) return;
+        if (cardData.length === 0) {
+            // No alert needed if there are no cards to begin with.
+            return;
+        }
 
         let minStatus = Math.min(...cardStatus);
         let potentialIndices = cardStatus.map((s, i) => s === minStatus ? i : -1).filter(i => i !== -1);
@@ -143,8 +158,9 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function showPrevCard() {
-        if (currentCardIndex > 0) {
-            displayCard(currentCardIndex - 1);
+        if (viewHistory.length > 0) {
+            const prevIndex = viewHistory.pop();
+            displayCard(prevIndex, true);
         }
     }
 
@@ -197,6 +213,8 @@ document.addEventListener('DOMContentLoaded', () => {
             backColumnSelect.value = config.backColumn;
             ttsFrontLangSelect.value = config.ttsFrontLang;
             ttsBackLangSelect.value = config.ttsBackLang;
+            // Per instructions, ensure we start from the first card.
+            // Note: displayCard(0) is also called in loadData, making this redundant but harmless.
             displayCard(0);
             localStorage.setItem('flashcard-last-config', configName);
         });
