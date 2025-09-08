@@ -33,6 +33,10 @@ document.addEventListener('DOMContentLoaded', () => {
     const audioOnlyFrontCheckbox = document.getElementById('audio-only-front');
     const ttsOnHotkeyOnlyCheckbox = document.getElementById('tts-on-hotkey-only');
     const configNameInput = document.getElementById('config-name');
+    const keyColumnSelector = document.getElementById('key-column-selector');
+    const repetitionIntervalsTextarea = document.getElementById('repetition-intervals');
+    const learningSubsetSizeInput = document.getElementById('learning-subset-size');
+    const detectedLangSpan = document.getElementById('detected-lang');
     const configSelector = document.getElementById('config-selector');
     const cardContainer = document.getElementById('card-container');
     const cardStats = document.getElementById('card-stats');
@@ -57,6 +61,19 @@ document.addEventListener('DOMContentLoaded', () => {
     let viewHistory = []; // A stack to keep track of the sequence of viewed cards for the "previous" button.
     let useUppercase = false; // A flag for the "Alternate Uppercase" feature.
     let replayRate = 1.0; // Tracks the current playback rate for the 'f' key replay feature.
+
+    // History table sort state
+    let historySortColumn = -1;
+    let historySortDirection = 'asc';
+
+    // Spaced Repetition State
+    const defaultIntervals = [5, 25, 120, 600, 3600, 18000, 86400, 432000, 2160000, 10368000, 63072000]; // in seconds
+    let repetitionIntervals = [...defaultIntervals];
+    let cardInterval = []; // tracks the interval index for each card
+
+    // Learning Subset State
+    let learningSubset = [];
+    let learningSubsetSize = 7;
 
     // Drag state for swipe gestures
     let isDragging = false; // True if a card is currently being dragged.
@@ -85,6 +102,9 @@ document.addEventListener('DOMContentLoaded', () => {
     if (prevCardButton) prevCardButton.addEventListener('click', showPrevCard);
     if (iKnowButton) iKnowButton.addEventListener('click', () => { markCardAsKnown(true); showNextCard(); });
     if (iDontKnowButton) iDontKnowButton.addEventListener('click', () => { markCardAsKnown(false); showNextCard({ forceNew: true }); });
+    if (learningSubsetSizeInput) learningSubsetSizeInput.addEventListener('change', () => {
+        learningSubsetSize = parseInt(learningSubsetSizeInput.value) || 7;
+    });
     if (frontColumnCheckboxes) frontColumnCheckboxes.addEventListener('change', () => displayCard(currentCardIndex));
     if (backColumnCheckboxes) backColumnCheckboxes.addEventListener('change', () => displayCard(currentCardIndex));
     if (fontSelector) fontSelector.addEventListener('change', () => {
@@ -160,17 +180,22 @@ document.addEventListener('DOMContentLoaded', () => {
         cardStatus = new Array(cardData.length);
         viewCount = new Array(cardData.length);
         lastViewed = new Array(cardData.length);
+        cardInterval = new Array(cardData.length);
 
         cardData.forEach((card, index) => {
-            const cardKey = card[0];
-            const stats = statsData[cardKey] || { status: 0, viewCount: 0, lastViewed: null };
+            const cardKey = getCardKey(card);
+            const stats = statsData[cardKey] || { status: 0, viewCount: 0, lastViewed: null, interval: 0 };
             cardStatus[index] = stats.status;
             viewCount[index] = stats.viewCount;
             lastViewed[index] = stats.lastViewed;
+            cardInterval[index] = stats.interval;
         });
 
         viewHistory = [];
         populateColumnSelectors();
+        populateKeyColumnSelector();
+        if (repetitionIntervalsTextarea) repetitionIntervalsTextarea.value = repetitionIntervals.join(', ');
+        detectAndFilterLanguage();
     }
 
     /**
@@ -199,6 +224,15 @@ document.addEventListener('DOMContentLoaded', () => {
             const secondCheckbox = backColumnCheckboxes.querySelectorAll('input')[1];
             if (secondCheckbox) secondCheckbox.checked = true;
         }
+    }
+
+    function populateKeyColumnSelector() {
+        if (!keyColumnSelector) return;
+        keyColumnSelector.innerHTML = '';
+        headers.forEach((header, index) => {
+            const option = new Option(header, index);
+            keyColumnSelector.add(option);
+        });
     }
 
     /**
@@ -310,6 +344,8 @@ document.addEventListener('DOMContentLoaded', () => {
         currentCardIndex = index;
         replayRate = 1.0;
 
+        const previousLastViewed = lastViewed[currentCardIndex]; // Capture old value
+
         viewCount[currentCardIndex]++;
         lastViewed[currentCardIndex] = Date.now();
 
@@ -345,7 +381,7 @@ document.addEventListener('DOMContentLoaded', () => {
             speak(originalFrontText, ttsFrontLangSelect.value);
         }
 
-        const timeAgo = formatTimeAgo(lastViewed[currentCardIndex]);
+        const timeAgo = formatTimeAgo(previousLastViewed);
         cardStats.innerHTML = `
             <span>Retention Score: ${cardStatus[currentCardIndex]}</span> |
             <span>View Count: ${viewCount[currentCardIndex]}</span> |
@@ -363,19 +399,63 @@ document.addEventListener('DOMContentLoaded', () => {
      */
     function showNextCard({forceNew = false} = {}) {
         if (cardData.length === 0) return;
-
-        let minStatus = Math.min(...cardStatus);
-        let potentialIndices = cardStatus.map((s, i) => s === minStatus ? i : -1).filter(i => i !== -1);
-
-        if (forceNew && potentialIndices.length > 1) {
-            potentialIndices = potentialIndices.filter(i => i !== currentCardIndex);
+        if (cardData.length === 1) {
+            displayCard(0);
+            return;
         }
 
-        if (potentialIndices.length > 0) {
-            const nextIndex = potentialIndices[Math.floor(Math.random() * potentialIndices.length)];
+        // 1. Find due cards
+        const now = Date.now();
+        const dueCardIndices = [];
+        cardData.forEach((card, index) => {
+            const intervalSeconds = repetitionIntervals[cardInterval[index]];
+            if (now - lastViewed[index] > intervalSeconds * 1000) {
+                dueCardIndices.push(index);
+            }
+        });
+
+        // Prioritize due cards
+        if (dueCardIndices.length > 0) {
+            // Sort due cards by retention score (ascending)
+            dueCardIndices.sort((a, b) => cardStatus[a] - cardStatus[b]);
+            let nextIndex = dueCardIndices[0];
+            // Ensure we don't show the same card twice
+            if (nextIndex === currentCardIndex && dueCardIndices.length > 1) {
+                nextIndex = dueCardIndices[1];
+            }
             displayCard(nextIndex);
+            return;
+        }
+
+        // 2. If no cards are due, manage the learning subset
+        const subsetIsLearned = learningSubset.every(i => cardStatus[i] > 3);
+        if (learningSubset.length === 0 || subsetIsLearned) {
+            // Create a new subset
+            const notWellKnown = cardData
+                .map((card, index) => ({ index, status: cardStatus[index] }))
+                .filter(item => cardInterval[item.index] < repetitionIntervals.length - 1);
+
+            notWellKnown.sort((a, b) => a.status - b.status);
+            learningSubset = notWellKnown.slice(0, learningSubsetSize).map(item => item.index);
+        }
+
+        // 3. Select from the subset
+        if (learningSubset.length > 0) {
+            // Sort subset by status, then lastViewed
+            learningSubset.sort((a, b) => {
+                if (cardStatus[a] !== cardStatus[b]) {
+                    return cardStatus[a] - cardStatus[b];
+                }
+                return lastViewed[a] - lastViewed[b];
+            });
+
+            let potentialNext = learningSubset[0];
+            if (forceNew && potentialNext === currentCardIndex && learningSubset.length > 1) {
+                potentialNext = learningSubset[1];
+            }
+            displayCard(potentialNext);
         } else {
-             alert("You've reviewed all cards!");
+            alert("Congratulations! You've learned all the cards for now.");
         }
     }
 
@@ -397,13 +477,17 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!historyTableContainer) return;
         const statsData = JSON.parse(localStorage.getItem('card-stats-data')) || {};
         let tableHTML = '<table><thead><tr>';
-        headers.forEach(header => {
-            tableHTML += `<th>${header}</th>`;
+
+        headers.forEach((header, index) => {
+            tableHTML += `<th class="sortable" data-column-index="${index}">${header}</th>`;
         });
-        tableHTML += '<th>Retention Score</th><th>View Count</th><th>Last Seen</th></tr></thead><tbody>';
+        tableHTML += `<th class="sortable" data-column-index="${headers.length}">Retention Score</th>`;
+        tableHTML += `<th class="sortable" data-column-index="${headers.length + 1}">View Count</th>`;
+        tableHTML += `<th class="sortable" data-column-index="${headers.length + 2}">Last Seen</th>`;
+        tableHTML += '</tr></thead><tbody>';
 
         cardData.forEach((card, index) => {
-            const cardKey = card[0];
+            const cardKey = getCardKey(card);
             const stats = statsData[cardKey] || { status: 0, viewCount: 0, lastViewed: null };
             tableHTML += '<tr>';
             card.forEach(cell => {
@@ -417,7 +501,98 @@ document.addEventListener('DOMContentLoaded', () => {
 
         tableHTML += '</tbody></table>';
         historyTableContainer.innerHTML = tableHTML;
+
+        historyTableContainer.querySelectorAll('th.sortable').forEach(th => {
+            th.addEventListener('click', sortHistoryTable);
+        });
+
         historyModal.classList.remove('hidden');
+    }
+
+    function sortHistoryTable(e) {
+        const th = e.currentTarget;
+        const columnIndex = parseInt(th.dataset.columnIndex);
+
+        if (historySortColumn === columnIndex) {
+            historySortDirection = historySortDirection === 'asc' ? 'desc' : 'asc';
+        } else {
+            historySortColumn = columnIndex;
+            historySortDirection = 'asc';
+        }
+
+        const statsData = JSON.parse(localStorage.getItem('card-stats-data')) || {};
+
+        // Create a combined array for sorting
+        const combinedData = cardData.map((card, index) => {
+            const cardKey = getCardKey(card);
+            const stats = statsData[cardKey] || { status: cardStatus[index], viewCount: viewCount[index], lastViewed: lastViewed[index] };
+            return {
+                card: card,
+                stats: stats
+            };
+        });
+
+        combinedData.sort((a, b) => {
+            let valA, valB;
+
+            if (columnIndex < headers.length) {
+                // It's a data column
+                valA = a.card[columnIndex];
+                valB = b.card[columnIndex];
+            } else {
+                // It's a stats column
+                const statsKey = ['status', 'viewCount', 'lastViewed'][columnIndex - headers.length];
+                valA = a.stats[statsKey];
+                valB = b.stats[statsKey];
+            }
+
+            // Type-aware comparison
+            const isNumeric = !isNaN(parseFloat(valA)) && isFinite(valA) && !isNaN(parseFloat(valB)) && isFinite(valB);
+
+            if (valA === null || valA === undefined) valA = historySortDirection === 'asc' ? Infinity : -Infinity;
+            if (valB === null || valB === undefined) valB = historySortDirection === 'asc' ? Infinity : -Infinity;
+
+
+            if (isNumeric) {
+                valA = Number(valA);
+                valB = Number(valB);
+            } else if (typeof valA === 'string') {
+                valA = valA.toLowerCase();
+                if (typeof valB === 'string') {
+                    valB = valB.toLowerCase();
+                }
+            }
+
+            if (valA < valB) {
+                return historySortDirection === 'asc' ? -1 : 1;
+            }
+            if (valA > valB) {
+                return historySortDirection === 'asc' ? 1 : -1;
+            }
+            return 0;
+        });
+
+        // Re-populate the original arrays from the sorted combined data
+        cardData = combinedData.map(item => item.card);
+        cardStatus = combinedData.map(item => item.stats.status);
+        viewCount = combinedData.map(item => item.stats.viewCount);
+        lastViewed = combinedData.map(item => item.stats.lastViewed);
+
+        renderHistoryTable();
+    }
+
+    /**
+     * Gets the unique key for a given card based on the selected key column.
+     * @param {string[]} card - The card data array.
+     * @returns {string} The unique key for the card.
+     */
+    function getCardKey(card) {
+        const keyIndex = keyColumnSelector ? parseInt(keyColumnSelector.value) : 0;
+        if (!card || keyIndex >= card.length) {
+            // Fallback or error handling
+            return card ? card.join('-') : `invalid-card-${Math.random()}`;
+        }
+        return card[keyIndex];
     }
 
     /**
@@ -425,15 +600,17 @@ document.addEventListener('DOMContentLoaded', () => {
      * to the browser's local storage.
      */
     function saveCardStats() {
-        const statsData = {};
-        cardData.forEach((card, index) => {
-            const cardKey = card[0];
-            statsData[cardKey] = {
-                status: cardStatus[index],
-                viewCount: viewCount[index],
-                lastViewed: lastViewed[index],
-            };
-        });
+        if (cardData.length === 0) return;
+
+        const statsData = JSON.parse(localStorage.getItem('card-stats-data')) || {};
+        const cardKey = getCardKey(cardData[currentCardIndex]);
+
+        statsData[cardKey] = {
+            status: cardStatus[currentCardIndex],
+            viewCount: viewCount[currentCardIndex],
+            lastViewed: lastViewed[currentCardIndex],
+            interval: cardInterval[currentCardIndex]
+        };
         localStorage.setItem('card-stats-data', JSON.stringify(statsData));
     }
 
@@ -444,8 +621,12 @@ document.addEventListener('DOMContentLoaded', () => {
     function markCardAsKnown(known) {
         if (known) {
             cardStatus[currentCardIndex]++;
+            if (cardInterval[currentCardIndex] < repetitionIntervals.length - 1) {
+                cardInterval[currentCardIndex]++;
+            }
         } else {
             cardStatus[currentCardIndex] = 0;
+            cardInterval[currentCardIndex] = 0;
         }
         saveCardStats();
     }
@@ -464,6 +645,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
         configs[configName] = {
             dataUrl: dataUrlInput.value,
+            keyColumn: keyColumnSelector.value,
+            repetitionIntervals: repetitionIntervalsTextarea.value,
+            learningSubsetSize: learningSubsetSizeInput.value,
             frontColumns: getSelectedColumnIndices(frontColumnCheckboxes),
             backColumns: getSelectedColumnIndices(backColumnCheckboxes),
             font: fontSelector.value,
@@ -500,6 +684,7 @@ document.addEventListener('DOMContentLoaded', () => {
         ttsBackCheckbox.checked = config.ttsBack;
         cardContainer.style.fontFamily = config.font;
         configTitle.textContent = configName;
+        if (keyColumnSelector) keyColumnSelector.value = config.keyColumn || 0;
 
         loadData().then(() => {
             if (frontColumnCheckboxes) frontColumnCheckboxes.querySelectorAll('input').forEach(cb => cb.checked = false);
@@ -525,6 +710,15 @@ document.addEventListener('DOMContentLoaded', () => {
             if (disableAnimationCheckbox) disableAnimationCheckbox.checked = config.disableAnimation || false;
             if (audioOnlyFrontCheckbox) audioOnlyFrontCheckbox.checked = config.audioOnlyFront || false;
             if (ttsOnHotkeyOnlyCheckbox) ttsOnHotkeyOnlyCheckbox.checked = config.ttsOnHotkeyOnly || false;
+
+            if (repetitionIntervalsTextarea) {
+                repetitionIntervalsTextarea.value = config.repetitionIntervals || defaultIntervals.join(', ');
+                repetitionIntervals = repetitionIntervalsTextarea.value.split(',').map(s => parseInt(s.trim())).filter(n => !isNaN(n));
+            }
+            if (learningSubsetSizeInput) {
+                learningSubsetSizeInput.value = config.learningSubsetSize || 7;
+                learningSubsetSize = parseInt(learningSubsetSizeInput.value);
+            }
 
             if (card) {
                 if (disableAnimationCheckbox.checked) {
@@ -579,18 +773,59 @@ document.addEventListener('DOMContentLoaded', () => {
      * Populates the TTS voice selection dropdowns with the list of voices
      * available in the user's browser.
      */
-    function populateVoices() {
+    function detectAndFilterLanguage() {
+        if (cardData.length === 0 || typeof franc === 'undefined') return;
+
+        const sampleSize = Math.min(10, cardData.length);
+        let sampleText = '';
+        for (let i = 0; i < sampleSize; i++) {
+            sampleText += cardData[i].join(' ') + ' ';
+        }
+
+        const langCode3 = franc(sampleText);
+
+        if (langCode3 && langCode3 !== 'und') {
+            const langCode2 = langCode3.substring(0, 2);
+            if (detectedLangSpan) {
+                detectedLangSpan.textContent = `Detected: ${langCode3}`;
+                detectedLangSpan.style.display = 'inline';
+            }
+            populateVoices(langCode2);
+        } else {
+            if (detectedLangSpan) detectedLangSpan.style.display = 'none';
+            populateVoices();
+        }
+    }
+
+    function populateVoices(filterLang) {
         if (!('speechSynthesis' in window)) return;
         voices = speechSynthesis.getVoices();
         if (!ttsFrontLangSelect || !ttsBackLangSelect) return;
+
+        const currentFront = ttsFrontLangSelect.value;
+        const currentBack = ttsBackLangSelect.value;
+
         ttsFrontLangSelect.innerHTML = '';
         ttsBackLangSelect.innerHTML = '';
-        voices.forEach(voice => {
+
+        let voicesToDisplay = voices;
+        if (filterLang) {
+            voicesToDisplay = voices.filter(voice => voice.lang.startsWith(filterLang));
+        }
+        if (voicesToDisplay.length === 0) {
+            voicesToDisplay = voices;
+        }
+
+        voicesToDisplay.forEach(voice => {
             const option1 = new Option(`${voice.name} (${voice.lang})`, voice.name);
             const option2 = new Option(`${voice.name} (${voice.lang})`, voice.name);
             ttsFrontLangSelect.add(option1);
             ttsBackLangSelect.add(option2);
         });
+
+        // Try to restore previous selection
+        ttsFrontLangSelect.value = currentFront;
+        ttsBackLangSelect.value = currentBack;
     }
 
     /**

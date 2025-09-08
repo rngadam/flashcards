@@ -4,11 +4,13 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Flashcards</title>
+    <script src="https://cdn.jsdelivr.net/npm/franc@6.2.0/index.min.js"></script>
     <link rel="stylesheet" href="style.css">
   </head>
   <body>
     <div id="top-bar">
       <h1 id="config-title"></h1>
+      <span id="detected-lang"></span>
       <div>
         <button id="history-button">📜</button>
         <button id="settings-button">⚙️</button>
@@ -30,6 +32,10 @@
         <div class="setting">
           <label for="config-name">Configuration Name:</label>
           <input type="text" id="config-name" placeholder="e.g., Spanish Vocabulary">
+        </div>
+        <div class="setting">
+          <label for="key-column-selector">Unique Key Column:</label>
+          <select id="key-column-selector"></select>
         </div>
         <div class="setting">
           <label for="data-url">Data Source URL (TSV/CSV):</label>
@@ -81,6 +87,14 @@
         <div class="setting">
           <input type="checkbox" id="tts-on-hotkey-only">
           <label for="tts-on-hotkey-only">Only read on hotkey (f)</label>
+        </div>
+        <div class="setting">
+          <label for="repetition-intervals">Repetition Intervals (seconds, comma-separated):</label>
+          <textarea id="repetition-intervals" rows="3"></textarea>
+        </div>
+        <div class="setting">
+          <label for="learning-subset-size">Learning Subset Size:</label>
+          <input type="number" id="learning-subset-size" value="7" min="1">
         </div>
         <button id="load-data">Load Data</button>
         <button id="save-config">Save Configuration</button>
