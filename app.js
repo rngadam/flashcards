@@ -803,17 +803,13 @@ document.addEventListener('DOMContentLoaded', () => {
      * available in the user's browser.
      */
     function detectAndFilterLanguage() {
-        if (cardData.length === 0 || typeof franc === 'undefined') return;
+        if (cardData.length === 0 || typeof francAll === 'undefined') return;
 
-        const sampleSize = Math.min(10, cardData.length);
-        let sampleText = '';
-        for (let i = 0; i < sampleSize; i++) {
-            sampleText += cardData[i].join(' ') + ' ';
-        }
+        // Use the entire text content
+        let fullText = cardData.map(row => row.join(' ')).join(' ');
 
-        const langGuesses = francAll(sampleText);
+        const langGuesses = francAll(fullText);
         const detectedLangCodes = langGuesses
-            .slice(0, 3) // Take top 3 guesses
             .filter(guess => guess[0] !== 'und') // Filter out 'undetermined'
             .map(guess => guess[0]); // Get the 3-letter code
 
