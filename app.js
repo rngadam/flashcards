@@ -548,21 +548,17 @@ document.addEventListener('DOMContentLoaded', () => {
                 valB = b.stats[statsKey];
             }
 
-            // Type-aware comparison
-            const isNumeric = !isNaN(parseFloat(valA)) && isFinite(valA) && !isNaN(parseFloat(valB)) && isFinite(valB);
-
+            // Handle nulls to sort them at the end
             if (valA === null || valA === undefined) valA = historySortDirection === 'asc' ? Infinity : -Infinity;
             if (valB === null || valB === undefined) valB = historySortDirection === 'asc' ? Infinity : -Infinity;
 
-
-            if (isNumeric) {
-                valA = Number(valA);
-                valB = Number(valB);
-            } else if (typeof valA === 'string') {
-                valA = valA.toLowerCase();
-                if (typeof valB === 'string') {
-                    valB = valB.toLowerCase();
-                }
+            // Type-aware comparison
+            if (typeof valA === 'number' && typeof valB === 'number') {
+                // Direct numeric comparison (for status, view count, and timestamp)
+            } else {
+                // Fallback to string comparison
+                valA = String(valA).toLowerCase();
+                valB = String(valB).toLowerCase();
             }
 
             if (valA < valB) {
@@ -802,26 +798,44 @@ document.addEventListener('DOMContentLoaded', () => {
      * Populates the TTS voice selection dropdowns with the list of voices
      * available in the user's browser.
      */
-    function detectAndFilterLanguage() {
-        if (cardData.length === 0 || typeof francAll === 'undefined') return;
+    async function detectAndFilterLanguage() {
+        if (cardData.length === 0) return;
 
-        // Use the entire text content
-        let fullText = cardData.map(row => row.join(' ')).join(' ');
+        let detectedLangCodes2Letter = [];
+        const fullText = cardData.map(row => row.join(' ')).join(' ');
 
-        const langGuesses = francAll(fullText);
-        const detectedLangCodes = langGuesses
-            .filter(guess => guess[0] !== 'und') // Filter out 'undetermined'
-            .map(guess => guess[0]); // Get the 3-letter code
+        if ('LanguageDetector' in window) {
+            try {
+                const detector = await LanguageDetector.create();
+                const detectionResult = await detector.detect(fullText);
+                detectedLangCodes2Letter = detectionResult.languages
+                    .filter(lang => lang.language !== 'und')
+                    .map(lang => lang.language); // Native API gives 2-letter codes
+            } catch (error) {
+                console.error('Language Detector API failed, falling back to franc:', error);
+                if (typeof francAll !== 'undefined') {
+                    const langGuesses = francAll(fullText);
+                    detectedLangCodes2Letter = langGuesses
+                        .filter(guess => guess[0] !== 'und')
+                        .map(guess => guess[0].substring(0, 2)); // Convert 3-letter to 2-letter
+                }
+            }
+        } else if (typeof francAll !== 'undefined') {
+            const langGuesses = francAll(fullText);
+            detectedLangCodes2Letter = langGuesses
+                .filter(guess => guess[0] !== 'und')
+                .map(guess => guess[0].substring(0, 2)); // Convert 3-letter to 2-letter
+        }
 
-        if (detectedLangCodes.length > 0) {
+        if (detectedLangCodes2Letter.length > 0) {
             if (detectedLangSpan) {
-                detectedLangSpan.textContent = `Detected: ${detectedLangCodes.join(', ')}`;
+                detectedLangSpan.textContent = `Detected: ${detectedLangCodes2Letter.join(', ')}`;
                 detectedLangSpan.style.display = 'inline';
             }
-            populateVoices(detectedLangCodes);
+            populateVoices(detectedLangCodes2Letter);
         } else {
             if (detectedLangSpan) detectedLangSpan.style.display = 'none';
-            populateVoices([]); // Pass empty array
+            populateVoices([]);
         }
     }
 
