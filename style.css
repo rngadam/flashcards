@@ -198,4 +198,28 @@ button {
   color: #666;
   font-size: 0.9em;
   margin-left: 15px;
+  display: none; /* Hidden by default */
+}
+
+.btn-text {
+    display: none; /* Hidden by default */
+}
+
+/* Show text labels and hints only on desktop */
+body.desktop .btn-text,
+body.desktop .hotkey-hint {
+    display: inline;
+}
+
+body.desktop #controls button .btn-text {
+    margin-left: 8px;
+}
+
+body.desktop #controls button {
+    padding: 10px 15px; /* Adjust padding for text */
+    vertical-align: middle; /* Align icon and text */
+}
+
+body.desktop #controls button span:first-child {
+    font-size: 1.2em; /* Ensure icon is a good size */
 }

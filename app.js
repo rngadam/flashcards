@@ -4,6 +4,10 @@
  * and all user-facing features like TTS, spaced repetition, and settings.
  */
 document.addEventListener('DOMContentLoaded', () => {
+    if (!('ontouchstart' in window)) {
+        document.body.classList.add('desktop');
+    }
+
     // DOM Elements
     const settingsButton = document.getElementById('settings-button');
     const closeSettingsButton = document.getElementById('close-settings-button');
@@ -65,7 +69,15 @@ document.addEventListener('DOMContentLoaded', () => {
     if (closeSettingsButton) closeSettingsButton.addEventListener('click', () => settingsModal.classList.add('hidden'));
     if (historyButton) historyButton.addEventListener('click', renderHistoryTable);
     if (closeHistoryButton) closeHistoryButton.addEventListener('click', () => historyModal.classList.add('hidden'));
-    if (loadDataButton) loadDataButton.addEventListener('click', loadData);
+    if (loadDataButton) {
+        loadDataButton.addEventListener('click', () => {
+            loadData().then(() => {
+                if (cardData.length > 0) {
+                    showNextCard();
+                }
+            });
+        });
+    }
     if (saveConfigButton) saveConfigButton.addEventListener('click', saveConfig);
     if (configSelector) configSelector.addEventListener('change', () => loadSelectedConfig(configSelector.value));
     if (flipCardButton) flipCardButton.addEventListener('click', flipCard);
@@ -120,9 +132,7 @@ document.addEventListener('DOMContentLoaded', () => {
             })
             .then(text => {
                 parseData(text);
-                if (cardData.length > 0) {
-                    displayCard(0);
-                }
+                // The calling function is now responsible for displaying the first card
                 if (settingsModal) settingsModal.classList.add('hidden');
                 document.body.classList.add('debug-data-loaded');
             })
@@ -511,6 +521,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             }
             localStorage.setItem('flashcard-last-config', configName);
+
+            if (cardData.length > 0) {
+                showNextCard();
+            }
         });
     }
 
