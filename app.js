@@ -829,13 +829,21 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    function populateVoices(detectedLangCodes = []) { // Default to empty array
+    function populateVoices(detectedLangCodes) {
+        console.log('populateVoices called with:', detectedLangCodes);
+        console.log('Type:', typeof detectedLangCodes);
         if (!('speechSynthesis' in window)) return;
         voices = speechSynthesis.getVoices();
         if (!ttsFrontLangSelect || !ttsBackLangSelect) return;
 
         const currentFront = ttsFrontLangSelect.value;
         const currentBack = ttsBackLangSelect.value;
+
+        // Defensive check
+        if (!Array.isArray(detectedLangCodes)) {
+            console.log('detectedLangCodes is not an array, defaulting to empty.');
+            detectedLangCodes = [];
+        }
 
         // Create a set of language prefixes to show
         // Start with the 2-letter codes from the detected languages
