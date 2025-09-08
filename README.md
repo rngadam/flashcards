@@ -4,7 +4,7 @@ A rich, single-page web application for practicing flashcards using spaced repet
 
 ## Overview
 
-This web-app allows users to practice from custom data sources (TSV or CSV) with flexible configuration options. It saves your configurations to local browser storage, so your decks are always ready for you. On startup, the app automatically loads your last-used configuration. If no configurations are saved, the settings panel will appear, prompting you to create one.
+This web-app allows users to practice from custom data sources (TSV or CSV) with flexible configuration options. It saves your configurations and card statistics to local browser storage, so your decks and progress are always ready for you. On startup, the app automatically loads your last-used configuration.
 
 ## Features
 
@@ -26,6 +26,10 @@ This web-app allows users to practice from custom data sources (TSV or CSV) with
     *   **I don't know this (j):** Mark the card as not known and advance to a different low-score card.
     *   **Slow Replay (f):** Replay the card's audio at a slower speed. Each press gets progressively slower.
 
+### History and Persistence
+*   **Persistent Progress:** All your interactions with each card (retention score, view count, last seen time) are saved to your browser's local storage. Your progress is automatically loaded when you load a deck.
+*   **History View:** Click the history button (📜) in the upper-right corner to see a complete, interactive table of all cards in the current deck, along with their detailed statistics.
+
 ### Spaced Repetition
 *   **Intelligent Practice:** The app tracks which cards you know and which you don't. It prioritizes showing you cards you have the most trouble with.
 *   **Smart "Don't Know" Logic:** When you mark a card as not known, its score is reset, and the app will show you a *different* card from the pool of least-known cards, preventing immediate repeats.
@@ -41,3 +45,4 @@ This web-app allows users to practice from custom data sources (TSV or CSV) with
 *   **Disable Flip Animation:** Turn off the card flipping animation for a faster, more minimal experience.
 *   **Alternate Uppercase:** An option to alternate the casing on the front of the card between the original and all-uppercase, to help with memorization.
 *   **Audio-Only Front:** For listening comprehension practice, you can choose to hide the text on the front of the card and only hear the audio. A speech icon (🔊) will be displayed instead of the text.
+*   **On-Demand TTS:** An option to only have text-to-speech play when the 'f' hotkey is pressed.
