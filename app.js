@@ -1,3 +1,5 @@
+import { franc } from 'https://cdn.jsdelivr.net/npm/franc@6.2.0/+esm';
+
 /**
  * @file Main application logic for the Flashcards web app.
  * Handles DOM interactions, data loading, card display, state management,
@@ -124,9 +126,9 @@ document.addEventListener('DOMContentLoaded', () => {
     document.addEventListener('keyup', handleHotkeys);
     if (card) {
         card.addEventListener('mousedown', dragStart);
-        card.addEventListener('touchstart', dragStart);
+        card.addEventListener('touchstart', dragStart, { passive: false });
         card.addEventListener('mousemove', dragMove);
-        card.addEventListener('touchmove', dragMove);
+        card.addEventListener('touchmove', dragMove, { passive: false });
         card.addEventListener('mouseup', dragEnd);
         card.addEventListener('touchend', dragEnd);
         card.addEventListener('mouseleave', dragEnd);
