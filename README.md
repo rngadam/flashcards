@@ -17,14 +17,19 @@ This web-app allows users to practice from custom data sources (TSV or CSV) with
 ### Display and Interaction
 *   **Adaptive Font Size:** The font size automatically adjusts to maximize the use of the card's space, accommodating long text.
 *   **Configurable Font:** Choose from several fonts to suit your preference.
-*   **Full Hotkey Support:**
-    *   **Previous (←):** Go to the previously viewed card. This is history-aware, not just the previous card in the list.
-    *   **Flip (Space):** Press and release to flip the card.
-    *   **Hold Space:** Hold the spacebar to see the back of the card; release to flip back to the front.
-    *   **Next (→):** Go to the next card based on the spaced repetition algorithm.
-    *   **I know this (k):** Mark the card as known and advance to the next card.
-    *   **I don't know this (j):** Mark the card as not known and advance to a different low-score card.
-    *   **Slow Replay (f):** Replay the card's audio at a slower speed. Each press gets progressively slower.
+*   **Mobile-Friendly Controls:** The app is designed for a great experience on mobile devices.
+    *   **Tap-to-Flip:** Simply tap the card to flip it over.
+    *   **Swipe Navigation:** Swipe the card to the right to mark it as "known" (✅) and to the left to mark it as "unknown" (❌).
+    *   **Large Buttons with Icons:** The on-screen controls are large and use clear icons for easy tapping.
+
+### Full Hotkey Support
+*   **Previous (←):** Go to the previously viewed card. This is history-aware, not just the previous card in the list.
+*   **Flip (Space):** Press and release to flip the card.
+*   **Hold Space:** Hold the spacebar to see the back of the card; release to flip back to the front.
+*   **Next (→):** Go to the next card based on the spaced repetition algorithm.
+*   **I know this (k):** Mark the card as known and advance to the next card.
+*   **I don't know this (j):** Mark the card as not known and advance to a different low-score card.
+*   **Slow Replay (f):** Replay the card's audio at a slower speed. Each press gets progressively slower.
 
 ### History and Persistence
 *   **Persistent Progress:** All your interactions with each card (retention score, view count, last seen time) are saved to your browser's local storage. Your progress is automatically loaded when you load a deck.
