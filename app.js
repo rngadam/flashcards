@@ -1,3 +1,8 @@
+/**
+ * @file Main application logic for the Flashcards web app.
+ * Handles DOM interactions, data loading, card display, state management,
+ * and all user-facing features like TTS, spaced repetition, and settings.
+ */
 document.addEventListener('DOMContentLoaded', () => {
     // DOM Elements
     const settingsButton = document.getElementById('settings-button');
@@ -37,16 +42,23 @@ document.addEventListener('DOMContentLoaded', () => {
     const iDontKnowButton = document.getElementById('i-dont-know');
 
     // App state
-    let cardData = [];
-    let headers = [];
-    let currentCardIndex = 0;
-    let configs = {};
-    let cardStatus = []; // for spaced repetition
-    let viewCount = [];
-    let lastViewed = [];
-    let voices = [];
-    let viewHistory = [];
-    let useUppercase = false;
+    let cardData = []; // Holds the parsed card data from the TSV/CSV file.
+    let headers = []; // Holds the column headers from the data file.
+    let currentCardIndex = 0; // The index of the currently displayed card in cardData.
+    let configs = {}; // Stores all saved deck configurations.
+    let cardStatus = []; // Tracks the retention score for each card.
+    let viewCount = []; // Tracks how many times each card has been viewed.
+    let lastViewed = []; // Tracks the timestamp of the last time each card was viewed.
+    let voices = []; // Holds the list of available TTS voices from the browser.
+    let viewHistory = []; // A stack to keep track of the sequence of viewed cards for the "previous" button.
+    let useUppercase = false; // A flag for the "Alternate Uppercase" feature.
+    let replayRate = 1.0; // Tracks the current playback rate for the 'f' key replay feature.
+
+    // Drag state for swipe gestures
+    let isDragging = false; // True if a card is currently being dragged.
+    let startX = 0; // The starting X coordinate of a drag.
+    let currentX = 0; // The current X coordinate during a drag.
+    let dragThreshold = 100; // The pixel distance a card must be dragged to trigger a swipe action.
 
     // --- Event Listeners ---
     if (settingsButton) settingsButton.addEventListener('click', () => settingsModal.classList.remove('hidden'));
@@ -60,7 +72,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (nextCardButton) nextCardButton.addEventListener('click', () => showNextCard());
     if (prevCardButton) prevCardButton.addEventListener('click', showPrevCard);
     if (iKnowButton) iKnowButton.addEventListener('click', () => { markCardAsKnown(true); showNextCard(); });
-    if (iDontKnowButton) iDontKnowButton.addEventListener('click', () => { markCardAsKnown(false); showNextCard({forceNew: true}); });
+    if (iDontKnowButton) iDontKnowButton.addEventListener('click', () => { markCardAsKnown(false); showNextCard({ forceNew: true }); });
     if (frontColumnCheckboxes) frontColumnCheckboxes.addEventListener('change', () => displayCard(currentCardIndex));
     if (backColumnCheckboxes) backColumnCheckboxes.addEventListener('change', () => displayCard(currentCardIndex));
     if (fontSelector) fontSelector.addEventListener('change', () => {
@@ -78,8 +90,22 @@ document.addEventListener('DOMContentLoaded', () => {
     if (audioOnlyFrontCheckbox) audioOnlyFrontCheckbox.addEventListener('change', () => displayCard(currentCardIndex));
     document.addEventListener('keydown', handleHotkeys);
     document.addEventListener('keyup', handleHotkeys);
+    if (card) {
+        card.addEventListener('mousedown', dragStart);
+        card.addEventListener('touchstart', dragStart);
+        card.addEventListener('mousemove', dragMove);
+        card.addEventListener('touchmove', dragMove);
+        card.addEventListener('mouseup', dragEnd);
+        card.addEventListener('touchend', dragEnd);
+        card.addEventListener('mouseleave', dragEnd);
+        card.addEventListener('click', cardClick);
+    }
 
     // --- Functions ---
+    /**
+     * Fetches data from the provided URL, parses it, and initializes the deck.
+     * @returns {Promise<void>} A promise that resolves when the data is loaded and the first card is displayed, or rejects on failure.
+     */
     function loadData() {
         const url = dataUrlInput.value;
         if (!url) {
@@ -98,12 +124,19 @@ document.addEventListener('DOMContentLoaded', () => {
                     displayCard(0);
                 }
                 if (settingsModal) settingsModal.classList.add('hidden');
+                document.body.classList.add('debug-data-loaded');
             })
             .catch(error => {
                 alert(`Failed to load data: ${error.message}`);
             });
     }
 
+    /**
+     * Parses raw TSV or CSV text into the application's data structures.
+     * It auto-detects the delimiter (tab or comma).
+     * It also initializes the statistics for each card.
+     * @param {string} text - The raw string data from the fetched file.
+     */
     function parseData(text) {
         const rows = text.trim().split('\n');
         if (rows[0].includes('\t')) {
@@ -131,6 +164,10 @@ document.addEventListener('DOMContentLoaded', () => {
         populateColumnSelectors();
     }
 
+    /**
+     * Populates the front and back column selection checkboxes in the settings modal
+     * based on the headers from the data file.
+     */
     function populateColumnSelectors() {
         if (!frontColumnCheckboxes || !backColumnCheckboxes) return;
         frontColumnCheckboxes.innerHTML = '';
@@ -155,6 +192,10 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    /**
+     * Flips the current card and handles the flip animation.
+     * Also triggers TTS for the revealed side if enabled.
+     */
     function flipCard() {
         if (!card) return;
         card.classList.toggle('flipped');
@@ -173,6 +214,11 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    /**
+     * Dynamically adjusts the font size of an element to fit its container.
+     * Uses a binary search approach for efficiency.
+     * @param {HTMLElement} element - The text element to resize.
+     */
     function adjustFontSize(element) {
         if (!element) return;
         const container = element.parentElement;
@@ -193,6 +239,11 @@ document.addEventListener('DOMContentLoaded', () => {
         element.style.fontSize = `${bestSize}px`;
     }
 
+    /**
+     * Converts a timestamp into a human-readable "time ago" string.
+     * @param {number|null} timestamp - The timestamp to format.
+     * @returns {string} A human-readable string like "5 minutes ago" or "just now".
+     */
     function formatTimeAgo(timestamp) {
         if (!timestamp) return 'never';
         const now = Date.now();
@@ -211,12 +262,24 @@ document.addEventListener('DOMContentLoaded', () => {
         return `${years} years ago`;
     }
 
+    /**
+     * Gets the combined text content from the selected columns for the current card.
+     * @param {HTMLElement} checkboxContainer - The container with the column checkboxes (front or back).
+     * @returns {string} The combined text, with each column's content on a new line.
+     */
     function getSelectedColumnsText(checkboxContainer) {
         if (!checkboxContainer) return '';
         const selectedColumns = Array.from(checkboxContainer.querySelectorAll('input:checked')).map(cb => parseInt(cb.value));
         return selectedColumns.map(colIndex => cardData[currentCardIndex][colIndex]).join('\n');
     }
 
+    /**
+     * Displays a card at a given index, updating the front and back content,
+     * and handling features like "Alternate Uppercase" and "Audio-Only Front".
+     * It also updates and displays the card's statistics.
+     * @param {number} index - The index of the card to display in the `cardData` array.
+     * @param {boolean} [isNavigatingBack=false] - True if this call is from the "previous" button, to prevent pushing to view history.
+     */
     function displayCard(index, isNavigatingBack = false) {
         if (cardData.length === 0 || index < 0 || index >= cardData.length) return;
 
@@ -269,6 +332,12 @@ document.addEventListener('DOMContentLoaded', () => {
         saveCardStats();
     }
 
+    /**
+     * Determines the next card to show based on the spaced repetition algorithm.
+     * It prioritizes cards with the lowest retention score.
+     * @param {object} [options] - Optional parameters.
+     * @param {boolean} [options.forceNew=false] - If true, ensures the next card is different from the current one, even if it also has a low score. Used for "I don't know".
+     */
     function showNextCard({forceNew = false} = {}) {
         if (cardData.length === 0) return;
 
@@ -287,6 +356,9 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    /**
+     * Shows the previously viewed card by popping from the view history stack.
+     */
     function showPrevCard() {
         if (viewHistory.length > 0) {
             const prevIndex = viewHistory.pop();
@@ -294,6 +366,10 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    /**
+     * Renders the complete history of all cards and their statistics into a table
+     * and displays it in the history modal.
+     */
     function renderHistoryTable() {
         if (!historyTableContainer) return;
         const statsData = JSON.parse(localStorage.getItem('card-stats-data')) || {};
@@ -321,6 +397,10 @@ document.addEventListener('DOMContentLoaded', () => {
         historyModal.classList.remove('hidden');
     }
 
+    /**
+     * Saves the current statistics (status, view count, last viewed) for all cards
+     * to the browser's local storage.
+     */
     function saveCardStats() {
         const statsData = {};
         cardData.forEach((card, index) => {
@@ -334,6 +414,10 @@ document.addEventListener('DOMContentLoaded', () => {
         localStorage.setItem('card-stats-data', JSON.stringify(statsData));
     }
 
+    /**
+     * Updates the retention score for the current card.
+     * @param {boolean} known - If true, the score is incremented. If false, it's reset to 0.
+     */
     function markCardAsKnown(known) {
         if (known) {
             cardStatus[currentCardIndex]++;
@@ -343,6 +427,10 @@ document.addEventListener('DOMContentLoaded', () => {
         saveCardStats();
     }
 
+    /**
+     * Saves the current UI settings (URL, columns, font, etc.) as a named configuration
+     * to local storage.
+     */
     function saveConfig() {
         if (!configNameInput) return;
         const configName = configNameInput.value;
@@ -374,6 +462,10 @@ document.addEventListener('DOMContentLoaded', () => {
         alert(`Configuration '${configName}' saved!`);
     }
 
+    /**
+     * Loads a saved configuration by name, updating the UI and loading its data.
+     * @param {string} configName - The name of the configuration to load.
+     */
     function loadSelectedConfig(configName) {
         if (!configName || !configs[configName]) return;
         const config = configs[configName];
@@ -422,6 +514,10 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    /**
+     * Populates the configuration dropdown in the settings modal with the names
+     * of all saved configurations.
+     */
     function populateConfigSelector() {
         if (!configSelector) return;
         configSelector.innerHTML = '<option value="">-- Load a Configuration --</option>';
@@ -431,6 +527,11 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    /**
+     * Loads configurations from local storage on startup.
+     * If a "last used" configuration is found, it is loaded automatically.
+     * Otherwise, the settings modal is shown.
+     */
     function loadInitialConfigs() {
         const savedConfigs = localStorage.getItem('flashcard-configs');
         if (savedConfigs) {
@@ -447,6 +548,10 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    /**
+     * Populates the TTS voice selection dropdowns with the list of voices
+     * available in the user's browser.
+     */
     function populateVoices() {
         if (!('speechSynthesis' in window)) return;
         voices = speechSynthesis.getVoices();
@@ -461,8 +566,12 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    let replayRate = 1.0;
-
+    /**
+     * Uses the browser's SpeechSynthesis API to speak the given text.
+     * @param {string} text - The text to be spoken.
+     * @param {string} voiceName - The name of the voice to use (from `speechSynthesis.getVoices()`).
+     * @param {number} [rate] - The playback rate (e.g., 1.0 for normal, 0.5 for half-speed). Defaults to the slider value.
+     */
     function speak(text, voiceName, rate) {
         if (!('speechSynthesis' in window) || speechSynthesis.speaking) {
             return;
@@ -478,6 +587,12 @@ document.addEventListener('DOMContentLoaded', () => {
         window.speechSynthesis.speak(utterance);
     }
 
+    /**
+     * Handles all keyboard shortcuts for the application.
+     * This includes flipping cards, navigation, marking cards, and replaying audio.
+     * It distinguishes between keydown and keyup for the "hold space to peek" feature.
+     * @param {KeyboardEvent} e - The keyboard event object.
+     */
     function handleHotkeys(e) {
         if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
 
@@ -524,6 +639,68 @@ document.addEventListener('DOMContentLoaded', () => {
                 break;
         }
     }
+
+    function cardClick(e) {
+        // This is a failsafe for the dragend logic. If a click is registered,
+        // and it wasn't a drag, we flip the card.
+        if (!isDragging) {
+            flipCard();
+        }
+    }
+
+    function dragStart(e) {
+        if (e.target.closest('button')) return; // Don't drag if clicking a button on the card
+        isDragging = true;
+        startX = e.pageX || e.touches[0].pageX;
+        currentX = startX; // Initialize currentX
+        card.style.transition = 'none'; // Disable transition for smooth dragging
+    }
+
+    function dragMove(e) {
+        if (!isDragging) return;
+        e.preventDefault();
+        currentX = e.pageX || e.touches[0].pageX;
+        const diffX = currentX - startX;
+        card.style.transform = `translateX(${diffX}px) rotate(${diffX / 20}deg)`;
+    }
+
+    function dragEnd(e) {
+        if (!isDragging) return;
+        const wasDragging = isDragging;
+        isDragging = false;
+
+        const diffX = currentX - startX;
+
+        // A very small movement should be treated as a click, not a drag
+        if (Math.abs(diffX) < 10) {
+            card.style.transform = '';
+            // The 'click' event will handle the flip
+            return;
+        }
+
+        card.style.transition = 'transform 0.3s ease';
+
+        if (Math.abs(diffX) > dragThreshold) {
+            card.classList.add(diffX > 0 ? 'swipe-right' : 'swipe-left');
+            setTimeout(() => {
+                if (diffX > 0) {
+                    markCardAsKnown(true);
+                    showNextCard();
+                } else {
+                    markCardAsKnown(false);
+                    showNextCard({ forceNew: true });
+                }
+                card.style.transform = '';
+                card.classList.remove('swipe-right', 'swipe-left');
+            }, 300);
+        } else {
+            card.style.transform = '';
+        }
+
+        startX = 0;
+        currentX = 0;
+    }
+
 
     // Initial load
     populateVoices();
