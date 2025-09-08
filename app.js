@@ -110,7 +110,6 @@ document.addEventListener('DOMContentLoaded', () => {
         card.addEventListener('mouseup', dragEnd);
         card.addEventListener('touchend', dragEnd);
         card.addEventListener('mouseleave', dragEnd);
-        card.addEventListener('click', cardClick);
     }
 
     // --- Functions ---
@@ -216,7 +215,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (ttsOnHotkeyOnlyCheckbox && ttsOnHotkeyOnlyCheckbox.checked) return;
 
-        const originalFrontText = getSelectedColumnsText(frontColumnCheckboxes);
+        const frontIndices = getSelectedColumnIndices(frontColumnCheckboxes);
+        const originalFrontText = getTextForColumns(frontIndices);
+
         if (card.classList.contains('flipped') && ttsBackCheckbox && ttsBackCheckbox.checked) {
             speak(cardBack.textContent, ttsBackLangSelect.value);
         } else if (!card.classList.contains('flipped') && ttsFrontCheckbox && ttsFrontCheckbox.checked) {
@@ -273,14 +274,23 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     /**
-     * Gets the combined text content from the selected columns for the current card.
-     * @param {HTMLElement} checkboxContainer - The container with the column checkboxes (front or back).
+     * Gets the selected column indices from a checkbox container.
+     * @param {HTMLElement} checkboxContainer - The container with the column checkboxes.
+     * @returns {number[]} An array of selected column indices, e.g., [0, 2].
+     */
+    function getSelectedColumnIndices(checkboxContainer) {
+        if (!checkboxContainer) return [];
+        return Array.from(checkboxContainer.querySelectorAll('input:checked')).map(cb => parseInt(cb.value));
+    }
+
+    /**
+     * Gets the combined text content for the current card from a given set of column indices.
+     * @param {number[]} indices - An array of column indices.
      * @returns {string} The combined text, with each column's content on a new line.
      */
-    function getSelectedColumnsText(checkboxContainer) {
-        if (!checkboxContainer) return '';
-        const selectedColumns = Array.from(checkboxContainer.querySelectorAll('input:checked')).map(cb => parseInt(cb.value));
-        return selectedColumns.map(colIndex => cardData[currentCardIndex][colIndex]).join('\n');
+    function getTextForColumns(indices) {
+        if (!indices || !cardData[currentCardIndex]) return '';
+        return indices.map(colIndex => cardData[currentCardIndex][colIndex]).join('\n');
     }
 
     /**
@@ -303,7 +313,10 @@ document.addEventListener('DOMContentLoaded', () => {
         viewCount[currentCardIndex]++;
         lastViewed[currentCardIndex] = Date.now();
 
-        const originalFrontText = getSelectedColumnsText(frontColumnCheckboxes);
+        const frontIndices = getSelectedColumnIndices(frontColumnCheckboxes);
+        const backIndices = getSelectedColumnIndices(backColumnCheckboxes);
+
+        const originalFrontText = getTextForColumns(frontIndices);
         let displayText = originalFrontText;
         if (alternateUppercaseCheckbox && alternateUppercaseCheckbox.checked) {
             if (useUppercase) {
@@ -317,7 +330,7 @@ document.addEventListener('DOMContentLoaded', () => {
         } else {
             cardFront.textContent = displayText;
         }
-        cardBack.textContent = getSelectedColumnsText(backColumnCheckboxes);
+        cardBack.textContent = getTextForColumns(backIndices);
 
         cardFront.style.fontSize = '';
         cardBack.style.fontSize = '';
@@ -451,8 +464,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
         configs[configName] = {
             dataUrl: dataUrlInput.value,
-            frontColumns: getSelectedColumnsText(frontColumnCheckboxes),
-            backColumns: getSelectedColumnsText(backColumnCheckboxes),
+            frontColumns: getSelectedColumnIndices(frontColumnCheckboxes),
+            backColumns: getSelectedColumnIndices(backColumnCheckboxes),
             font: fontSelector.value,
             ttsFront: ttsFrontCheckbox.checked,
             ttsBack: ttsBackCheckbox.checked,
@@ -654,14 +667,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    function cardClick(e) {
-        // This is a failsafe for the dragend logic. If a click is registered,
-        // and it wasn't a drag, we flip the card.
-        if (!isDragging) {
-            flipCard();
-        }
-    }
-
     function dragStart(e) {
         if (e.target.closest('button')) return; // Don't drag if clicking a button on the card
         isDragging = true;
@@ -680,21 +685,28 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function dragEnd(e) {
         if (!isDragging) return;
-        const wasDragging = isDragging;
         isDragging = false;
 
         const diffX = currentX - startX;
 
-        // A very small movement should be treated as a click, not a drag
+        // Reset drag state for the next interaction
+        startX = 0;
+        currentX = 0;
+
+        // Treat very small movements as a tap
         if (Math.abs(diffX) < 10) {
             card.style.transform = '';
-            // The 'click' event will handle the flip
+            // Don't flip if the mouse just left the card while dragging
+            if (e.type !== 'mouseleave') {
+                flipCard();
+            }
             return;
         }
 
         card.style.transition = 'transform 0.3s ease';
 
         if (Math.abs(diffX) > dragThreshold) {
+            // A real swipe
             card.classList.add(diffX > 0 ? 'swipe-right' : 'swipe-left');
             setTimeout(() => {
                 if (diffX > 0) {
@@ -708,11 +720,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 card.classList.remove('swipe-right', 'swipe-left');
             }, 300);
         } else {
+            // A short drag, but not a tap, so snap back
             card.style.transform = '';
         }
-
-        startX = 0;
-        currentX = 0;
     }
 
 
