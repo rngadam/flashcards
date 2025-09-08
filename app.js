@@ -1,4 +1,4 @@
-import { franc } from 'https://cdn.jsdelivr.net/npm/franc@6.2.0/+esm';
+import { franc, francAll } from 'https://cdn.jsdelivr.net/npm/franc@6.2.0/+esm';
 
 /**
  * @file Main application logic for the Flashcards web app.
@@ -522,15 +522,15 @@ document.addEventListener('DOMContentLoaded', () => {
             historySortDirection = 'asc';
         }
 
-        const statsData = JSON.parse(localStorage.getItem('card-stats-data')) || {};
-
-        // Create a combined array for sorting
+        // Create a combined array for sorting directly from in-memory state
         const combinedData = cardData.map((card, index) => {
-            const cardKey = getCardKey(card);
-            const stats = statsData[cardKey] || { status: cardStatus[index], viewCount: viewCount[index], lastViewed: lastViewed[index] };
             return {
                 card: card,
-                stats: stats
+                stats: {
+                    status: cardStatus[index],
+                    viewCount: viewCount[index],
+                    lastViewed: lastViewed[index]
+                }
             };
         });
 
@@ -574,13 +574,40 @@ document.addEventListener('DOMContentLoaded', () => {
             return 0;
         });
 
-        // Re-populate the original arrays from the sorted combined data
-        cardData = combinedData.map(item => item.card);
-        cardStatus = combinedData.map(item => item.stats.status);
-        viewCount = combinedData.map(item => item.stats.viewCount);
-        lastViewed = combinedData.map(item => item.stats.lastViewed);
+        // Generate a new table body from the sorted data
+        let newTbodyHtml = '<tbody>';
+        combinedData.forEach(item => {
+            newTbodyHtml += '<tr>';
+            item.card.forEach(cell => {
+                newTbodyHtml += `<td>${cell}</td>`;
+            });
+            newTbodyHtml += `<td>${item.stats.status}</td>`;
+            newTbodyHtml += `<td>${item.stats.viewCount}</td>`;
+            newTbodyHtml += `<td>${formatTimeAgo(item.stats.lastViewed)}</td>`;
+            newTbodyHtml += '</tr>';
+        });
+        newTbodyHtml += '</tbody>';
 
-        renderHistoryTable();
+        // Replace only the table body, leaving the main app state untouched
+        const table = historyTableContainer.querySelector('table');
+        if (table) {
+            const oldTbody = table.querySelector('tbody');
+            if (oldTbody) {
+                // oldTbody.innerHTML = newTbodyHtml; // This is not right, it would insert '<tbody>...</tbody>' inside another tbody
+                table.removeChild(oldTbody);
+                table.insertAdjacentHTML('beforeend', newTbodyHtml);
+            } else {
+                table.insertAdjacentHTML('beforeend', newTbodyHtml);
+            }
+        }
+
+        // Also update the header classes to show sort direction
+        historyTableContainer.querySelectorAll('th.sortable').forEach(th => {
+            th.classList.remove('asc', 'desc');
+            if (parseInt(th.dataset.columnIndex) === historySortColumn) {
+                th.classList.add(historySortDirection);
+            }
+        });
     }
 
     /**
@@ -784,7 +811,7 @@ document.addEventListener('DOMContentLoaded', () => {
             sampleText += cardData[i].join(' ') + ' ';
         }
 
-        const langGuesses = franc.all(sampleText);
+        const langGuesses = francAll(sampleText);
         const detectedLangCodes = langGuesses
             .slice(0, 3) // Take top 3 guesses
             .filter(guess => guess[0] !== 'und') // Filter out 'undetermined'

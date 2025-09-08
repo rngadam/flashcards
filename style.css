@@ -223,3 +223,23 @@ body.desktop #controls button {
 body.desktop #controls button span:first-child {
     font-size: 1.2em; /* Ensure icon is a good size */
 }
+
+th.sortable {
+    cursor: pointer;
+}
+
+th.sortable.asc::after,
+th.sortable.desc::after {
+    content: '';
+    display: inline-block;
+    margin-left: 5px;
+    font-size: 0.8em;
+}
+
+th.sortable.asc::after {
+    content: '▲';
+}
+
+th.sortable.desc::after {
+    content: '▼';
+}
