@@ -784,22 +784,25 @@ document.addEventListener('DOMContentLoaded', () => {
             sampleText += cardData[i].join(' ') + ' ';
         }
 
-        const langCode3 = franc(sampleText);
+        const langGuesses = franc.all(sampleText);
+        const detectedLangCodes = langGuesses
+            .slice(0, 3) // Take top 3 guesses
+            .filter(guess => guess[0] !== 'und') // Filter out 'undetermined'
+            .map(guess => guess[0]); // Get the 3-letter code
 
-        if (langCode3 && langCode3 !== 'und') {
-            const langCode2 = langCode3.substring(0, 2);
+        if (detectedLangCodes.length > 0) {
             if (detectedLangSpan) {
-                detectedLangSpan.textContent = `Detected: ${langCode3}`;
+                detectedLangSpan.textContent = `Detected: ${detectedLangCodes.join(', ')}`;
                 detectedLangSpan.style.display = 'inline';
             }
-            populateVoices(langCode2);
+            populateVoices(detectedLangCodes);
         } else {
             if (detectedLangSpan) detectedLangSpan.style.display = 'none';
-            populateVoices();
+            populateVoices([]); // Pass empty array
         }
     }
 
-    function populateVoices(filterLang) {
+    function populateVoices(detectedLangCodes = []) { // Default to empty array
         if (!('speechSynthesis' in window)) return;
         voices = speechSynthesis.getVoices();
         if (!ttsFrontLangSelect || !ttsBackLangSelect) return;
@@ -807,13 +810,32 @@ document.addEventListener('DOMContentLoaded', () => {
         const currentFront = ttsFrontLangSelect.value;
         const currentBack = ttsBackLangSelect.value;
 
+        // Create a set of language prefixes to show
+        // Start with the 2-letter codes from the detected languages
+        const langPrefixesToShow = new Set(detectedLangCodes.map(code => code.substring(0, 2)));
+
+        // Add the currently configured languages to the set so they are not removed
+        const frontVoice = voices.find(v => v.name === currentFront);
+        const backVoice = voices.find(v => v.name === currentBack);
+        if (frontVoice) {
+            langPrefixesToShow.add(frontVoice.lang.substring(0, 2));
+        }
+        if (backVoice) {
+            langPrefixesToShow.add(backVoice.lang.substring(0, 2));
+        }
+
         ttsFrontLangSelect.innerHTML = '';
         ttsBackLangSelect.innerHTML = '';
 
         let voicesToDisplay = voices;
-        if (filterLang) {
-            voicesToDisplay = voices.filter(voice => voice.lang.startsWith(filterLang));
+        if (langPrefixesToShow.size > 0) {
+            voicesToDisplay = voices.filter(voice => {
+                const voiceLangPrefix = voice.lang.substring(0, 2);
+                return langPrefixesToShow.has(voiceLangPrefix);
+            });
         }
+
+        // If filtering results in no voices, fall back to showing all
         if (voicesToDisplay.length === 0) {
             voicesToDisplay = voices;
         }
