@@ -737,8 +737,19 @@ document.addEventListener('DOMContentLoaded', () => {
             if (ttsOnHotkeyOnlyCheckbox) ttsOnHotkeyOnlyCheckbox.checked = config.ttsOnHotkeyOnly || false;
 
             if (repetitionIntervalsTextarea) {
-                repetitionIntervalsTextarea.value = config.repetitionIntervals || defaultIntervals.join(', ');
-                repetitionIntervals = repetitionIntervalsTextarea.value.split(',').map(s => parseInt(s.trim())).filter(n => !isNaN(n));
+                const configIntervalsString = config.repetitionIntervals;
+                // Check if the string is null, undefined, or just empty space
+                if (configIntervalsString && configIntervalsString.trim() !== '') {
+                    repetitionIntervals = configIntervalsString.split(',').map(s => parseInt(s.trim())).filter(n => !isNaN(n));
+                }
+
+                // If parsing resulted in an empty array, or if there was no string to begin with, use defaults
+                if (repetitionIntervals.length === 0) {
+                    repetitionIntervals = [...defaultIntervals];
+                }
+
+                // Always update the UI to reflect the actual intervals being used
+                repetitionIntervalsTextarea.value = repetitionIntervals.join(', ');
             }
             if (learningSubsetSizeInput) {
                 learningSubsetSizeInput.value = config.learningSubsetSize || 7;
@@ -808,9 +819,9 @@ document.addEventListener('DOMContentLoaded', () => {
             try {
                 const detector = await LanguageDetector.create();
                 const detectionResult = await detector.detect(fullText);
-                detectedLangCodes2Letter = detectionResult.languages
-                    .filter(lang => lang.language !== 'und')
-                    .map(lang => lang.language); // Native API gives 2-letter codes
+                detectedLangCodes2Letter = detectionResult
+                    .filter(lang => lang.detectedLanguage !== 'und')
+                    .map(lang => lang.detectedLanguage);
             } catch (error) {
                 console.error('Language Detector API failed, falling back to franc:', error);
                 if (typeof francAll !== 'undefined') {
