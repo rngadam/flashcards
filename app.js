@@ -1,4 +1,5 @@
 import { franc, francAll } from 'https://cdn.jsdelivr.net/npm/franc@6.2.0/+esm';
+import { eld } from 'https://cdn.jsdelivr.net/npm/efficient-language-detector-no-dynamic-import@1.0.3/+esm';
 
 /**
  * @file Main application logic for the Flashcards web app.
@@ -812,38 +813,49 @@ document.addEventListener('DOMContentLoaded', () => {
     async function detectAndFilterLanguage() {
         if (cardData.length === 0) return;
 
-        let detectedLangCodes2Letter = [];
+        const langCodeSet = new Set();
         const fullText = cardData.map(row => row.join(' ')).join(' ');
 
+        // 1. Native Chrome API
         if ('LanguageDetector' in window) {
             try {
                 const detector = await LanguageDetector.create();
                 const detectionResult = await detector.detect(fullText);
-                detectedLangCodes2Letter = detectionResult
+                detectionResult
                     .filter(lang => lang.detectedLanguage !== 'und')
-                    .map(lang => lang.detectedLanguage);
+                    .forEach(lang => langCodeSet.add(lang.detectedLanguage));
             } catch (error) {
-                console.error('Language Detector API failed, falling back to franc:', error);
-                if (typeof francAll !== 'undefined') {
-                    const langGuesses = francAll(fullText);
-                    detectedLangCodes2Letter = langGuesses
-                        .filter(guess => guess[0] !== 'und')
-                        .map(guess => guess[0].substring(0, 2)); // Convert 3-letter to 2-letter
-                }
+                console.error('Language Detector API failed:', error);
             }
-        } else if (typeof francAll !== 'undefined') {
-            const langGuesses = francAll(fullText);
-            detectedLangCodes2Letter = langGuesses
-                .filter(guess => guess[0] !== 'und')
-                .map(guess => guess[0].substring(0, 2)); // Convert 3-letter to 2-letter
         }
 
-        if (detectedLangCodes2Letter.length > 0) {
+        // 2. ELD Library
+        try {
+            const result = eld.detect(fullText);
+            if (result.isReliable() && result.language) {
+                langCodeSet.add(result.language);
+            }
+        } catch (error) {
+            console.error('ELD detection failed:', error);
+        }
+
+        // 3. Franc as a fallback if others fail
+        if (langCodeSet.size === 0 && typeof francAll !== 'undefined') {
+            const langGuesses = francAll(fullText);
+            langGuesses
+                .filter(guess => guess[0] !== 'und')
+                .map(guess => guess[0].substring(0, 2)) // franc gives 3-letter, convert to 2
+                .forEach(code => langCodeSet.add(code));
+        }
+
+        const finalLangCodes = Array.from(langCodeSet);
+
+        if (finalLangCodes.length > 0) {
             if (detectedLangSpan) {
-                detectedLangSpan.textContent = `Detected: ${detectedLangCodes2Letter.join(', ')}`;
+                detectedLangSpan.textContent = `Detected: ${finalLangCodes.join(', ')}`;
                 detectedLangSpan.style.display = 'inline';
             }
-            populateVoices(detectedLangCodes2Letter);
+            populateVoices(finalLangCodes);
         } else {
             if (detectedLangSpan) detectedLangSpan.style.display = 'none';
             populateVoices([]);
