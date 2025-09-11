@@ -1,5 +1,6 @@
 import { franc, francAll } from 'https://cdn.jsdelivr.net/npm/franc@6.2.0/+esm';
 import { eld } from 'https://cdn.jsdelivr.net/npm/efficient-language-detector-no-dynamic-import@1.0.3/+esm';
+import { get, set } from 'https://cdn.jsdelivr.net/npm/idb-keyval/+esm';
 
 /**
  * @file Main application logic for the Flashcards web app.
@@ -51,15 +52,14 @@ document.addEventListener('DOMContentLoaded', () => {
     const prevCardButton = document.getElementById('prev-card');
     const iKnowButton = document.getElementById('i-know');
     const iDontKnowButton = document.getElementById('i-dont-know');
+    const explanationMessage = document.getElementById('explanation-message');
 
     // App state
     let cardData = []; // Holds the parsed card data from the TSV/CSV file.
     let headers = []; // Holds the column headers from the data file.
     let currentCardIndex = 0; // The index of the currently displayed card in cardData.
     let configs = {}; // Stores all saved deck configurations.
-    let cardStatus = []; // Tracks the retention score for each card.
-    let viewCount = []; // Tracks how many times each card has been viewed.
-    let lastViewed = []; // Tracks the timestamp of the last time each card was viewed.
+    let cardStats = []; // Array of objects holding rich history for each card
     let voices = []; // Holds the list of available TTS voices from the browser.
     let viewHistory = []; // A stack to keep track of the sequence of viewed cards for the "previous" button.
     let useUppercase = false; // A flag for the "Alternate Uppercase" feature.
@@ -90,12 +90,11 @@ document.addEventListener('DOMContentLoaded', () => {
     if (historyButton) historyButton.addEventListener('click', renderHistoryTable);
     if (closeHistoryButton) closeHistoryButton.addEventListener('click', () => historyModal.classList.add('hidden'));
     if (loadDataButton) {
-        loadDataButton.addEventListener('click', () => {
-            loadData().then(() => {
-                if (cardData.length > 0) {
-                    showNextCard();
-                }
-            });
+        loadDataButton.addEventListener('click', async () => { // make listener async
+            await loadData(); // await the async function
+            if (cardData.length > 0) {
+                showNextCard();
+            }
         });
     }
     if (saveConfigButton) saveConfigButton.addEventListener('click', saveConfig);
@@ -140,27 +139,31 @@ document.addEventListener('DOMContentLoaded', () => {
      * Fetches data from the provided URL, parses it, and initializes the deck.
      * @returns {Promise<void>} A promise that resolves when the data is loaded and the first card is displayed, or rejects on failure.
      */
-    function loadData() {
+    async function loadData() { // Made async
         const url = dataUrlInput.value;
         if (!url) {
             alert('Please enter a data source URL.');
-            return Promise.reject('No URL provided');
+            return; // No need to return promise
         }
 
-        return fetch(url)
-            .then(response => {
-                if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-                return response.text();
-            })
-            .then(text => {
-                parseData(text);
-                // The calling function is now responsible for displaying the first card
-                if (settingsModal) settingsModal.classList.add('hidden');
-                document.body.classList.add('debug-data-loaded');
-            })
-            .catch(error => {
-                alert(`Failed to load data: ${error.message}`);
-            });
+        try {
+            const response = await fetch(url);
+            if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+            const text = await response.text();
+            await parseData(text); // Await the async parseData
+            // The calling function is now responsible for displaying the first card
+            if (settingsModal) settingsModal.classList.add('hidden');
+            document.body.classList.add('debug-data-loaded');
+        } catch (error) {
+            alert(`Failed to load data: ${error.message}`);
+        }
+    }
+
+    function shuffleArray(array) {
+        for (let i = array.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [array[i], array[j]] = [array[j], array[i]];
+        }
     }
 
     /**
@@ -169,7 +172,7 @@ document.addEventListener('DOMContentLoaded', () => {
      * It also initializes the statistics for each card.
      * @param {string} text - The raw string data from the fetched file.
      */
-    function parseData(text) {
+    async function parseData(text) { // Made async
         const rows = text.trim().split('\n');
         if (rows[0].includes('\t')) {
             headers = rows[0].split('\t');
@@ -179,19 +182,17 @@ document.addEventListener('DOMContentLoaded', () => {
             cardData = rows.slice(1).map(row => row.split(','));
         }
 
-        const statsData = JSON.parse(localStorage.getItem('card-stats-data')) || {};
-        cardStatus = new Array(cardData.length);
-        viewCount = new Array(cardData.length);
-        lastViewed = new Array(cardData.length);
-        cardInterval = new Array(cardData.length);
-
-        cardData.forEach((card, index) => {
+        const statsData = await get('card-stats-data') || {};
+        cardStats = cardData.map((card, index) => {
             const cardKey = getCardKey(card);
-            const stats = statsData[cardKey] || { status: 0, viewCount: 0, lastViewed: null, interval: 0 };
-            cardStatus[index] = stats.status;
-            viewCount[index] = stats.viewCount;
-            lastViewed[index] = stats.lastViewed;
-            cardInterval[index] = stats.interval;
+            const defaultStats = {
+                successTimestamps: [],
+                failureTimestamps: [],
+                lastViewed: null,
+                intervalIndex: 0,
+                viewCount: 0
+            };
+            return statsData[cardKey] || defaultStats;
         });
 
         viewHistory = [];
@@ -335,9 +336,11 @@ document.addEventListener('DOMContentLoaded', () => {
      * and handling features like "Alternate Uppercase" and "Audio-Only Front".
      * It also updates and displays the card's statistics.
      * @param {number} index - The index of the card to display in the `cardData` array.
-     * @param {boolean} [isNavigatingBack=false] - True if this call is from the "previous" button, to prevent pushing to view history.
+     * @param {object} [options={}] - Additional options.
+     * @param {boolean} [options.isNavigatingBack=false] - True if this call is from the "previous" button.
+     * @param {string} [options.reason=''] - The reason the card was chosen.
      */
-    function displayCard(index, isNavigatingBack = false) {
+    function displayCard(index, { isNavigatingBack = false, reason = '' } = {}) {
         if (cardData.length === 0 || index < 0 || index >= cardData.length) return;
 
         if (!isNavigatingBack && index !== currentCardIndex) {
@@ -347,10 +350,11 @@ document.addEventListener('DOMContentLoaded', () => {
         currentCardIndex = index;
         replayRate = 1.0;
 
-        const previousLastViewed = lastViewed[currentCardIndex]; // Capture old value
+        const stats = cardStats[currentCardIndex];
+        const previousLastViewed = stats.lastViewed;
 
-        viewCount[currentCardIndex]++;
-        lastViewed[currentCardIndex] = Date.now();
+        stats.viewCount++;
+        stats.lastViewed = Date.now();
 
         const frontIndices = getSelectedColumnIndices(frontColumnCheckboxes);
         const backIndices = getSelectedColumnIndices(backColumnCheckboxes);
@@ -385,11 +389,26 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         const timeAgo = formatTimeAgo(previousLastViewed);
+        const retentionScore = (stats.successTimestamps?.length || 0) - (stats.failureTimestamps?.length || 0);
         cardStats.innerHTML = `
-            <span>Retention Score: ${cardStatus[currentCardIndex]}</span> |
-            <span>View Count: ${viewCount[currentCardIndex]}</span> |
+            <span>Retention Score: ${retentionScore}</span> |
+            <span>View Count: ${stats.viewCount}</span> |
             <span>Last seen: ${timeAgo}</span>
         `;
+
+        if (explanationMessage) {
+            let message = '';
+            switch (reason) {
+                case 'due_review':
+                    message = 'This card is due for review.';
+                    break;
+                case 'new_card':
+                    message = 'Introducing a new card with a low score.';
+                    break;
+            }
+            explanationMessage.textContent = message;
+            explanationMessage.classList.toggle('visible', !!message);
+        }
 
         saveCardStats();
     }
@@ -411,8 +430,9 @@ document.addEventListener('DOMContentLoaded', () => {
         const now = Date.now();
         const dueCardIndices = [];
         cardData.forEach((card, index) => {
-            const intervalSeconds = repetitionIntervals[cardInterval[index]];
-            if (now - lastViewed[index] > intervalSeconds * 1000) {
+            const stats = cardStats[index];
+            const intervalSeconds = repetitionIntervals[stats.intervalIndex];
+            if (now - stats.lastViewed > intervalSeconds * 1000) {
                 dueCardIndices.push(index);
             }
         });
@@ -420,43 +440,68 @@ document.addEventListener('DOMContentLoaded', () => {
         // Prioritize due cards
         if (dueCardIndices.length > 0) {
             // Sort due cards by retention score (ascending)
-            dueCardIndices.sort((a, b) => cardStatus[a] - cardStatus[b]);
+            dueCardIndices.sort((a, b) => {
+                const scoreA = (cardStats[a].successTimestamps?.length || 0) - (cardStats[a].failureTimestamps?.length || 0);
+                const scoreB = (cardStats[b].successTimestamps?.length || 0) - (cardStats[b].failureTimestamps?.length || 0);
+                return scoreA - scoreB;
+            });
             let nextIndex = dueCardIndices[0];
             // Ensure we don't show the same card twice
             if (nextIndex === currentCardIndex && dueCardIndices.length > 1) {
                 nextIndex = dueCardIndices[1];
             }
-            displayCard(nextIndex);
+            displayCard(nextIndex, { reason: 'due_review' });
             return;
         }
 
         // 2. If no cards are due, manage the learning subset
-        const subsetIsLearned = learningSubset.every(i => cardStatus[i] > 3);
+        const subsetIsLearned = learningSubset.every(i => (cardStats[i].successTimestamps?.length || 0) - (cardStats[i].failureTimestamps?.length || 0) > 3);
         if (learningSubset.length === 0 || subsetIsLearned) {
             // Create a new subset
-            const notWellKnown = cardData
-                .map((card, index) => ({ index, status: cardStatus[index] }))
-                .filter(item => cardInterval[item.index] < repetitionIntervals.length - 1);
+            let notWellKnown = cardData
+                .map((card, index) => {
+                    const score = (cardStats[index].successTimestamps?.length || 0) - (cardStats[index].failureTimestamps?.length || 0);
+                    return { index, score, intervalIndex: cardStats[index].intervalIndex };
+                })
+                .filter(item => item.intervalIndex < repetitionIntervals.length - 1);
 
-            notWellKnown.sort((a, b) => a.status - b.status);
-            learningSubset = notWellKnown.slice(0, learningSubsetSize).map(item => item.index);
+            // Sort by score first
+            notWellKnown.sort((a, b) => a.score - b.score);
+
+            // Group by score, shuffle within groups, then flatten
+            const groupedByScore = notWellKnown.reduce((acc, item) => {
+                acc[item.score] = acc[item.score] || [];
+                acc[item.score].push(item);
+                return acc;
+            }, {});
+
+            let shuffledNotWellKnown = [];
+            Object.keys(groupedByScore).sort((a,b) => a-b).forEach(score => {
+                const group = groupedByScore[score];
+                shuffleArray(group);
+                shuffledNotWellKnown = shuffledNotWellKnown.concat(group);
+            });
+
+            learningSubset = shuffledNotWellKnown.slice(0, learningSubsetSize).map(item => item.index);
         }
 
         // 3. Select from the subset
         if (learningSubset.length > 0) {
-            // Sort subset by status, then lastViewed
+            // Sort subset by score, then lastViewed
             learningSubset.sort((a, b) => {
-                if (cardStatus[a] !== cardStatus[b]) {
-                    return cardStatus[a] - cardStatus[b];
+                const scoreA = (cardStats[a].successTimestamps?.length || 0) - (cardStats[a].failureTimestamps?.length || 0);
+                const scoreB = (cardStats[b].successTimestamps?.length || 0) - (cardStats[b].failureTimestamps?.length || 0);
+                if (scoreA !== scoreB) {
+                    return scoreA - scoreB;
                 }
-                return lastViewed[a] - lastViewed[b];
+                return cardStats[a].lastViewed - cardStats[b].lastViewed;
             });
 
             let potentialNext = learningSubset[0];
             if (forceNew && potentialNext === currentCardIndex && learningSubset.length > 1) {
                 potentialNext = learningSubset[1];
             }
-            displayCard(potentialNext);
+            displayCard(potentialNext, { reason: 'new_card' });
         } else {
             alert("Congratulations! You've learned all the cards for now.");
         }
@@ -468,7 +513,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function showPrevCard() {
         if (viewHistory.length > 0) {
             const prevIndex = viewHistory.pop();
-            displayCard(prevIndex, true);
+            displayCard(prevIndex, { isNavigatingBack: true });
         }
     }
 
@@ -524,16 +569,10 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         // Create a combined array for sorting directly from in-memory state
-        const combinedData = cardData.map((card, index) => {
-            return {
-                card: card,
-                stats: {
-                    status: cardStatus[index],
-                    viewCount: viewCount[index],
-                    lastViewed: lastViewed[index]
-                }
-            };
-        });
+        const combinedData = cardData.map((card, index) => ({
+            card: card,
+            stats: cardStats[index] // The whole stats object
+        }));
 
         combinedData.sort((a, b) => {
             let valA, valB;
@@ -544,9 +583,17 @@ document.addEventListener('DOMContentLoaded', () => {
                 valB = b.card[columnIndex];
             } else {
                 // It's a stats column
-                const statsKey = ['status', 'viewCount', 'lastViewed'][columnIndex - headers.length];
-                valA = a.stats[statsKey];
-                valB = b.stats[statsKey];
+                const statsKeyIndex = columnIndex - headers.length;
+                if (statsKeyIndex === 0) { // Retention Score
+                    valA = (a.stats.successTimestamps?.length || 0) - (a.stats.failureTimestamps?.length || 0);
+                    valB = (b.stats.successTimestamps?.length || 0) - (b.stats.failureTimestamps?.length || 0);
+                } else if (statsKeyIndex === 1) { // View Count
+                    valA = a.stats.viewCount;
+                    valB = b.stats.viewCount;
+                } else { // Last Seen
+                    valA = a.stats.lastViewed;
+                    valB = b.stats.lastViewed;
+                }
             }
 
             // Handle nulls to sort them at the end
@@ -578,7 +625,8 @@ document.addEventListener('DOMContentLoaded', () => {
             item.card.forEach(cell => {
                 newTbodyHtml += `<td>${cell}</td>`;
             });
-            newTbodyHtml += `<td>${item.stats.status}</td>`;
+            const retentionScore = (item.stats.successTimestamps?.length || 0) - (item.stats.failureTimestamps?.length || 0);
+            newTbodyHtml += `<td>${retentionScore}</td>`;
             newTbodyHtml += `<td>${item.stats.viewCount}</td>`;
             newTbodyHtml += `<td>${formatTimeAgo(item.stats.lastViewed)}</td>`;
             newTbodyHtml += '</tr>';
@@ -623,21 +671,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
     /**
      * Saves the current statistics (status, view count, last viewed) for all cards
-     * to the browser's local storage.
+     * to IndexedDB.
      */
-    function saveCardStats() {
+    async function saveCardStats() {
         if (cardData.length === 0) return;
 
-        const statsData = JSON.parse(localStorage.getItem('card-stats-data')) || {};
+        const statsData = await get('card-stats-data') || {};
         const cardKey = getCardKey(cardData[currentCardIndex]);
 
-        statsData[cardKey] = {
-            status: cardStatus[currentCardIndex],
-            viewCount: viewCount[currentCardIndex],
-            lastViewed: lastViewed[currentCardIndex],
-            interval: cardInterval[currentCardIndex]
-        };
-        localStorage.setItem('card-stats-data', JSON.stringify(statsData));
+        statsData[cardKey] = cardStats[currentCardIndex]; // Save the whole stats object
+        await set('card-stats-data', statsData);
     }
 
     /**
@@ -645,23 +688,24 @@ document.addEventListener('DOMContentLoaded', () => {
      * @param {boolean} known - If true, the score is incremented. If false, it's reset to 0.
      */
     function markCardAsKnown(known) {
+        const stats = cardStats[currentCardIndex];
         if (known) {
-            cardStatus[currentCardIndex]++;
-            if (cardInterval[currentCardIndex] < repetitionIntervals.length - 1) {
-                cardInterval[currentCardIndex]++;
+            stats.successTimestamps.push(Date.now());
+            if (stats.intervalIndex < repetitionIntervals.length - 1) {
+                stats.intervalIndex++;
             }
         } else {
-            cardStatus[currentCardIndex] = 0;
-            cardInterval[currentCardIndex] = 0;
+            stats.failureTimestamps.push(Date.now());
+            stats.intervalIndex = 0; // Reset interval on failure
         }
         saveCardStats();
     }
 
     /**
      * Saves the current UI settings (URL, columns, font, etc.) as a named configuration
-     * to local storage.
+     * to IndexedDB.
      */
-    function saveConfig() {
+    async function saveConfig() { // Made async
         if (!configNameInput) return;
         const configName = configNameInput.value;
         if (!configName) {
@@ -687,8 +731,8 @@ document.addEventListener('DOMContentLoaded', () => {
             audioOnlyFront: audioOnlyFrontCheckbox.checked,
             ttsOnHotkeyOnly: ttsOnHotkeyOnlyCheckbox.checked,
         };
-        localStorage.setItem('flashcard-configs', JSON.stringify(configs));
-        localStorage.setItem('flashcard-last-config', configName);
+        await set('flashcard-configs', configs);
+        await set('flashcard-last-config', configName);
         populateConfigSelector();
         configSelector.value = configName;
         configTitle.textContent = configName;
@@ -699,7 +743,7 @@ document.addEventListener('DOMContentLoaded', () => {
      * Loads a saved configuration by name, updating the UI and loading its data.
      * @param {string} configName - The name of the configuration to load.
      */
-    function loadSelectedConfig(configName) {
+    async function loadSelectedConfig(configName) { // Made async
         if (!configName || !configs[configName]) return;
         const config = configs[configName];
 
@@ -712,64 +756,64 @@ document.addEventListener('DOMContentLoaded', () => {
         configTitle.textContent = configName;
         if (keyColumnSelector) keyColumnSelector.value = config.keyColumn || 0;
 
-        loadData().then(() => {
-            if (frontColumnCheckboxes) frontColumnCheckboxes.querySelectorAll('input').forEach(cb => cb.checked = false);
-            if (backColumnCheckboxes) backColumnCheckboxes.querySelectorAll('input').forEach(cb => cb.checked = false);
+        await loadData(); // Await the async function
 
-            if (config.frontColumns) {
-                config.frontColumns.forEach(colIndex => {
-                    const cb = frontColumnCheckboxes.querySelector(`input[value="${colIndex}"]`);
-                    if (cb) cb.checked = true;
-                });
-            }
-            if (config.backColumns) {
-                config.backColumns.forEach(colIndex => {
-                    const cb = backColumnCheckboxes.querySelector(`input[value="${colIndex}"]`);
-                    if (cb) cb.checked = true;
-                });
-            }
+        if (frontColumnCheckboxes) frontColumnCheckboxes.querySelectorAll('input').forEach(cb => cb.checked = false);
+        if (backColumnCheckboxes) backColumnCheckboxes.querySelectorAll('input').forEach(cb => cb.checked = false);
 
-            if (ttsFrontLangSelect) ttsFrontLangSelect.value = config.ttsFrontLang;
-            if (ttsBackLangSelect) ttsBackLangSelect.value = config.ttsBackLang;
-            if (ttsRateSlider) ttsRateSlider.value = config.ttsRate || 1;
-            if (alternateUppercaseCheckbox) alternateUppercaseCheckbox.checked = config.alternateUppercase || false;
-            if (disableAnimationCheckbox) disableAnimationCheckbox.checked = config.disableAnimation || false;
-            if (audioOnlyFrontCheckbox) audioOnlyFrontCheckbox.checked = config.audioOnlyFront || false;
-            if (ttsOnHotkeyOnlyCheckbox) ttsOnHotkeyOnlyCheckbox.checked = config.ttsOnHotkeyOnly || false;
+        if (config.frontColumns) {
+            config.frontColumns.forEach(colIndex => {
+                const cb = frontColumnCheckboxes.querySelector(`input[value="${colIndex}"]`);
+                if (cb) cb.checked = true;
+            });
+        }
+        if (config.backColumns) {
+            config.backColumns.forEach(colIndex => {
+                const cb = backColumnCheckboxes.querySelector(`input[value="${colIndex}"]`);
+                if (cb) cb.checked = true;
+            });
+        }
 
-            if (repetitionIntervalsTextarea) {
-                const configIntervalsString = config.repetitionIntervals;
-                // Check if the string is null, undefined, or just empty space
-                if (configIntervalsString && configIntervalsString.trim() !== '') {
-                    repetitionIntervals = configIntervalsString.split(',').map(s => parseInt(s.trim())).filter(n => !isNaN(n));
-                }
+        if (ttsFrontLangSelect) ttsFrontLangSelect.value = config.ttsFrontLang;
+        if (ttsBackLangSelect) ttsBackLangSelect.value = config.ttsBackLang;
+        if (ttsRateSlider) ttsRateSlider.value = config.ttsRate || 1;
+        if (alternateUppercaseCheckbox) alternateUppercaseCheckbox.checked = config.alternateUppercase || false;
+        if (disableAnimationCheckbox) disableAnimationCheckbox.checked = config.disableAnimation || false;
+        if (audioOnlyFrontCheckbox) audioOnlyFrontCheckbox.checked = config.audioOnlyFront || false;
+        if (ttsOnHotkeyOnlyCheckbox) ttsOnHotkeyOnlyCheckbox.checked = config.ttsOnHotkeyOnly || false;
 
-                // If parsing resulted in an empty array, or if there was no string to begin with, use defaults
-                if (repetitionIntervals.length === 0) {
-                    repetitionIntervals = [...defaultIntervals];
-                }
-
-                // Always update the UI to reflect the actual intervals being used
-                repetitionIntervalsTextarea.value = repetitionIntervals.join(', ');
-            }
-            if (learningSubsetSizeInput) {
-                learningSubsetSizeInput.value = config.learningSubsetSize || 7;
-                learningSubsetSize = parseInt(learningSubsetSizeInput.value);
+        if (repetitionIntervalsTextarea) {
+            const configIntervalsString = config.repetitionIntervals;
+            // Check if the string is null, undefined, or just empty space
+            if (configIntervalsString && configIntervalsString.trim() !== '') {
+                repetitionIntervals = configIntervalsString.split(',').map(s => parseInt(s.trim())).filter(n => !isNaN(n));
             }
 
-            if (card) {
-                if (disableAnimationCheckbox.checked) {
-                    card.classList.add('no-animation');
-                } else {
-                    card.classList.remove('no-animation');
-                }
+            // If parsing resulted in an empty array, or if there was no string to begin with, use defaults
+            if (repetitionIntervals.length === 0) {
+                repetitionIntervals = [...defaultIntervals];
             }
-            localStorage.setItem('flashcard-last-config', configName);
 
-            if (cardData.length > 0) {
-                showNextCard();
+            // Always update the UI to reflect the actual intervals being used
+            repetitionIntervalsTextarea.value = repetitionIntervals.join(', ');
+        }
+        if (learningSubsetSizeInput) {
+            learningSubsetSizeInput.value = config.learningSubsetSize || 7;
+            learningSubsetSize = parseInt(learningSubsetSizeInput.value);
+        }
+
+        if (card) {
+            if (disableAnimationCheckbox.checked) {
+                card.classList.add('no-animation');
+            } else {
+                card.classList.remove('no-animation');
             }
-        });
+        }
+        await set('flashcard-last-config', configName);
+
+        if (cardData.length > 0) {
+            showNextCard();
+        }
     }
 
     /**
@@ -790,14 +834,14 @@ document.addEventListener('DOMContentLoaded', () => {
      * If a "last used" configuration is found, it is loaded automatically.
      * Otherwise, the settings modal is shown.
      */
-    function loadInitialConfigs() {
-        const savedConfigs = localStorage.getItem('flashcard-configs');
+    async function loadInitialConfigs() { // Made async
+        const savedConfigs = await get('flashcard-configs');
         if (savedConfigs) {
-            configs = JSON.parse(savedConfigs);
+            configs = savedConfigs; // No JSON.parse needed
             populateConfigSelector();
         }
 
-        const lastConfig = localStorage.getItem('flashcard-last-config');
+        const lastConfig = await get('flashcard-last-config');
         if (lastConfig && configs[lastConfig]) {
             configSelector.value = lastConfig;
             loadSelectedConfig(lastConfig);
