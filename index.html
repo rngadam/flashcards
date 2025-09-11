@@ -9,6 +9,7 @@
   <body>
     <div id="top-bar">
       <h1 id="config-title"></h1>
+      <span id="detected-lang"></span>
       <div>
         <button id="history-button">📜</button>
         <button id="settings-button">⚙️</button>
@@ -30,6 +31,10 @@
         <div class="setting">
           <label for="config-name">Configuration Name:</label>
           <input type="text" id="config-name" placeholder="e.g., Spanish Vocabulary">
+        </div>
+        <div class="setting">
+          <label for="key-column-selector">Unique Key Column:</label>
+          <select id="key-column-selector"></select>
         </div>
         <div class="setting">
           <label for="data-url">Data Source URL (TSV/CSV):</label>
@@ -82,6 +87,14 @@
           <input type="checkbox" id="tts-on-hotkey-only">
           <label for="tts-on-hotkey-only">Only read on hotkey (f)</label>
         </div>
+        <div class="setting">
+          <label for="repetition-intervals">Repetition Intervals (seconds, comma-separated):</label>
+          <textarea id="repetition-intervals" rows="3"></textarea>
+        </div>
+        <div class="setting">
+          <label for="learning-subset-size">Learning Subset Size:</label>
+          <input type="number" id="learning-subset-size" value="7" min="1">
+        </div>
         <button id="load-data">Load Data</button>
         <button id="save-config">Save Configuration</button>
         <div class="setting">
@@ -109,6 +122,6 @@
 
     <div id="card-stats"></div>
 
-    <script src="app.js"></script>
+    <script type="module" src="app.js"></script>
   </body>
 </html>
