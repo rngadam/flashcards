@@ -493,7 +493,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (scoreA !== scoreB) {
                     return scoreA - scoreB;
                 }
-                return cardStats[a].lastViewed - cardStats[b].lastViewed;
+                // Tie-breaker: oldest seen card first. Never seen (null) are considered oldest.
+                const lastViewedA = cardStats[a].lastViewed || 0;
+                const lastViewedB = cardStats[b].lastViewed || 0;
+                return lastViewedA - lastViewedB;
             });
 
             let potentialNext = learningSubset[0];
@@ -517,38 +520,50 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     /**
+    function buildHistoryTbodyHtml(data) {
+        let tbodyHtml = '<tbody>';
+        data.forEach(item => {
+            tbodyHtml += '<tr>';
+            item.card.forEach(cell => {
+                tbodyHtml += `<td>${cell}</td>`;
+            });
+            const retentionScore = (item.stats.successTimestamps?.length || 0) - (item.stats.failureTimestamps?.length || 0);
+            tbodyHtml += `<td>${retentionScore}</td>`;
+            tbodyHtml += `<td>${item.stats.viewCount}</td>`;
+            tbodyHtml += `<td>${formatTimeAgo(item.stats.lastViewed)}</td>`;
+            tbodyHtml += '</tr>';
+        });
+        tbodyHtml += '</tbody>';
+        return tbodyHtml;
+    }
+
      * Renders the complete history of all cards and their statistics into a table
      * and displays it in the history modal.
      */
     function renderHistoryTable() {
         if (!historyTableContainer) return;
-        const statsData = JSON.parse(localStorage.getItem('card-stats-data')) || {};
-        let tableHTML = '<table><thead><tr>';
 
+        // Build header
+        let tableHTML = '<table><thead><tr>';
         headers.forEach((header, index) => {
             tableHTML += `<th class="sortable" data-column-index="${index}">${header}</th>`;
         });
         tableHTML += `<th class="sortable" data-column-index="${headers.length}">Retention Score</th>`;
         tableHTML += `<th class="sortable" data-column-index="${headers.length + 1}">View Count</th>`;
         tableHTML += `<th class="sortable" data-column-index="${headers.length + 2}">Last Seen</th>`;
-        tableHTML += '</tr></thead><tbody>';
+        tableHTML += '</tr></thead>';
 
-        cardData.forEach((card, index) => {
-            const cardKey = getCardKey(card);
-            const stats = statsData[cardKey] || { status: 0, viewCount: 0, lastViewed: null };
-            tableHTML += '<tr>';
-            card.forEach(cell => {
-                tableHTML += `<td>${cell}</td>`;
-            });
-            tableHTML += `<td>${stats.status}</td>`;
-            tableHTML += `<td>${stats.viewCount}</td>`;
-            tableHTML += `<td>${formatTimeAgo(stats.lastViewed)}</td>`;
-            tableHTML += '</tr>';
-        });
+        // Build body from in-memory state
+        const combinedData = cardData.map((card, index) => ({
+            card: card,
+            stats: cardStats[index]
+        }));
+        tableHTML += buildHistoryTbodyHtml(combinedData);
 
-        tableHTML += '</tbody></table>';
+        tableHTML += '</table>';
         historyTableContainer.innerHTML = tableHTML;
 
+        // Re-attach event listeners
         historyTableContainer.querySelectorAll('th.sortable').forEach(th => {
             th.addEventListener('click', sortHistoryTable);
         });
@@ -618,19 +633,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         // Generate a new table body from the sorted data
-        let newTbodyHtml = '<tbody>';
-        combinedData.forEach(item => {
-            newTbodyHtml += '<tr>';
-            item.card.forEach(cell => {
-                newTbodyHtml += `<td>${cell}</td>`;
-            });
-            const retentionScore = (item.stats.successTimestamps?.length || 0) - (item.stats.failureTimestamps?.length || 0);
-            newTbodyHtml += `<td>${retentionScore}</td>`;
-            newTbodyHtml += `<td>${item.stats.viewCount}</td>`;
-            newTbodyHtml += `<td>${formatTimeAgo(item.stats.lastViewed)}</td>`;
-            newTbodyHtml += '</tr>';
-        });
-        newTbodyHtml += '</tbody>';
+        const newTbodyHtml = buildHistoryTbodyHtml(combinedData);
 
         // Replace only the table body, leaving the main app state untouched
         const table = historyTableContainer.querySelector('table');
