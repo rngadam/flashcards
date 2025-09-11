@@ -832,7 +832,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // 2. ELD Library
         try {
             const result = eld.detect(fullText);
-            if (result.isReliable() && result.language) {
+            if (result.language) {
                 langCodeSet.add(result.language);
             }
         } catch (error) {
