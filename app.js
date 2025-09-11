@@ -43,7 +43,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const detectedLangSpan = document.getElementById('detected-lang');
     const configSelector = document.getElementById('config-selector');
     const cardContainer = document.getElementById('card-container');
-    const cardStats = document.getElementById('card-stats');
+    const cardStatsDisplay = document.getElementById('card-stats');
     const cardFront = document.querySelector('.card-front');
     const cardBack = document.querySelector('.card-back');
     const flipCardButton = document.getElementById('flip-card');
@@ -72,7 +72,6 @@ document.addEventListener('DOMContentLoaded', () => {
     // Spaced Repetition State
     const defaultIntervals = [5, 25, 120, 600, 3600, 18000, 86400, 432000, 2160000, 10368000, 63072000]; // in seconds
     let repetitionIntervals = [...defaultIntervals];
-    let cardInterval = []; // tracks the interval index for each card
 
     // Learning Subset State
     let learningSubset = [];
@@ -390,7 +389,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const timeAgo = formatTimeAgo(previousLastViewed);
         const retentionScore = (stats.successTimestamps?.length || 0) - (stats.failureTimestamps?.length || 0);
-        cardStats.innerHTML = `
+        cardStatsDisplay.innerHTML = `
             <span>Retention Score: ${retentionScore}</span> |
             <span>View Count: ${stats.viewCount}</span> |
             <span>Last seen: ${timeAgo}</span>
