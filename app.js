@@ -12,6 +12,32 @@ document.addEventListener('DOMContentLoaded', () => {
         document.body.classList.add('desktop');
     }
 
+    // Tab switching logic
+    const tabsContainer = document.querySelector('.tabs');
+    const tabPanels = document.querySelectorAll('.tab-panel');
+
+    if (tabsContainer) {
+        tabsContainer.addEventListener('click', (e) => {
+            if (e.target.matches('.tab-button')) {
+                const button = e.target;
+
+                // Update button states
+                tabsContainer.querySelectorAll('.tab-button').forEach(btn => {
+                    btn.classList.remove('active');
+                    btn.setAttribute('aria-selected', 'false');
+                });
+                button.classList.add('active');
+                button.setAttribute('aria-selected', 'true');
+
+                // Update panel visibility
+                const tabName = button.dataset.tab;
+                tabPanels.forEach(panel => {
+                    panel.classList.toggle('active', panel.id === tabName);
+                });
+            }
+        });
+    }
+
     // DOM Elements
     const settingsButton = document.getElementById('settings-button');
     const closeSettingsButton = document.getElementById('close-settings-button');
@@ -59,11 +85,11 @@ document.addEventListener('DOMContentLoaded', () => {
     let headers = []; // Holds the column headers from the data file.
     let currentCardIndex = 0; // The index of the currently displayed card in cardData.
     let configs = {}; // Stores all saved deck configurations.
-    let cardStats = []; // Array of objects holding rich history for each card
     let voices = []; // Holds the list of available TTS voices from the browser.
     let viewHistory = []; // A stack to keep track of the sequence of viewed cards for the "previous" button.
     let useUppercase = false; // A flag for the "Alternate Uppercase" feature.
     let replayRate = 1.0; // Tracks the current playback rate for the 'f' key replay feature.
+    let cardShownTimestamp = null; // Tracks when the card was shown to calculate response delay.
 
     // History table sort state
     let historySortColumn = -1;
@@ -101,13 +127,13 @@ document.addEventListener('DOMContentLoaded', () => {
     if (flipCardButton) flipCardButton.addEventListener('click', flipCard);
     if (nextCardButton) nextCardButton.addEventListener('click', () => showNextCard());
     if (prevCardButton) prevCardButton.addEventListener('click', showPrevCard);
-    if (iKnowButton) iKnowButton.addEventListener('click', () => { markCardAsKnown(true); showNextCard(); });
-    if (iDontKnowButton) iDontKnowButton.addEventListener('click', () => { markCardAsKnown(false); showNextCard({ forceNew: true }); });
+    if (iKnowButton) iKnowButton.addEventListener('click', async () => { await markCardAsKnown(true); await showNextCard(); });
+    if (iDontKnowButton) iDontKnowButton.addEventListener('click', async () => { await markCardAsKnown(false); await showNextCard({ forceNew: true }); });
     if (learningSubsetSizeInput) learningSubsetSizeInput.addEventListener('change', () => {
         learningSubsetSize = parseInt(learningSubsetSizeInput.value) || 7;
     });
-    if (frontColumnCheckboxes) frontColumnCheckboxes.addEventListener('change', () => displayCard(currentCardIndex));
-    if (backColumnCheckboxes) backColumnCheckboxes.addEventListener('change', () => displayCard(currentCardIndex));
+    if (frontColumnCheckboxes) frontColumnCheckboxes.addEventListener('change', async () => await displayCard(currentCardIndex));
+    if (backColumnCheckboxes) backColumnCheckboxes.addEventListener('change', async () => await displayCard(currentCardIndex));
     if (fontSelector) fontSelector.addEventListener('change', () => {
         if (cardContainer) cardContainer.style.fontFamily = fontSelector.value;
     });
@@ -172,6 +198,8 @@ document.addEventListener('DOMContentLoaded', () => {
      * @param {string} text - The raw string data from the fetched file.
      */
     async function parseData(text) { // Made async
+        const cleanCell = (cell) => cell.replace(/[\r\n\s]+/g, ' ').trim();
+
         const rows = text.trim().split('\n').filter(row => row.trim() !== ''); // Filter empty lines
         if (rows.length < 1) {
             cardData = [];
@@ -180,26 +208,14 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         const delimiter = rows[0].includes('\t') ? '\t' : ',';
-        headers = rows[0].split(delimiter).map(h => h.trim());
+        headers = rows[0].split(delimiter).map(cleanCell);
 
         cardData = rows
             .slice(1)
-            .map(row => row.split(delimiter).map(cell => cell.trim())) // Trim each cell
+            .map(row => row.split(delimiter).map(cleanCell))
             .filter(row => row.length === headers.length); // Ensure row has correct number of columns
 
-        const statsData = await get('card-stats-data') || {};
-        cardStats = cardData.map((card, index) => {
-            const cardKey = getCardKey(card);
-            const defaultStats = {
-                successTimestamps: [],
-                failureTimestamps: [],
-                lastViewed: null,
-                intervalIndex: 0,
-                viewCount: 0
-            };
-            return statsData[cardKey] || defaultStats;
-        });
-        console.log('Finished parsing. Final cardStats array:', cardStats);
+        // Stats are no longer loaded in bulk here.
 
         viewHistory = [];
         populateColumnSelectors();
@@ -226,13 +242,16 @@ document.addEventListener('DOMContentLoaded', () => {
             backColumnCheckboxes.insertAdjacentHTML('beforeend', checkboxBack);
         });
 
+        // Default front to first column
         if (headers.length > 0) {
             const firstCheckbox = frontColumnCheckboxes.querySelector('input');
             if (firstCheckbox) firstCheckbox.checked = true;
         }
-        if (headers.length > 1) {
-            const secondCheckbox = backColumnCheckboxes.querySelectorAll('input')[1];
-            if (secondCheckbox) secondCheckbox.checked = true;
+        // Default back to all columns
+        if (backColumnCheckboxes) {
+            backColumnCheckboxes.querySelectorAll('input[type="checkbox"]').forEach(cb => {
+                cb.checked = true;
+            });
         }
     }
 
@@ -317,6 +336,15 @@ document.addEventListener('DOMContentLoaded', () => {
         return `${years} years ago`;
     }
 
+    function formatDuration(seconds) {
+        if (seconds < 60) return `${seconds} seconds`;
+        if (seconds < 3600) return `${Math.round(seconds / 60)} minutes`;
+        if (seconds < 86400) return `${Math.round(seconds / 3600)} hours`;
+        if (seconds < 2592000) return `${Math.round(seconds / 86400)} days`;
+        if (seconds < 31536000) return `${Math.round(seconds / 2592000)} months`;
+        return `${Math.round(seconds / 31536000)} years`;
+    }
+
     /**
      * Gets the selected column indices from a checkbox container.
      * @param {HTMLElement} checkboxContainer - The container with the column checkboxes.
@@ -350,8 +378,19 @@ document.addEventListener('DOMContentLoaded', () => {
      * @param {boolean} [options.isNavigatingBack=false] - True if this call is from the "previous" button.
      * @param {string} [options.reason=''] - The reason the card was chosen.
      */
-    function displayCard(index, { isNavigatingBack = false, reason = '' } = {}) {
+    async function displayCard(index, { isNavigatingBack = false, reason = '' } = {}) {
         if (cardData.length === 0 || index < 0 || index >= cardData.length) return;
+
+        const cardKey = getCardKey(cardData[index]);
+        const defaultStats = {
+            successTimestamps: [],
+            failureTimestamps: [],
+            responseDelays: [],
+            lastViewed: null,
+            intervalIndex: 0,
+            viewCount: 0
+        };
+        const stats = await get(cardKey) || defaultStats;
 
         if (!isNavigatingBack && index !== currentCardIndex) {
             viewHistory.push(currentCardIndex);
@@ -360,7 +399,6 @@ document.addEventListener('DOMContentLoaded', () => {
         currentCardIndex = index;
         replayRate = 1.0;
 
-        const stats = cardStats[currentCardIndex];
         const previousLastViewed = stats.lastViewed;
 
         stats.viewCount++;
@@ -408,19 +446,34 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (explanationMessage) {
             let message = '';
-            switch (reason) {
+            switch (reason.type) { // reason is now an object
                 case 'due_review':
-                    message = 'This card is due for review.';
+                    message = `This card was due for its ${reason.expiredInterval} review. Next review in ${reason.nextInterval}.`;
                     break;
                 case 'new_card':
-                    message = 'Introducing a new card with a low score.';
+                    message = 'Introducing a new, low-score card to learn.';
                     break;
             }
             explanationMessage.textContent = message;
             explanationMessage.classList.toggle('visible', !!message);
         }
 
-        saveCardStats();
+        await saveCardStats(cardKey, stats);
+        cardShownTimestamp = Date.now();
+    }
+
+    async function getAllCardStats() {
+        const allStats = [];
+        for (let i = 0; i < cardData.length; i++) {
+            const cardKey = getCardKey(cardData[i]);
+            const defaultStats = {
+                successTimestamps: [], failureTimestamps: [],
+                lastViewed: null, intervalIndex: 0, viewCount: 0
+            };
+            const stats = await get(cardKey) || defaultStats;
+            allStats.push(stats);
+        }
+        return allStats;
     }
 
     /**
@@ -429,18 +482,20 @@ document.addEventListener('DOMContentLoaded', () => {
      * @param {object} [options] - Optional parameters.
      * @param {boolean} [options.forceNew=false] - If true, ensures the next card is different from the current one, even if it also has a low score. Used for "I don't know".
      */
-    function showNextCard({forceNew = false} = {}) {
+    async function showNextCard({forceNew = false} = {}) {
         if (cardData.length === 0) return;
         if (cardData.length === 1) {
-            displayCard(0);
+            await displayCard(0);
             return;
         }
+
+        const allCardStats = await getAllCardStats();
 
         // 1. Find due cards
         const now = Date.now();
         const dueCardIndices = [];
-        cardData.forEach((card, index) => {
-            const stats = cardStats[index];
+        allCardStats.forEach((stats, index) => {
+            if (!stats.lastViewed) return; // Never seen, not due
             const intervalSeconds = repetitionIntervals[stats.intervalIndex];
             if (now - stats.lastViewed > intervalSeconds * 1000) {
                 dueCardIndices.push(index);
@@ -449,36 +504,41 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Prioritize due cards
         if (dueCardIndices.length > 0) {
-            // Pre-calculate scores and sort
-            const scoredDueCards = dueCardIndices.map(index => ({ index, score: getRetentionScore(cardStats[index]) }));
+            const scoredDueCards = dueCardIndices.map(index => ({ index, score: getRetentionScore(allCardStats[index]) }));
             scoredDueCards.sort((a, b) => a.score - b.score);
-
             let sortedDueCardIndices = scoredDueCards.map(item => item.index);
             let nextIndex = sortedDueCardIndices[0];
-            // Ensure we don't show the same card twice
             if (nextIndex === currentCardIndex && sortedDueCardIndices.length > 1) {
                 nextIndex = sortedDueCardIndices[1];
             }
-            displayCard(nextIndex, { reason: 'due_review' });
+
+            const stats = allCardStats[nextIndex];
+            const expiredInterval = formatDuration(repetitionIntervals[stats.intervalIndex]);
+            const nextInterval = formatDuration(repetitionIntervals[stats.intervalIndex + 1] || repetitionIntervals[stats.intervalIndex]);
+
+            await displayCard(nextIndex, {
+                reason: {
+                    type: 'due_review',
+                    expiredInterval: expiredInterval,
+                    nextInterval: nextInterval
+                }
+            });
             return;
         }
 
         // 2. If no cards are due, manage the learning subset
-        const subsetIsLearned = learningSubset.every(i => (cardStats[i].successTimestamps?.length || 0) - (cardStats[i].failureTimestamps?.length || 0) > 3);
+        const subsetIsLearned = learningSubset.every(i => getRetentionScore(allCardStats[i]) > 3);
         if (learningSubset.length === 0 || subsetIsLearned) {
-            // Create a new subset
             let notWellKnown = cardData
                 .map((card, index) => ({
                     index,
-                    score: getRetentionScore(cardStats[index]),
-                    intervalIndex: cardStats[index].intervalIndex
+                    score: getRetentionScore(allCardStats[index]),
+                    intervalIndex: allCardStats[index].intervalIndex
                 }))
                 .filter(item => item.intervalIndex < repetitionIntervals.length - 1);
 
-            // Sort by score first
             notWellKnown.sort((a, b) => a.score - b.score);
 
-            // Group by score, shuffle within groups, then flatten
             const groupedByScore = notWellKnown.reduce((acc, item) => {
                 acc[item.score] = acc[item.score] || [];
                 acc[item.score].push(item);
@@ -497,11 +557,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // 3. Select from the subset
         if (learningSubset.length > 0) {
-            // Sort subset by score, then lastViewed
             const scoredSubset = learningSubset.map(index => ({
                 index,
-                score: getRetentionScore(cardStats[index]),
-                lastViewed: cardStats[index].lastViewed || 0
+                score: getRetentionScore(allCardStats[index]),
+                lastViewed: allCardStats[index].lastViewed || 0
             }));
 
             scoredSubset.sort((a, b) => {
@@ -516,7 +575,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (forceNew && potentialNext === currentCardIndex && learningSubset.length > 1) {
                 potentialNext = learningSubset[1];
             }
-            displayCard(potentialNext, { reason: 'new_card' });
+            await displayCard(potentialNext, { reason: { type: 'new_card' } });
         } else {
             alert("Congratulations! You've learned all the cards for now.");
         }
@@ -525,10 +584,10 @@ document.addEventListener('DOMContentLoaded', () => {
     /**
      * Shows the previously viewed card by popping from the view history stack.
      */
-    function showPrevCard() {
+    async function showPrevCard() {
         if (viewHistory.length > 0) {
             const prevIndex = viewHistory.pop();
-            displayCard(prevIndex, { isNavigatingBack: true });
+            await displayCard(prevIndex, { isNavigatingBack: true });
         }
     }
 
@@ -553,7 +612,7 @@ document.addEventListener('DOMContentLoaded', () => {
      * Renders the complete history of all cards and their statistics into a table
      * and displays it in the history modal.
      */
-    function renderHistoryTable() {
+    async function renderHistoryTable() {
         if (!historyTableContainer) return;
 
         // Build header
@@ -566,10 +625,12 @@ document.addEventListener('DOMContentLoaded', () => {
         tableHTML += `<th class="sortable" data-column-index="${headers.length + 2}">Last Seen</th>`;
         tableHTML += '</tr></thead>';
 
-        // Build body from in-memory state
+        const allCardStats = await getAllCardStats();
+
+        // Build body from freshly fetched state
         const combinedData = cardData.map((card, index) => ({
             card: card,
-            stats: cardStats[index]
+            stats: allCardStats[index]
         }));
         tableHTML += buildHistoryTbodyHtml(combinedData);
 
@@ -584,7 +645,7 @@ document.addEventListener('DOMContentLoaded', () => {
         historyModal.classList.remove('hidden');
     }
 
-    function sortHistoryTable(e) {
+    async function sortHistoryTable(e) {
         const th = e.currentTarget;
         const columnIndex = parseInt(th.dataset.columnIndex);
 
@@ -595,10 +656,12 @@ document.addEventListener('DOMContentLoaded', () => {
             historySortDirection = 'asc';
         }
 
+        const allCardStats = await getAllCardStats();
+
         // Create a combined array for sorting directly from in-memory state
         const combinedData = cardData.map((card, index) => ({
             card: card,
-            stats: cardStats[index] // The whole stats object
+            stats: allCardStats[index] // The whole stats object
         }));
 
         combinedData.sort((a, b) => {
@@ -688,24 +751,29 @@ document.addEventListener('DOMContentLoaded', () => {
      * Saves the current statistics (status, view count, last viewed) for all cards
      * to IndexedDB.
      */
-    async function saveCardStats() {
-        if (cardData.length === 0) return;
-
-        const statsData = await get('card-stats-data') || {};
-        console.log('Saving stats. Current statsData from DB:', statsData);
-        const cardKey = getCardKey(cardData[currentCardIndex]);
-
-        statsData[cardKey] = cardStats[currentCardIndex]; // Save the whole stats object
-        console.log('Updated statsData to be saved:', statsData);
-        await set('card-stats-data', statsData);
+    async function saveCardStats(cardKey, stats) {
+        if (!cardKey || !stats) return;
+        await set(cardKey, stats);
     }
 
     /**
      * Updates the retention score for the current card.
      * @param {boolean} known - If true, the score is incremented. If false, it's reset to 0.
      */
-    function markCardAsKnown(known) {
-        const stats = cardStats[currentCardIndex];
+    async function markCardAsKnown(known) {
+        const cardKey = getCardKey(cardData[currentCardIndex]);
+        const defaultStats = {
+            successTimestamps: [], failureTimestamps: [], responseDelays: [],
+            lastViewed: null, intervalIndex: 0, viewCount: 0
+        };
+        const stats = await get(cardKey) || defaultStats;
+
+        if (cardShownTimestamp) {
+            const delay = Date.now() - cardShownTimestamp;
+            stats.responseDelays = stats.responseDelays || [];
+            stats.responseDelays.push(delay);
+        }
+
         if (known) {
             stats.successTimestamps.push(Date.now());
             if (stats.intervalIndex < repetitionIntervals.length - 1) {
@@ -715,7 +783,7 @@ document.addEventListener('DOMContentLoaded', () => {
             stats.failureTimestamps.push(Date.now());
             stats.intervalIndex = 0; // Reset interval on failure
         }
-        saveCardStats();
+        await saveCardStats(cardKey, stats);
     }
 
     /**
