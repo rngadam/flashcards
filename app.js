@@ -185,6 +185,7 @@ document.addEventListener('DOMContentLoaded', () => {
         console.log('Parsing data. Got statsData from DB:', statsData);
         cardStats = cardData.map((card, index) => {
             const cardKey = getCardKey(card);
+            console.log(`Processing card index ${index}, key: "${cardKey}", found in DB: ${!!statsData[cardKey]}`);
             const defaultStats = {
                 successTimestamps: [],
                 failureTimestamps: [],
@@ -676,7 +677,7 @@ document.addEventListener('DOMContentLoaded', () => {
             // Fallback or error handling
             return card ? card.join('-') : `invalid-card-${Math.random()}`;
         }
-        return card[keyIndex];
+        return card[keyIndex].trim();
     }
 
     /**
