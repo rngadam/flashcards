@@ -332,6 +332,10 @@ document.addEventListener('DOMContentLoaded', () => {
         return indices.map(colIndex => cardData[currentCardIndex][colIndex]).join('\n');
     }
 
+    function getRetentionScore(stats) {
+        return (stats.successTimestamps?.length || 0) - (stats.failureTimestamps?.length || 0);
+    }
+
     /**
      * Displays a card at a given index, updating the front and back content,
      * and handling features like "Alternate Uppercase" and "Audio-Only Front".
@@ -390,7 +394,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         const timeAgo = formatTimeAgo(previousLastViewed);
-        const retentionScore = (stats.successTimestamps?.length || 0) - (stats.failureTimestamps?.length || 0);
+        const retentionScore = getRetentionScore(stats);
         cardStatsDisplay.innerHTML = `
             <span>Retention Score: ${retentionScore}</span> |
             <span>View Count: ${stats.viewCount}</span> |
@@ -440,16 +444,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Prioritize due cards
         if (dueCardIndices.length > 0) {
-            // Sort due cards by retention score (ascending)
-            dueCardIndices.sort((a, b) => {
-                const scoreA = (cardStats[a].successTimestamps?.length || 0) - (cardStats[a].failureTimestamps?.length || 0);
-                const scoreB = (cardStats[b].successTimestamps?.length || 0) - (cardStats[b].failureTimestamps?.length || 0);
-                return scoreA - scoreB;
-            });
-            let nextIndex = dueCardIndices[0];
+            // Pre-calculate scores and sort
+            const scoredDueCards = dueCardIndices.map(index => ({ index, score: getRetentionScore(cardStats[index]) }));
+            scoredDueCards.sort((a, b) => a.score - b.score);
+
+            let sortedDueCardIndices = scoredDueCards.map(item => item.index);
+            let nextIndex = sortedDueCardIndices[0];
             // Ensure we don't show the same card twice
-            if (nextIndex === currentCardIndex && dueCardIndices.length > 1) {
-                nextIndex = dueCardIndices[1];
+            if (nextIndex === currentCardIndex && sortedDueCardIndices.length > 1) {
+                nextIndex = sortedDueCardIndices[1];
             }
             displayCard(nextIndex, { reason: 'due_review' });
             return;
@@ -460,10 +463,11 @@ document.addEventListener('DOMContentLoaded', () => {
         if (learningSubset.length === 0 || subsetIsLearned) {
             // Create a new subset
             let notWellKnown = cardData
-                .map((card, index) => {
-                    const score = (cardStats[index].successTimestamps?.length || 0) - (cardStats[index].failureTimestamps?.length || 0);
-                    return { index, score, intervalIndex: cardStats[index].intervalIndex };
-                })
+                .map((card, index) => ({
+                    index,
+                    score: getRetentionScore(cardStats[index]),
+                    intervalIndex: cardStats[index].intervalIndex
+                }))
                 .filter(item => item.intervalIndex < repetitionIntervals.length - 1);
 
             // Sort by score first
@@ -489,18 +493,20 @@ document.addEventListener('DOMContentLoaded', () => {
         // 3. Select from the subset
         if (learningSubset.length > 0) {
             // Sort subset by score, then lastViewed
-            learningSubset.sort((a, b) => {
-                const scoreA = (cardStats[a].successTimestamps?.length || 0) - (cardStats[a].failureTimestamps?.length || 0);
-                const scoreB = (cardStats[b].successTimestamps?.length || 0) - (cardStats[b].failureTimestamps?.length || 0);
-                if (scoreA !== scoreB) {
-                    return scoreA - scoreB;
+            const scoredSubset = learningSubset.map(index => ({
+                index,
+                score: getRetentionScore(cardStats[index]),
+                lastViewed: cardStats[index].lastViewed || 0
+            }));
+
+            scoredSubset.sort((a, b) => {
+                if (a.score !== b.score) {
+                    return a.score - b.score;
                 }
-                // Tie-breaker: oldest seen card first. Never seen (null) are considered oldest.
-                const lastViewedA = cardStats[a].lastViewed || 0;
-                const lastViewedB = cardStats[b].lastViewed || 0;
-                return lastViewedA - lastViewedB;
+                return a.lastViewed - b.lastViewed;
             });
 
+            learningSubset = scoredSubset.map(item => item.index);
             let potentialNext = learningSubset[0];
             if (forceNew && potentialNext === currentCardIndex && learningSubset.length > 1) {
                 potentialNext = learningSubset[1];
@@ -601,8 +607,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 // It's a stats column
                 const statsKeyIndex = columnIndex - headers.length;
                 if (statsKeyIndex === 0) { // Retention Score
-                    valA = (a.stats.successTimestamps?.length || 0) - (a.stats.failureTimestamps?.length || 0);
-                    valB = (b.stats.successTimestamps?.length || 0) - (b.stats.failureTimestamps?.length || 0);
+                    valA = getRetentionScore(a.stats);
+                    valB = getRetentionScore(b.stats);
                 } else if (statsKeyIndex === 1) { // View Count
                     valA = a.stats.viewCount;
                     valB = b.stats.viewCount;
