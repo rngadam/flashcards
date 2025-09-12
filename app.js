@@ -78,9 +78,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const iKnowButton = document.getElementById('i-know');
     const iDontKnowButton = document.getElementById('i-dont-know');
     const explanationMessage = document.getElementById('explanation-message');
-    const nextReviewAlert = document.getElementById('next-review-alert');
-    const nextReviewTime = document.getElementById('next-review-time');
-    const dismissReviewAlert = document.getElementById('dismiss-review-alert');
 
     // App state
     let cardData = []; // Holds the parsed card data from the TSV/CSV file.
@@ -153,8 +150,6 @@ document.addEventListener('DOMContentLoaded', () => {
         card.addEventListener('touchend', dragEnd);
         card.addEventListener('mouseleave', dragEnd);
     }
-
-    if (dismissReviewAlert) dismissReviewAlert.addEventListener('click', () => nextReviewAlert.classList.add('hidden'));
 
     // --- Functions ---
     /**
@@ -375,32 +370,6 @@ document.addEventListener('DOMContentLoaded', () => {
         };
     }
 
-    async function updateNextReviewAlert() {
-        if (!nextReviewAlert || !nextReviewTime) return;
-
-        const allCardStats = await getAllCardStats();
-        if (allCardStats.length === 0) {
-            nextReviewAlert.classList.add('hidden');
-            return;
-        }
-
-        let minTimeToDue = Infinity;
-
-        const now = Date.now();
-        allCardStats.forEach(stats => {
-            const timeToDue = getTimeToDue(stats, now).ms;
-            if (timeToDue > 0 && timeToDue < minTimeToDue) {
-                minTimeToDue = timeToDue;
-            }
-        });
-
-        if (minTimeToDue !== Infinity) {
-            nextReviewTime.textContent = formatTimeDifference(minTimeToDue);
-            nextReviewAlert.classList.remove('hidden');
-        } else {
-            nextReviewAlert.classList.add('hidden');
-        }
-    }
 
     /**
      * Gets the selected column indices from a checkbox container.
@@ -526,7 +495,15 @@ document.addEventListener('DOMContentLoaded', () => {
                     message = 'Introducing a new, unseen card.';
                     break;
                 case 'least_learned':
-                    message = 'All cards are learned. Showing the one with the lowest score.';
+                    message = 'Reviewing card with the lowest score.';
+                    break;
+                case 'deck_learned':
+                    if (reason.timeToNextReview !== Infinity) {
+                        const formattedTime = formatTimeDifference(reason.timeToNextReview);
+                        message = `Deck learned! Next review in ${formattedTime}. Reviewing lowest-score cards until then.`;
+                    } else {
+                        message = 'Congratulations, you have learned this whole deck!';
+                    }
                     break;
             }
             explanationMessage.textContent = message;
@@ -555,12 +532,10 @@ document.addEventListener('DOMContentLoaded', () => {
      */
     async function showNextCard({ forceNew = false, now = Date.now() } = {}) {
         if (cardData.length === 0) {
-            await updateNextReviewAlert();
             return;
         }
         if (cardData.length === 1) {
             await displayCard(0);
-            await updateNextReviewAlert();
             return;
         }
 
@@ -594,7 +569,6 @@ document.addEventListener('DOMContentLoaded', () => {
             const expiredInterval = formatDuration(repetitionIntervals[stats.intervalIndex]);
             const nextInterval = formatDuration(repetitionIntervals[stats.intervalIndex + 1] || repetitionIntervals[stats.intervalIndex]);
             await displayCard(nextIndex, { reason: { type: 'due_review', expiredInterval, nextInterval } });
-            await updateNextReviewAlert();
             return;
         }
 
@@ -610,12 +584,30 @@ document.addEventListener('DOMContentLoaded', () => {
             // Pick a random new card to show.
             const nextIndex = newCardIndices[Math.floor(Math.random() * newCardIndices.length)];
             await displayCard(nextIndex, { reason: { type: 'new_card' } });
-            await updateNextReviewAlert();
             return;
         }
 
         // --- Heuristic Step 3: Find and show the "least learned" card ---
         // If no cards are due and none are new, find the card with the lowest retention score.
+
+        const allCardsLearned = allCardStats.every(stats => getRetentionScore(stats) > 0);
+        let reasonForDisplay;
+
+        if (allCardsLearned) {
+            let minTimeToDue = Infinity;
+            allCardStats.forEach(stats => {
+                const timeToDue = getTimeToDue(stats, now).ms;
+                if (timeToDue > 0 && timeToDue < minTimeToDue) {
+                    minTimeToDue = timeToDue;
+                }
+            });
+            reasonForDisplay = {
+                type: 'deck_learned',
+                timeToNextReview: minTimeToDue
+            };
+        } else {
+            reasonForDisplay = { type: 'least_learned' };
+        }
 
         // Create a list of all card indices except the current one if forceNew is true
         let candidateIndices = allCardStats.map((_, index) => index);
@@ -645,8 +637,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         const nextIndex = candidateIndices[0];
-        await displayCard(nextIndex, { reason: { type: 'least_learned' } });
-        await updateNextReviewAlert();
+        await displayCard(nextIndex, { reason: reasonForDisplay });
     }
 
     /**
