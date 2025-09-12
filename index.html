@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Flashcards</title>
     <link rel="stylesheet" href="style.css">
-    <script src="https://cdn.jsdelivr.net/npm/efficient-language-detector-no-dynamic-import@1.0.3/minified/eld.M60.min.js"></script>
   </head>
   <body>
     <div id="top-bar">
@@ -53,12 +52,12 @@
             <input type="text" id="config-name" placeholder="e.g., Spanish Vocabulary">
         </div>
 
-        <div class="tabs">
-          <button class="tab-button active" data-tab="basic-settings">Basic</button>
-          <button class="tab-button" data-tab="advanced-settings">Advanced</button>
+        <div class="tabs" role="tablist">
+          <button class="tab-button active" id="basic-tab" data-tab="basic-settings" role="tab" aria-controls="basic-settings" aria-selected="true">Basic</button>
+          <button class="tab-button" id="advanced-tab" data-tab="advanced-settings" role="tab" aria-controls="advanced-settings" aria-selected="false">Advanced</button>
         </div>
 
-        <div id="basic-settings" class="tab-panel active">
+        <div id="basic-settings" class="tab-panel active" role="tabpanel" aria-labelledby="basic-tab">
             <div class="setting">
                 <label>Front Column(s):</label>
                 <div id="front-column-checkboxes" class="column-checkbox-group"></div>
@@ -88,7 +87,7 @@
             </div>
         </div>
 
-        <div id="advanced-settings" class="tab-panel">
+        <div id="advanced-settings" class="tab-panel" role="tabpanel" aria-labelledby="advanced-tab">
             <div class="setting">
                 <label for="tts-rate">Reading Speed:</label>
                 <input type="range" id="tts-rate" min="0.1" max="2" value="1" step="0.1">

@@ -13,20 +13,30 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // Tab switching logic
-    const tabButtons = document.querySelectorAll('.tab-button');
+    const tabsContainer = document.querySelector('.tabs');
     const tabPanels = document.querySelectorAll('.tab-panel');
 
-    tabButtons.forEach(button => {
-        button.addEventListener('click', () => {
-            tabButtons.forEach(btn => btn.classList.remove('active'));
-            button.classList.add('active');
+    if (tabsContainer) {
+        tabsContainer.addEventListener('click', (e) => {
+            if (e.target.matches('.tab-button')) {
+                const button = e.target;
 
-            const tabName = button.dataset.tab;
-            tabPanels.forEach(panel => {
-                panel.classList.toggle('active', panel.id === tabName);
-            });
+                // Update button states
+                tabsContainer.querySelectorAll('.tab-button').forEach(btn => {
+                    btn.classList.remove('active');
+                    btn.setAttribute('aria-selected', 'false');
+                });
+                button.classList.add('active');
+                button.setAttribute('aria-selected', 'true');
+
+                // Update panel visibility
+                const tabName = button.dataset.tab;
+                tabPanels.forEach(panel => {
+                    panel.classList.toggle('active', panel.id === tabName);
+                });
+            }
         });
-    });
+    }
 
     // DOM Elements
     const settingsButton = document.getElementById('settings-button');
@@ -187,6 +197,8 @@ document.addEventListener('DOMContentLoaded', () => {
      * @param {string} text - The raw string data from the fetched file.
      */
     async function parseData(text) { // Made async
+        const cleanCell = (cell) => cell.replace(/[\r\n\s]+/g, ' ').trim();
+
         const rows = text.trim().split('\n').filter(row => row.trim() !== ''); // Filter empty lines
         if (rows.length < 1) {
             cardData = [];
@@ -195,11 +207,11 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         const delimiter = rows[0].includes('\t') ? '\t' : ',';
-        headers = rows[0].split(delimiter).map(h => h.replace(/[\r\n\s]+/g, ' ').trim());
+        headers = rows[0].split(delimiter).map(cleanCell);
 
         cardData = rows
             .slice(1)
-            .map(row => row.split(delimiter).map(cell => cell.replace(/[\r\n\s]+/g, ' ').trim()))
+            .map(row => row.split(delimiter).map(cleanCell))
             .filter(row => row.length === headers.length); // Ensure row has correct number of columns
 
         // Stats are no longer loaded in bulk here.
