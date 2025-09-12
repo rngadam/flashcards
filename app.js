@@ -89,6 +89,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let viewHistory = []; // A stack to keep track of the sequence of viewed cards for the "previous" button.
     let useUppercase = false; // A flag for the "Alternate Uppercase" feature.
     let replayRate = 1.0; // Tracks the current playback rate for the 'f' key replay feature.
+    let cardShownTimestamp = null; // Tracks when the card was shown to calculate response delay.
 
     // History table sort state
     let historySortColumn = -1;
@@ -335,6 +336,15 @@ document.addEventListener('DOMContentLoaded', () => {
         return `${years} years ago`;
     }
 
+    function formatDuration(seconds) {
+        if (seconds < 60) return `${seconds} seconds`;
+        if (seconds < 3600) return `${Math.round(seconds / 60)} minutes`;
+        if (seconds < 86400) return `${Math.round(seconds / 3600)} hours`;
+        if (seconds < 2592000) return `${Math.round(seconds / 86400)} days`;
+        if (seconds < 31536000) return `${Math.round(seconds / 2592000)} months`;
+        return `${Math.round(seconds / 31536000)} years`;
+    }
+
     /**
      * Gets the selected column indices from a checkbox container.
      * @param {HTMLElement} checkboxContainer - The container with the column checkboxes.
@@ -375,6 +385,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const defaultStats = {
             successTimestamps: [],
             failureTimestamps: [],
+            responseDelays: [],
             lastViewed: null,
             intervalIndex: 0,
             viewCount: 0
@@ -388,7 +399,6 @@ document.addEventListener('DOMContentLoaded', () => {
         currentCardIndex = index;
         replayRate = 1.0;
 
-        const stats = cardStats[currentCardIndex];
         const previousLastViewed = stats.lastViewed;
 
         stats.viewCount++;
@@ -436,12 +446,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (explanationMessage) {
             let message = '';
-            switch (reason) {
+            switch (reason.type) { // reason is now an object
                 case 'due_review':
-                    message = 'This card is due for review.';
+                    message = `This card was due for its ${reason.expiredInterval} review. Next review in ${reason.nextInterval}.`;
                     break;
                 case 'new_card':
-                    message = 'Introducing a new card with a low score.';
+                    message = 'Introducing a new, low-score card to learn.';
                     break;
             }
             explanationMessage.textContent = message;
@@ -449,6 +459,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         await saveCardStats(cardKey, stats);
+        cardShownTimestamp = Date.now();
     }
 
     async function getAllCardStats() {
@@ -500,7 +511,18 @@ document.addEventListener('DOMContentLoaded', () => {
             if (nextIndex === currentCardIndex && sortedDueCardIndices.length > 1) {
                 nextIndex = sortedDueCardIndices[1];
             }
-            await displayCard(nextIndex, { reason: 'due_review' });
+
+            const stats = allCardStats[nextIndex];
+            const expiredInterval = formatDuration(repetitionIntervals[stats.intervalIndex]);
+            const nextInterval = formatDuration(repetitionIntervals[stats.intervalIndex + 1] || repetitionIntervals[stats.intervalIndex]);
+
+            await displayCard(nextIndex, {
+                reason: {
+                    type: 'due_review',
+                    expiredInterval: expiredInterval,
+                    nextInterval: nextInterval
+                }
+            });
             return;
         }
 
@@ -553,7 +575,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (forceNew && potentialNext === currentCardIndex && learningSubset.length > 1) {
                 potentialNext = learningSubset[1];
             }
-            await displayCard(potentialNext, { reason: 'new_card' });
+            await displayCard(potentialNext, { reason: { type: 'new_card' } });
         } else {
             alert("Congratulations! You've learned all the cards for now.");
         }
@@ -741,10 +763,16 @@ document.addEventListener('DOMContentLoaded', () => {
     async function markCardAsKnown(known) {
         const cardKey = getCardKey(cardData[currentCardIndex]);
         const defaultStats = {
-            successTimestamps: [], failureTimestamps: [],
+            successTimestamps: [], failureTimestamps: [], responseDelays: [],
             lastViewed: null, intervalIndex: 0, viewCount: 0
         };
         const stats = await get(cardKey) || defaultStats;
+
+        if (cardShownTimestamp) {
+            const delay = Date.now() - cardShownTimestamp;
+            stats.responseDelays = stats.responseDelays || [];
+            stats.responseDelays.push(delay);
+        }
 
         if (known) {
             stats.successTimestamps.push(Date.now());
