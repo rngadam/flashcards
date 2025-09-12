@@ -182,6 +182,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         const statsData = await get('card-stats-data') || {};
+        console.log('Parsing data. Got statsData from DB:', statsData);
         cardStats = cardData.map((card, index) => {
             const cardKey = getCardKey(card);
             const defaultStats = {
@@ -193,6 +194,7 @@ document.addEventListener('DOMContentLoaded', () => {
             };
             return statsData[cardKey] || defaultStats;
         });
+        console.log('Finished parsing. Final cardStats array:', cardStats);
 
         viewHistory = [];
         populateColumnSelectors();
@@ -679,9 +681,11 @@ document.addEventListener('DOMContentLoaded', () => {
         if (cardData.length === 0) return;
 
         const statsData = await get('card-stats-data') || {};
+        console.log('Saving stats. Current statsData from DB:', statsData);
         const cardKey = getCardKey(cardData[currentCardIndex]);
 
         statsData[cardKey] = cardStats[currentCardIndex]; // Save the whole stats object
+        console.log('Updated statsData to be saved:', statsData);
         await set('card-stats-data', statsData);
     }
 
