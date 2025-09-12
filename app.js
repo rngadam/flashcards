@@ -172,14 +172,20 @@ document.addEventListener('DOMContentLoaded', () => {
      * @param {string} text - The raw string data from the fetched file.
      */
     async function parseData(text) { // Made async
-        const rows = text.trim().split('\n');
-        if (rows[0].includes('\t')) {
-            headers = rows[0].split('\t');
-            cardData = rows.slice(1).map(row => row.split('\t'));
-        } else {
-            headers = rows[0].split(',');
-            cardData = rows.slice(1).map(row => row.split(','));
+        const rows = text.trim().split('\n').filter(row => row.trim() !== ''); // Filter empty lines
+        if (rows.length < 1) {
+            cardData = [];
+            headers = [];
+            return;
         }
+
+        const delimiter = rows[0].includes('\t') ? '\t' : ',';
+        headers = rows[0].split(delimiter);
+
+        cardData = rows
+            .slice(1)
+            .map(row => row.split(delimiter))
+            .filter(row => row.length === headers.length); // Ensure row has correct number of columns
 
         const statsData = await get('card-stats-data') || {};
         console.log('Parsing data. Got statsData from DB:', statsData);
@@ -673,9 +679,10 @@ document.addEventListener('DOMContentLoaded', () => {
      */
     function getCardKey(card) {
         const keyIndex = keyColumnSelector ? parseInt(keyColumnSelector.value) : 0;
-        if (!card || keyIndex >= card.length) {
-            // Fallback or error handling
-            return card ? card.join('-') : `invalid-card-${Math.random()}`;
+        if (!card || keyIndex >= card.length || typeof card[keyIndex] !== 'string') {
+            // Fallback for malformed rows that might have slipped through
+            console.warn('Malformed card data detected, could not generate key:', card);
+            return `invalid-card-${Math.random()}`;
         }
         return card[keyIndex].trim();
     }
