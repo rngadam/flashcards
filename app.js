@@ -180,18 +180,16 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         const delimiter = rows[0].includes('\t') ? '\t' : ',';
-        headers = rows[0].split(delimiter);
+        headers = rows[0].split(delimiter).map(h => h.trim());
 
         cardData = rows
             .slice(1)
-            .map(row => row.split(delimiter))
+            .map(row => row.split(delimiter).map(cell => cell.trim())) // Trim each cell
             .filter(row => row.length === headers.length); // Ensure row has correct number of columns
 
         const statsData = await get('card-stats-data') || {};
-        console.log('Parsing data. Got statsData from DB:', statsData);
         cardStats = cardData.map((card, index) => {
             const cardKey = getCardKey(card);
-            console.log(`Processing card index ${index}, key: "${cardKey}", found in DB: ${!!statsData[cardKey]}`);
             const defaultStats = {
                 successTimestamps: [],
                 failureTimestamps: [],
@@ -679,9 +677,8 @@ document.addEventListener('DOMContentLoaded', () => {
      */
     function getCardKey(card) {
         const keyIndex = keyColumnSelector ? parseInt(keyColumnSelector.value) : 0;
+        // The robust parsing in parseData should prevent these errors, but this is a final safeguard.
         if (!card || keyIndex >= card.length || typeof card[keyIndex] !== 'string') {
-            // Fallback for malformed rows that might have slipped through
-            console.warn('Malformed card data detected, could not generate key:', card);
             return `invalid-card-${Math.random()}`;
         }
         return card[keyIndex].trim();
