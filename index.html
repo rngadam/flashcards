@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Flashcards</title>
     <link rel="stylesheet" href="style.css">
+    <script src="https://cdn.jsdelivr.net/npm/efficient-language-detector-no-dynamic-import@1.0.3/minified/eld.M60.min.js"></script>
   </head>
   <body>
     <div id="top-bar">
@@ -28,79 +29,97 @@
       <div id="settings">
         <button id="close-settings-button">X</button>
         <h2>Settings</h2>
-        <div class="setting">
-          <label for="config-name">Configuration Name:</label>
-          <input type="text" id="config-name" placeholder="e.g., Spanish Vocabulary">
-        </div>
-        <div class="setting">
-          <label for="key-column-selector">Unique Key Column:</label>
-          <select id="key-column-selector"></select>
-        </div>
-        <div class="setting">
-          <label for="data-url">Data Source URL (TSV/CSV):</label>
-          <input type="text" id="data-url" value="https://docs.google.com/spreadsheets/d/e/2PACX-1vSW_KeHCyth3-9kWtpYHXl9aPVwoOhurjGINbJ4oNHWGoQMjSHyZl0J9LeraGDt51ZUjIsqrv9DXO27/pub?gid=2060234086&single=true&output=tsv">
-        </div>
-        <div class="setting">
-          <label>Front Column(s):</label>
-          <div id="front-column-checkboxes" class="column-checkbox-group"></div>
-        </div>
-        <div class="setting">
-          <label>Back Column(s):</label>
-          <div id="back-column-checkboxes" class="column-checkbox-group"></div>
-        </div>
-        <div class="setting">
-          <label for="font-selector">Font:</label>
-          <select id="font-selector">
-            <option value="Arial">Arial</option>
-            <option value="Verdana">Verdana</option>
-            <option value="Times New Roman">Times New Roman</option>
-            <option value="Courier New">Courier New</option>
-          </select>
-        </div>
-        <div class="setting">
-          <input type="checkbox" id="tts-front">
-          <label for="tts-front">Text-to-Speech on Front</label>
-          <select id="tts-front-lang"></select>
-        </div>
-        <div class="setting">
-          <input type="checkbox" id="tts-back">
-          <label for="tts-back">Text-to-Speech on Back</label>
-          <select id="tts-back-lang"></select>
-        </div>
-        <div class="setting">
-          <label for="tts-rate">Reading Speed:</label>
-          <input type="range" id="tts-rate" min="0.1" max="2" value="1" step="0.1">
-        </div>
-        <div class="setting">
-          <input type="checkbox" id="alternate-uppercase">
-          <label for="alternate-uppercase">Alternate Uppercase on Front</label>
-        </div>
-        <div class="setting">
-          <input type="checkbox" id="disable-animation">
-          <label for="disable-animation">Disable Flip Animation</label>
-        </div>
-        <div class="setting">
-          <input type="checkbox" id="audio-only-front">
-          <label for="audio-only-front">Audio-Only Front</label>
-        </div>
-        <div class="setting">
-          <input type="checkbox" id="tts-on-hotkey-only">
-          <label for="tts-on-hotkey-only">Only read on hotkey (f)</label>
-        </div>
-        <div class="setting">
-          <label for="repetition-intervals">Repetition Intervals (seconds, comma-separated):</label>
-          <textarea id="repetition-intervals" rows="3"></textarea>
-        </div>
-        <div class="setting">
-          <label for="learning-subset-size">Learning Subset Size:</label>
-          <input type="number" id="learning-subset-size" value="7" min="1">
-        </div>
-        <button id="load-data">Load Data</button>
-        <button id="save-config">Save Configuration</button>
+
         <div class="setting">
           <label for="config-selector">Load Configuration:</label>
           <select id="config-selector"></select>
         </div>
+
+        <div class="setting data-source-setting">
+          <label for="data-url">Data Source URL (TSV/CSV):</label>
+          <div class="input-with-button">
+            <input type="text" id="data-url" value="https://docs.google.com/spreadsheets/d/e/2PACX-1vSW_KeHCyth3-9kWtpYHXl9aPVwoOhurjGINbJ4oNHWGoQMjSHyZl0J9LeraGDt51ZUjIsqrv9DXO27/pub?gid=2060234086&single=true&output=tsv">
+            <button id="load-data">Load</button>
+          </div>
+        </div>
+
+        <div class="setting">
+          <label for="key-column-selector">Unique Key Column:</label>
+          <select id="key-column-selector"></select>
+        </div>
+
+        <div class="setting">
+            <label for="config-name">Configuration Name:</label>
+            <input type="text" id="config-name" placeholder="e.g., Spanish Vocabulary">
+        </div>
+
+        <div class="tabs">
+          <button class="tab-button active" data-tab="basic-settings">Basic</button>
+          <button class="tab-button" data-tab="advanced-settings">Advanced</button>
+        </div>
+
+        <div id="basic-settings" class="tab-panel active">
+            <div class="setting">
+                <label>Front Column(s):</label>
+                <div id="front-column-checkboxes" class="column-checkbox-group"></div>
+            </div>
+            <div class="setting">
+                <label>Back Column(s):</label>
+                <div id="back-column-checkboxes" class="column-checkbox-group"></div>
+            </div>
+            <div class="setting">
+                <label for="font-selector">Font:</label>
+                <select id="font-selector">
+                    <option value="Arial">Arial</option>
+                    <option value="Verdana">Verdana</option>
+                    <option value="Times New Roman">Times New Roman</option>
+                    <option value="Courier New">Courier New</option>
+                </select>
+            </div>
+            <div class="setting">
+                <input type="checkbox" id="tts-front">
+                <label for="tts-front">Text-to-Speech on Front</label>
+                <select id="tts-front-lang"></select>
+            </div>
+            <div class="setting">
+                <input type="checkbox" id="tts-back">
+                <label for="tts-back">Text-to-Speech on Back</label>
+                <select id="tts-back-lang"></select>
+            </div>
+        </div>
+
+        <div id="advanced-settings" class="tab-panel">
+            <div class="setting">
+                <label for="tts-rate">Reading Speed:</label>
+                <input type="range" id="tts-rate" min="0.1" max="2" value="1" step="0.1">
+            </div>
+            <div class="setting">
+                <input type="checkbox" id="alternate-uppercase">
+                <label for="alternate-uppercase">Alternate Uppercase on Front</label>
+            </div>
+            <div class="setting">
+                <input type="checkbox" id="disable-animation">
+                <label for="disable-animation">Disable Flip Animation</label>
+            </div>
+            <div class="setting">
+                <input type="checkbox" id="audio-only-front">
+                <label for="audio-only-front">Audio-Only Front</label>
+            </div>
+            <div class="setting">
+                <input type="checkbox" id="tts-on-hotkey-only">
+                <label for="tts-on-hotkey-only">Only read on hotkey (f)</label>
+            </div>
+            <div class="setting">
+                <label for="repetition-intervals">Repetition Intervals (seconds, comma-separated):</label>
+                <textarea id="repetition-intervals" rows="3"></textarea>
+            </div>
+            <div class="setting">
+                <label for="learning-subset-size">Learning Subset Size:</label>
+                <input type="number" id="learning-subset-size" value="7" min="1">
+            </div>
+        </div>
+
+        <button id="save-config">Save Configuration</button>
       </div>
     </div>
 

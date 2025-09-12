@@ -12,6 +12,22 @@ document.addEventListener('DOMContentLoaded', () => {
         document.body.classList.add('desktop');
     }
 
+    // Tab switching logic
+    const tabButtons = document.querySelectorAll('.tab-button');
+    const tabPanels = document.querySelectorAll('.tab-panel');
+
+    tabButtons.forEach(button => {
+        button.addEventListener('click', () => {
+            tabButtons.forEach(btn => btn.classList.remove('active'));
+            button.classList.add('active');
+
+            const tabName = button.dataset.tab;
+            tabPanels.forEach(panel => {
+                panel.classList.toggle('active', panel.id === tabName);
+            });
+        });
+    });
+
     // DOM Elements
     const settingsButton = document.getElementById('settings-button');
     const closeSettingsButton = document.getElementById('close-settings-button');
@@ -180,11 +196,11 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         const delimiter = rows[0].includes('\t') ? '\t' : ',';
-        headers = rows[0].split(delimiter).map(h => h.trim());
+        headers = rows[0].split(delimiter).map(h => h.replace(/[\r\n\s]+/g, ' ').trim());
 
         cardData = rows
             .slice(1)
-            .map(row => row.split(delimiter).map(cell => cell.trim())) // Trim each cell
+            .map(row => row.split(delimiter).map(cell => cell.replace(/[\r\n\s]+/g, ' ').trim()))
             .filter(row => row.length === headers.length); // Ensure row has correct number of columns
 
         const statsData = await get('card-stats-data') || {};
@@ -199,7 +215,6 @@ document.addEventListener('DOMContentLoaded', () => {
             };
             return statsData[cardKey] || defaultStats;
         });
-        console.log('Finished parsing. Final cardStats array:', cardStats);
 
         viewHistory = [];
         populateColumnSelectors();
@@ -226,13 +241,16 @@ document.addEventListener('DOMContentLoaded', () => {
             backColumnCheckboxes.insertAdjacentHTML('beforeend', checkboxBack);
         });
 
+        // Default front to first column
         if (headers.length > 0) {
             const firstCheckbox = frontColumnCheckboxes.querySelector('input');
             if (firstCheckbox) firstCheckbox.checked = true;
         }
-        if (headers.length > 1) {
-            const secondCheckbox = backColumnCheckboxes.querySelectorAll('input')[1];
-            if (secondCheckbox) secondCheckbox.checked = true;
+        // Default back to all columns
+        if (backColumnCheckboxes) {
+            backColumnCheckboxes.querySelectorAll('input[type="checkbox"]').forEach(cb => {
+                cb.checked = true;
+            });
         }
     }
 
@@ -692,11 +710,9 @@ document.addEventListener('DOMContentLoaded', () => {
         if (cardData.length === 0) return;
 
         const statsData = await get('card-stats-data') || {};
-        console.log('Saving stats. Current statsData from DB:', statsData);
         const cardKey = getCardKey(cardData[currentCardIndex]);
 
         statsData[cardKey] = cardStats[currentCardIndex]; // Save the whole stats object
-        console.log('Updated statsData to be saved:', statsData);
         await set('card-stats-data', statsData);
     }
 

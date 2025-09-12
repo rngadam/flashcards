@@ -136,6 +136,16 @@ body.is-flipping {
   margin-bottom: 10px;
 }
 
+.input-with-button {
+    display: flex;
+    align-items: center;
+}
+
+.input-with-button input {
+    flex-grow: 1;
+    margin-right: 10px;
+}
+
 #card-container {
   width: 80%;
   height: 60%;
@@ -261,4 +271,35 @@ th.sortable.desc::after {
 
 #explanation-message.visible {
     opacity: 1;
+}
+
+/* Tab Styles */
+.tabs {
+    display: flex;
+    margin-bottom: 15px;
+    border-bottom: 1px solid #ccc;
+}
+.tab-button {
+    padding: 10px 15px;
+    border: none;
+    background: none;
+    cursor: pointer;
+    font-size: 1em;
+    margin: 0;
+    border-radius: 0;
+    border-bottom: 3px solid transparent;
+    color: #007bff;
+}
+.tab-button:hover {
+    background-color: #f0f0f0;
+}
+.tab-button.active {
+    font-weight: bold;
+    border-bottom: 3px solid #007bff;
+}
+.tab-panel {
+    display: none;
+}
+.tab-panel.active {
+    display: block;
 }
