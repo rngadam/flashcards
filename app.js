@@ -1,6 +1,6 @@
 import { franc, francAll } from 'https://cdn.jsdelivr.net/npm/franc@6.2.0/+esm';
 import { eld } from 'https://cdn.jsdelivr.net/npm/efficient-language-detector-no-dynamic-import@1.0.3/+esm';
-import { get, set } from 'https://cdn.jsdelivr.net/npm/idb-keyval/+esm';
+import { get, set, del } from 'https://cdn.jsdelivr.net/npm/idb-keyval/+esm';
 
 /**
  * @file Main application logic for the Flashcards web app.
@@ -49,6 +49,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const configTitle = document.getElementById('config-title');
     const loadDataButton = document.getElementById('load-data');
     const saveConfigButton = document.getElementById('save-config');
+    const resetStatsButton = document.getElementById('reset-stats');
     const dataUrlInput = document.getElementById('data-url');
     const frontColumnCheckboxes = document.getElementById('front-column-checkboxes');
     const backColumnCheckboxes = document.getElementById('back-column-checkboxes');
@@ -65,7 +66,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const configNameInput = document.getElementById('config-name');
     const keyColumnSelector = document.getElementById('key-column-selector');
     const repetitionIntervalsTextarea = document.getElementById('repetition-intervals');
-    const learningSubsetSizeInput = document.getElementById('learning-subset-size');
     const detectedLangSpan = document.getElementById('detected-lang');
     const configSelector = document.getElementById('config-selector');
     const cardContainer = document.getElementById('card-container');
@@ -90,6 +90,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let useUppercase = false; // A flag for the "Alternate Uppercase" feature.
     let replayRate = 1.0; // Tracks the current playback rate for the 'f' key replay feature.
     let cardShownTimestamp = null; // Tracks when the card was shown to calculate response delay.
+    let isCurrentCardDue = false; // Tracks if the current card was shown because it was due for review.
 
     // History table sort state
     let historySortColumn = -1;
@@ -98,10 +99,6 @@ document.addEventListener('DOMContentLoaded', () => {
     // Spaced Repetition State
     const defaultIntervals = [5, 25, 120, 600, 3600, 18000, 86400, 432000, 2160000, 10368000, 63072000]; // in seconds
     let repetitionIntervals = [...defaultIntervals];
-
-    // Learning Subset State
-    let learningSubset = [];
-    let learningSubsetSize = 7;
 
     // Drag state for swipe gestures
     let isDragging = false; // True if a card is currently being dragged.
@@ -123,15 +120,13 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
     if (saveConfigButton) saveConfigButton.addEventListener('click', saveConfig);
+    if (resetStatsButton) resetStatsButton.addEventListener('click', resetDeckStats);
     if (configSelector) configSelector.addEventListener('change', () => loadSelectedConfig(configSelector.value));
     if (flipCardButton) flipCardButton.addEventListener('click', flipCard);
     if (nextCardButton) nextCardButton.addEventListener('click', () => showNextCard());
     if (prevCardButton) prevCardButton.addEventListener('click', showPrevCard);
     if (iKnowButton) iKnowButton.addEventListener('click', async () => { await markCardAsKnown(true); await showNextCard(); });
     if (iDontKnowButton) iDontKnowButton.addEventListener('click', async () => { await markCardAsKnown(false); await showNextCard({ forceNew: true }); });
-    if (learningSubsetSizeInput) learningSubsetSizeInput.addEventListener('change', () => {
-        learningSubsetSize = parseInt(learningSubsetSizeInput.value) || 7;
-    });
     if (frontColumnCheckboxes) frontColumnCheckboxes.addEventListener('change', async () => await displayCard(currentCardIndex));
     if (backColumnCheckboxes) backColumnCheckboxes.addEventListener('change', async () => await displayCard(currentCardIndex));
     if (fontSelector) fontSelector.addEventListener('change', () => {
@@ -345,6 +340,40 @@ document.addEventListener('DOMContentLoaded', () => {
         return `${Math.round(seconds / 31536000)} years`;
     }
 
+    function formatTimeDifference(ms) {
+        if (ms <= 0) return 'Now';
+
+        const seconds = Math.floor(ms / 1000);
+        if (seconds < 60) return `${seconds}s`;
+
+        const minutes = Math.floor(seconds / 60);
+        if (minutes < 60) return `${minutes}m`;
+
+        const hours = Math.floor(minutes / 60);
+        if (hours < 24) return `${hours}h`;
+
+        const days = Math.floor(hours / 24);
+        return `${days}d`;
+    }
+
+    function getTimeToDue(stats, now = Date.now()) {
+        if (!stats.lastViewed) {
+            return { ms: -1, formatted: 'N/A' }; // N/A for cards never seen
+        }
+        const intervalSeconds = repetitionIntervals[stats.intervalIndex];
+        if (intervalSeconds === undefined) {
+             return { ms: Infinity, formatted: 'Learned' }; // Card is fully learned
+        }
+        const dueDate = stats.lastViewed + (intervalSeconds * 1000);
+        const timeToDueMs = dueDate - now;
+
+        return {
+            ms: timeToDueMs,
+            formatted: formatTimeDifference(timeToDueMs)
+        };
+    }
+
+
     /**
      * Gets the selected column indices from a checkbox container.
      * @param {HTMLElement} checkboxContainer - The container with the column checkboxes.
@@ -366,7 +395,30 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function getRetentionScore(stats) {
+        if (!stats || typeof stats !== 'object') {
+            return 0;
+        }
         return (stats.successTimestamps?.length || 0) - (stats.failureTimestamps?.length || 0);
+    }
+
+    async function getSanitizedStats(cardKey) {
+        const defaultStats = {
+            successTimestamps: [],
+            failureTimestamps: [],
+            responseDelays: [],
+            lastViewed: null,
+            intervalIndex: 0,
+            viewCount: 0
+        };
+
+        let stats = await get(cardKey);
+
+        if (!stats || typeof stats !== 'object') {
+            stats = defaultStats;
+        } else {
+            stats = { ...defaultStats, ...stats };
+        }
+        return stats;
     }
 
     /**
@@ -378,19 +430,13 @@ document.addEventListener('DOMContentLoaded', () => {
      * @param {boolean} [options.isNavigatingBack=false] - True if this call is from the "previous" button.
      * @param {string} [options.reason=''] - The reason the card was chosen.
      */
-    async function displayCard(index, { isNavigatingBack = false, reason = '' } = {}) {
+    async function displayCard(index, { isNavigatingBack = false, reason = {} } = {}) {
         if (cardData.length === 0 || index < 0 || index >= cardData.length) return;
 
+        isCurrentCardDue = reason.type === 'due_review';
+
         const cardKey = getCardKey(cardData[index]);
-        const defaultStats = {
-            successTimestamps: [],
-            failureTimestamps: [],
-            responseDelays: [],
-            lastViewed: null,
-            intervalIndex: 0,
-            viewCount: 0
-        };
-        const stats = await get(cardKey) || defaultStats;
+        const stats = await getSanitizedStats(cardKey);
 
         if (!isNavigatingBack && index !== currentCardIndex) {
             viewHistory.push(currentCardIndex);
@@ -446,12 +492,23 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (explanationMessage) {
             let message = '';
-            switch (reason.type) { // reason is now an object
+            switch (reason.type) {
                 case 'due_review':
-                    message = `This card was due for its ${reason.expiredInterval} review. Next review in ${reason.nextInterval}.`;
+                    message = `This card is due for its ${reason.expiredInterval} review. Next review in ${reason.nextInterval}.`;
                     break;
                 case 'new_card':
-                    message = 'Introducing a new, low-score card to learn.';
+                    message = 'Introducing a new, unseen card.';
+                    break;
+                case 'least_learned':
+                    message = 'Reviewing card with the lowest score.';
+                    break;
+                case 'deck_learned':
+                    if (reason.timeToNextReview !== Infinity) {
+                        const formattedTime = formatTimeDifference(reason.timeToNextReview);
+                        message = `Deck learned! Next review in ${formattedTime}. Reviewing lowest-score cards until then.`;
+                    } else {
+                        message = 'Congratulations, you have learned this whole deck!';
+                    }
                     break;
             }
             explanationMessage.textContent = message;
@@ -463,17 +520,8 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     async function getAllCardStats() {
-        const allStats = [];
-        for (let i = 0; i < cardData.length; i++) {
-            const cardKey = getCardKey(cardData[i]);
-            const defaultStats = {
-                successTimestamps: [], failureTimestamps: [],
-                lastViewed: null, intervalIndex: 0, viewCount: 0
-            };
-            const stats = await get(cardKey) || defaultStats;
-            allStats.push(stats);
-        }
-        return allStats;
+        const promises = cardData.map(card => getSanitizedStats(getCardKey(card)));
+        return Promise.all(promises);
     }
 
     /**
@@ -482,8 +530,10 @@ document.addEventListener('DOMContentLoaded', () => {
      * @param {object} [options] - Optional parameters.
      * @param {boolean} [options.forceNew=false] - If true, ensures the next card is different from the current one, even if it also has a low score. Used for "I don't know".
      */
-    async function showNextCard({forceNew = false} = {}) {
-        if (cardData.length === 0) return;
+    async function showNextCard({ forceNew = false, now = Date.now() } = {}) {
+        if (cardData.length === 0) {
+            return;
+        }
         if (cardData.length === 1) {
             await displayCard(0);
             return;
@@ -491,94 +541,103 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const allCardStats = await getAllCardStats();
 
-        // 1. Find due cards
-        const now = Date.now();
+        // --- Heuristic Step 1: Find and show a "due" card ---
         const dueCardIndices = [];
         allCardStats.forEach((stats, index) => {
-            if (!stats.lastViewed) return; // Never seen, not due
-            const intervalSeconds = repetitionIntervals[stats.intervalIndex];
-            if (now - stats.lastViewed > intervalSeconds * 1000) {
-                dueCardIndices.push(index);
+            // A card is due if it has been seen before and its review interval has passed.
+            if (stats.lastViewed) {
+                const intervalSeconds = repetitionIntervals[stats.intervalIndex] || defaultIntervals[defaultIntervals.length - 1];
+                if (now - stats.lastViewed > intervalSeconds * 1000) {
+                    dueCardIndices.push(index);
+                }
             }
         });
 
-        // Prioritize due cards
         if (dueCardIndices.length > 0) {
-            const scoredDueCards = dueCardIndices.map(index => ({ index, score: getRetentionScore(allCardStats[index]) }));
-            scoredDueCards.sort((a, b) => a.score - b.score);
-            let sortedDueCardIndices = scoredDueCards.map(item => item.index);
-            let nextIndex = sortedDueCardIndices[0];
-            if (nextIndex === currentCardIndex && sortedDueCardIndices.length > 1) {
-                nextIndex = sortedDueCardIndices[1];
+            // Find the due card with the lowest retention score to prioritize it.
+            // If scores are equal, shuffle to introduce randomness.
+            shuffleArray(dueCardIndices); // Randomize before sorting to break ties
+            dueCardIndices.sort((a, b) => getRetentionScore(allCardStats[a]) - getRetentionScore(allCardStats[b]));
+
+            let nextIndex = dueCardIndices[0];
+            // Avoid showing the same card twice in a row if there are other due cards.
+            if (nextIndex === currentCardIndex && dueCardIndices.length > 1) {
+                nextIndex = dueCardIndices[1];
             }
 
             const stats = allCardStats[nextIndex];
             const expiredInterval = formatDuration(repetitionIntervals[stats.intervalIndex]);
             const nextInterval = formatDuration(repetitionIntervals[stats.intervalIndex + 1] || repetitionIntervals[stats.intervalIndex]);
-
-            await displayCard(nextIndex, {
-                reason: {
-                    type: 'due_review',
-                    expiredInterval: expiredInterval,
-                    nextInterval: nextInterval
-                }
-            });
+            await displayCard(nextIndex, { reason: { type: 'due_review', expiredInterval, nextInterval } });
             return;
         }
 
-        // 2. If no cards are due, manage the learning subset
-        const subsetIsLearned = learningSubset.every(i => getRetentionScore(allCardStats[i]) > 3);
-        if (learningSubset.length === 0 || subsetIsLearned) {
-            let notWellKnown = cardData
-                .map((card, index) => ({
-                    index,
-                    score: getRetentionScore(allCardStats[index]),
-                    intervalIndex: allCardStats[index].intervalIndex
-                }))
-                .filter(item => item.intervalIndex < repetitionIntervals.length - 1);
-
-            notWellKnown.sort((a, b) => a.score - b.score);
-
-            const groupedByScore = notWellKnown.reduce((acc, item) => {
-                acc[item.score] = acc[item.score] || [];
-                acc[item.score].push(item);
-                return acc;
-            }, {});
-
-            let shuffledNotWellKnown = [];
-            Object.keys(groupedByScore).sort((a,b) => a-b).forEach(score => {
-                const group = groupedByScore[score];
-                shuffleArray(group);
-                shuffledNotWellKnown = shuffledNotWellKnown.concat(group);
-            });
-
-            learningSubset = shuffledNotWellKnown.slice(0, learningSubsetSize).map(item => item.index);
-        }
-
-        // 3. Select from the subset
-        if (learningSubset.length > 0) {
-            const scoredSubset = learningSubset.map(index => ({
-                index,
-                score: getRetentionScore(allCardStats[index]),
-                lastViewed: allCardStats[index].lastViewed || 0
-            }));
-
-            scoredSubset.sort((a, b) => {
-                if (a.score !== b.score) {
-                    return a.score - b.score;
-                }
-                return a.lastViewed - b.lastViewed;
-            });
-
-            learningSubset = scoredSubset.map(item => item.index);
-            let potentialNext = learningSubset[0];
-            if (forceNew && potentialNext === currentCardIndex && learningSubset.length > 1) {
-                potentialNext = learningSubset[1];
+        // --- Heuristic Step 2: Find and show a "new" card ---
+        const newCardIndices = [];
+        allCardStats.forEach((stats, index) => {
+            if (stats.viewCount === 0) {
+                newCardIndices.push(index);
             }
-            await displayCard(potentialNext, { reason: { type: 'new_card' } });
-        } else {
-            alert("Congratulations! You've learned all the cards for now.");
+        });
+
+        if (newCardIndices.length > 0) {
+            // Pick a random new card to show.
+            const nextIndex = newCardIndices[Math.floor(Math.random() * newCardIndices.length)];
+            await displayCard(nextIndex, { reason: { type: 'new_card' } });
+            return;
         }
+
+        // --- Heuristic Step 3: Find and show the "least learned" card ---
+        // If no cards are due and none are new, find the card with the lowest retention score.
+
+        const allCardsLearned = allCardStats.every(stats => getRetentionScore(stats) > 0);
+        let reasonForDisplay;
+
+        if (allCardsLearned) {
+            let minTimeToDue = Infinity;
+            allCardStats.forEach(stats => {
+                const timeToDue = getTimeToDue(stats, now).ms;
+                if (timeToDue > 0 && timeToDue < minTimeToDue) {
+                    minTimeToDue = timeToDue;
+                }
+            });
+            reasonForDisplay = {
+                type: 'deck_learned',
+                timeToNextReview: minTimeToDue
+            };
+        } else {
+            reasonForDisplay = { type: 'least_learned' };
+        }
+
+        // Create a list of all card indices except the current one if forceNew is true
+        let candidateIndices = allCardStats.map((_, index) => index);
+        if (forceNew && candidateIndices.length > 1) {
+            candidateIndices = candidateIndices.filter(index => index !== currentCardIndex);
+        }
+
+        if (candidateIndices.length === 0) {
+            // This can happen if forceNew is true and there's only one card left.
+            // In this case, just show that one card.
+            candidateIndices.push(currentCardIndex);
+        }
+
+        // Sort by retention score (ascending), then by last viewed time (ascending - oldest first)
+        // Shuffle first to break ties in both score and lastViewed
+        shuffleArray(candidateIndices);
+        candidateIndices.sort((a, b) => {
+            const scoreA = getRetentionScore(allCardStats[a]);
+            const scoreB = getRetentionScore(allCardStats[b]);
+            if (scoreA !== scoreB) {
+                return scoreA - scoreB;
+            }
+            // If scores are equal, show the one that was seen longer ago.
+            const lastViewedA = allCardStats[a].lastViewed || 0;
+            const lastViewedB = allCardStats[b].lastViewed || 0;
+            return lastViewedA - lastViewedB;
+        });
+
+        const nextIndex = candidateIndices[0];
+        await displayCard(nextIndex, { reason: reasonForDisplay });
     }
 
     /**
@@ -593,15 +652,18 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function buildHistoryTbodyHtml(data) {
         let tbodyHtml = '<tbody>';
+        const now = Date.now();
         data.forEach(item => {
             tbodyHtml += '<tr>';
             item.card.forEach(cell => {
                 tbodyHtml += `<td>${cell}</td>`;
             });
-            const retentionScore = (item.stats.successTimestamps?.length || 0) - (item.stats.failureTimestamps?.length || 0);
+            const retentionScore = getRetentionScore(item.stats);
             tbodyHtml += `<td>${retentionScore}</td>`;
             tbodyHtml += `<td>${item.stats.viewCount}</td>`;
             tbodyHtml += `<td>${formatTimeAgo(item.stats.lastViewed)}</td>`;
+            const timeToDue = getTimeToDue(item.stats, now);
+            tbodyHtml += `<td>${timeToDue.formatted}</td>`;
             tbodyHtml += '</tr>';
         });
         tbodyHtml += '</tbody>';
@@ -623,6 +685,7 @@ document.addEventListener('DOMContentLoaded', () => {
         tableHTML += `<th class="sortable" data-column-index="${headers.length}">Retention Score</th>`;
         tableHTML += `<th class="sortable" data-column-index="${headers.length + 1}">View Count</th>`;
         tableHTML += `<th class="sortable" data-column-index="${headers.length + 2}">Last Seen</th>`;
+        tableHTML += `<th class="sortable" data-column-index="${headers.length + 3}">Time to Due</th>`;
         tableHTML += '</tr></thead>';
 
         const allCardStats = await getAllCardStats();
@@ -648,6 +711,7 @@ document.addEventListener('DOMContentLoaded', () => {
     async function sortHistoryTable(e) {
         const th = e.currentTarget;
         const columnIndex = parseInt(th.dataset.columnIndex);
+        const now = Date.now(); // Capture timestamp for consistent sorting
 
         if (historySortColumn === columnIndex) {
             historySortDirection = historySortDirection === 'asc' ? 'desc' : 'asc';
@@ -680,9 +744,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 } else if (statsKeyIndex === 1) { // View Count
                     valA = a.stats.viewCount;
                     valB = b.stats.viewCount;
-                } else { // Last Seen
+                } else if (statsKeyIndex === 2) { // Last Seen
                     valA = a.stats.lastViewed;
                     valB = b.stats.lastViewed;
+                } else { // Time to Due
+                    valA = getTimeToDue(a.stats, now).ms;
+                    valB = getTimeToDue(b.stats, now).ms;
                 }
             }
 
@@ -762,11 +829,7 @@ document.addEventListener('DOMContentLoaded', () => {
      */
     async function markCardAsKnown(known) {
         const cardKey = getCardKey(cardData[currentCardIndex]);
-        const defaultStats = {
-            successTimestamps: [], failureTimestamps: [], responseDelays: [],
-            lastViewed: null, intervalIndex: 0, viewCount: 0
-        };
-        const stats = await get(cardKey) || defaultStats;
+        const stats = await getSanitizedStats(cardKey);
 
         if (cardShownTimestamp) {
             const delay = Date.now() - cardShownTimestamp;
@@ -776,7 +839,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (known) {
             stats.successTimestamps.push(Date.now());
-            if (stats.intervalIndex < repetitionIntervals.length - 1) {
+            // Only advance the interval if the card was due for review.
+            if (isCurrentCardDue && stats.intervalIndex < repetitionIntervals.length - 1) {
                 stats.intervalIndex++;
             }
         } else {
@@ -802,7 +866,6 @@ document.addEventListener('DOMContentLoaded', () => {
             dataUrl: dataUrlInput.value,
             keyColumn: keyColumnSelector.value,
             repetitionIntervals: repetitionIntervalsTextarea.value,
-            learningSubsetSize: learningSubsetSizeInput.value,
             frontColumns: getSelectedColumnIndices(frontColumnCheckboxes),
             backColumns: getSelectedColumnIndices(backColumnCheckboxes),
             font: fontSelector.value,
@@ -822,6 +885,31 @@ document.addEventListener('DOMContentLoaded', () => {
         configSelector.value = configName;
         configTitle.textContent = configName;
         alert(`Configuration '${configName}' saved!`);
+    }
+
+    async function resetDeckStats() {
+        if (cardData.length === 0) {
+            alert("No deck is loaded. Please load a deck first.");
+            return;
+        }
+
+        const confirmation = confirm("Are you sure you want to reset all statistics for every card in the current deck? This action cannot be undone.");
+        if (!confirmation) {
+            return;
+        }
+
+        try {
+            const promises = cardData.map(card => del(getCardKey(card)));
+            await Promise.all(promises);
+            alert("Statistics for the current deck have been reset.");
+            // Optionally, reload the current card to show its stats are reset
+            if (currentCardIndex >= 0) {
+                await displayCard(currentCardIndex);
+            }
+        } catch (error) {
+            console.error("Failed to reset deck statistics:", error);
+            alert("An error occurred while trying to reset the deck statistics. Please check the console for details.");
+        }
     }
 
     /**
@@ -881,10 +969,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
             // Always update the UI to reflect the actual intervals being used
             repetitionIntervalsTextarea.value = repetitionIntervals.join(', ');
-        }
-        if (learningSubsetSizeInput) {
-            learningSubsetSizeInput.value = config.learningSubsetSize || 7;
-            learningSubsetSize = parseInt(learningSubsetSizeInput.value);
         }
 
         if (card) {

@@ -303,3 +303,24 @@ th.sortable.desc::after {
 .tab-panel.active {
     display: block;
 }
+
+.button-container {
+    display: flex;
+    gap: 10px;
+    margin-top: 20px;
+}
+
+.button-container button {
+    flex-grow: 1;
+}
+
+button.danger {
+    background-color: #e74c3c;
+    color: white;
+    border-color: #e74c3c;
+}
+
+button.danger:hover {
+    background-color: #c0392b;
+    border-color: #c0392b;
+}
