@@ -10,6 +10,7 @@
     <div id="top-bar">
       <h1 id="config-title"></h1>
       <span id="detected-lang"></span>
+      <div id="cache-status"></div>
       <div>
         <button id="history-button">📜</button>
         <button id="settings-button">⚙️</button>
@@ -55,6 +56,8 @@
         <div class="tabs" role="tablist">
           <button class="tab-button active" id="basic-tab" data-tab="basic-settings" role="tab" aria-controls="basic-settings" aria-selected="true">Basic</button>
           <button class="tab-button" id="advanced-tab" data-tab="advanced-settings" role="tab" aria-controls="advanced-settings" aria-selected="false">Advanced</button>
+          <button class="tab-button" id="subset-tab" data-tab="subset-settings" role="tab" aria-controls="subset-settings" aria-selected="false">Subset</button>
+          <button class="tab-button" id="dangerous-tab" data-tab="dangerous-settings" role="tab" aria-controls="dangerous-settings" aria-selected="false">Dangerous</button>
         </div>
 
         <div id="basic-settings" class="tab-panel active" role="tabpanel" aria-labelledby="basic-tab">
@@ -114,9 +117,27 @@
             </div>
         </div>
 
+        <div id="subset-settings" class="tab-panel" role="tabpanel" aria-labelledby="subset-tab">
+            <div class="setting">
+                <label for="subset-config-name">New Subset Name:</label>
+                <input type="text" id="subset-config-name" placeholder="e.g., Chapter 1 Words">
+            </div>
+            <div class="setting">
+                <label for="subset-text">Source Text:</label>
+                <textarea id="subset-text" rows="5" placeholder="Paste text here..."></textarea>
+            </div>
+            <button id="create-subset-config">Create and Load Subset</button>
+        </div>
+
+        <div id="dangerous-settings" class="tab-panel" role="tabpanel" aria-labelledby="dangerous-tab">
+            <div class="setting">
+                <p>This action cannot be undone.</p>
+                <button id="reset-stats" class="danger">Reset Current Deck Stats</button>
+            </div>
+        </div>
+
         <div class="button-container">
             <button id="save-config">Save Configuration</button>
-            <button id="reset-stats" class="danger">Reset Current Deck Stats</button>
         </div>
       </div>
     </div>
