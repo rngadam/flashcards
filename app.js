@@ -1,6 +1,6 @@
 import { franc, francAll } from 'https://cdn.jsdelivr.net/npm/franc@6.2.0/+esm';
 import { eld } from 'https://cdn.jsdelivr.net/npm/efficient-language-detector-no-dynamic-import@1.0.3/+esm';
-import { get, set } from 'https://cdn.jsdelivr.net/npm/idb-keyval/+esm';
+import { get, set, del } from 'https://cdn.jsdelivr.net/npm/idb-keyval/+esm';
 
 /**
  * @file Main application logic for the Flashcards web app.
@@ -49,6 +49,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const configTitle = document.getElementById('config-title');
     const loadDataButton = document.getElementById('load-data');
     const saveConfigButton = document.getElementById('save-config');
+    const resetStatsButton = document.getElementById('reset-stats');
     const dataUrlInput = document.getElementById('data-url');
     const frontColumnCheckboxes = document.getElementById('front-column-checkboxes');
     const backColumnCheckboxes = document.getElementById('back-column-checkboxes');
@@ -89,6 +90,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let useUppercase = false; // A flag for the "Alternate Uppercase" feature.
     let replayRate = 1.0; // Tracks the current playback rate for the 'f' key replay feature.
     let cardShownTimestamp = null; // Tracks when the card was shown to calculate response delay.
+    let isCurrentCardDue = false; // Tracks if the current card was shown because it was due for review.
 
     // History table sort state
     let historySortColumn = -1;
@@ -118,6 +120,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
     if (saveConfigButton) saveConfigButton.addEventListener('click', saveConfig);
+    if (resetStatsButton) resetStatsButton.addEventListener('click', resetDeckStats);
     if (configSelector) configSelector.addEventListener('change', () => loadSelectedConfig(configSelector.value));
     if (flipCardButton) flipCardButton.addEventListener('click', flipCard);
     if (nextCardButton) nextCardButton.addEventListener('click', () => showNextCard());
@@ -427,8 +430,10 @@ document.addEventListener('DOMContentLoaded', () => {
      * @param {boolean} [options.isNavigatingBack=false] - True if this call is from the "previous" button.
      * @param {string} [options.reason=''] - The reason the card was chosen.
      */
-    async function displayCard(index, { isNavigatingBack = false, reason = '' } = {}) {
+    async function displayCard(index, { isNavigatingBack = false, reason = {} } = {}) {
         if (cardData.length === 0 || index < 0 || index >= cardData.length) return;
+
+        isCurrentCardDue = reason.type === 'due_review';
 
         const cardKey = getCardKey(cardData[index]);
         const stats = await getSanitizedStats(cardKey);
@@ -515,13 +520,8 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     async function getAllCardStats() {
-        const allStats = [];
-        for (let i = 0; i < cardData.length; i++) {
-            const cardKey = getCardKey(cardData[i]);
-            const stats = await getSanitizedStats(cardKey);
-            allStats.push(stats);
-        }
-        return allStats;
+        const promises = cardData.map(card => getSanitizedStats(getCardKey(card)));
+        return Promise.all(promises);
     }
 
     /**
@@ -711,6 +711,7 @@ document.addEventListener('DOMContentLoaded', () => {
     async function sortHistoryTable(e) {
         const th = e.currentTarget;
         const columnIndex = parseInt(th.dataset.columnIndex);
+        const now = Date.now(); // Capture timestamp for consistent sorting
 
         if (historySortColumn === columnIndex) {
             historySortDirection = historySortDirection === 'asc' ? 'desc' : 'asc';
@@ -747,8 +748,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     valA = a.stats.lastViewed;
                     valB = b.stats.lastViewed;
                 } else { // Time to Due
-                    valA = getTimeToDue(a.stats).ms;
-                    valB = getTimeToDue(b.stats).ms;
+                    valA = getTimeToDue(a.stats, now).ms;
+                    valB = getTimeToDue(b.stats, now).ms;
                 }
             }
 
@@ -838,7 +839,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (known) {
             stats.successTimestamps.push(Date.now());
-            if (stats.intervalIndex < repetitionIntervals.length - 1) {
+            // Only advance the interval if the card was due for review.
+            if (isCurrentCardDue && stats.intervalIndex < repetitionIntervals.length - 1) {
                 stats.intervalIndex++;
             }
         } else {
@@ -883,6 +885,31 @@ document.addEventListener('DOMContentLoaded', () => {
         configSelector.value = configName;
         configTitle.textContent = configName;
         alert(`Configuration '${configName}' saved!`);
+    }
+
+    async function resetDeckStats() {
+        if (cardData.length === 0) {
+            alert("No deck is loaded. Please load a deck first.");
+            return;
+        }
+
+        const confirmation = confirm("Are you sure you want to reset all statistics for every card in the current deck? This action cannot be undone.");
+        if (!confirmation) {
+            return;
+        }
+
+        try {
+            const promises = cardData.map(card => del(getCardKey(card)));
+            await Promise.all(promises);
+            alert("Statistics for the current deck have been reset.");
+            // Optionally, reload the current card to show its stats are reset
+            if (currentCardIndex >= 0) {
+                await displayCard(currentCardIndex);
+            }
+        } catch (error) {
+            console.error("Failed to reset deck statistics:", error);
+            alert("An error occurred while trying to reset the deck statistics. Please check the console for details.");
+        }
     }
 
     /**
