@@ -51,6 +51,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const saveConfigButton = document.getElementById('save-config');
     const resetStatsButton = document.getElementById('reset-stats');
     const dataUrlInput = document.getElementById('data-url');
+    const columnRolesContainer = document.getElementById('column-roles-container');
     const skillColumnConfigContainer = document.getElementById('skill-column-config-container');
     const fontSelector = document.getElementById('font-selector');
     const ttsFrontCheckbox = document.getElementById('tts-front');
@@ -88,6 +89,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
     // App state
+    const COLUMN_ROLES = {
+        NONE: 'None',
+        TARGET_LANGUAGE: 'Target Language',
+        BASE_LANGUAGE: 'Base Language',
+        PRONUNCIATION: 'Pronunciation Guide',
+        EXAMPLE_SENTENCE: 'Example Sentence',
+    };
     const SKILLS = {
         READING: {
             id: 'READING',
@@ -382,10 +390,134 @@ document.addEventListener('DOMContentLoaded', () => {
         // Stats are no longer loaded in bulk here.
 
         viewHistory = [];
+        populateColumnRolesUI();
         populateColumnSelectors();
         populateKeyColumnSelector();
         if (repetitionIntervalsTextarea) repetitionIntervalsTextarea.value = repetitionIntervals.join(', ');
         detectAndFilterLanguage();
+    }
+
+    function populateColumnRolesUI() {
+        if (!columnRolesContainer) return;
+        columnRolesContainer.innerHTML = ''; // Clear previous
+
+        const title = document.createElement('label');
+        title.textContent = 'Column Roles (for Auto-Configuration):';
+        title.style.display = 'block';
+        title.style.marginBottom = '10px';
+        columnRolesContainer.appendChild(title);
+
+        const rolesGrid = document.createElement('div');
+        rolesGrid.style.display = 'grid';
+        rolesGrid.style.gridTemplateColumns = 'auto 1fr';
+        rolesGrid.style.gap = '5px 10px';
+        rolesGrid.style.alignItems = 'center';
+
+
+        headers.forEach((header, index) => {
+            const label = document.createElement('label');
+            label.textContent = header;
+            label.htmlFor = `column-role-${index}`;
+
+            const select = document.createElement('select');
+            select.id = `column-role-${index}`;
+            select.dataset.columnIndex = index;
+
+            for (const roleKey in COLUMN_ROLES) {
+                const option = new Option(COLUMN_ROLES[roleKey], roleKey);
+                select.add(option);
+            }
+            // Auto-detect basic roles
+            if (header.toLowerCase().includes('target') || header.toLowerCase().includes('greek')) select.value = 'TARGET_LANGUAGE';
+            if (header.toLowerCase().includes('base') || header.toLowerCase().includes('english')) select.value = 'BASE_LANGUAGE';
+            if (header.toLowerCase().includes('pronunciation')) select.value = 'PRONUNCIATION';
+
+
+            rolesGrid.appendChild(label);
+            rolesGrid.appendChild(select);
+        });
+
+        // Add TTS source selector
+        const ttsLabel = document.createElement('label');
+        ttsLabel.textContent = 'TTS Source Column:';
+        ttsLabel.htmlFor = 'tts-source-column-selector';
+        const ttsSelect = document.createElement('select');
+        ttsSelect.id = 'tts-source-column-selector';
+        headers.forEach((header, index) => {
+            const option = new Option(header, index);
+            ttsSelect.add(option);
+        });
+
+        // Add Auto-configure button
+        const autoConfigButton = document.createElement('button');
+        autoConfigButton.id = 'auto-configure-button';
+        autoConfigButton.textContent = 'Auto-Configure Skill Settings';
+        autoConfigButton.style.gridColumn = '1 / -1'; // Span across both columns
+        autoConfigButton.style.marginTop = '10px';
+
+
+        columnRolesContainer.appendChild(rolesGrid);
+        rolesGrid.appendChild(ttsLabel);
+        rolesGrid.appendChild(ttsSelect);
+        rolesGrid.appendChild(autoConfigButton);
+
+        autoConfigButton.addEventListener('click', autoConfigureSkills);
+    }
+
+    function autoConfigureSkills() {
+        // 1. Read the current role assignments from the UI
+        const columnRoles = {};
+        document.querySelectorAll('[id^="column-role-"]').forEach(select => {
+            columnRoles[select.dataset.columnIndex] = select.value;
+        });
+
+        // 2. Map roles to arrays of column indices
+        const roleToIndexMap = {};
+        for (const roleKey in COLUMN_ROLES) {
+            roleToIndexMap[roleKey] = [];
+        }
+        for (const colIndex in columnRoles) {
+            const role = columnRoles[colIndex];
+            if (role !== 'NONE') {
+                roleToIndexMap[role].push(parseInt(colIndex));
+            }
+        }
+
+        // 3. Define preset rules
+        const presets = {
+            READING: { front: roleToIndexMap.TARGET_LANGUAGE, back: roleToIndexMap.BASE_LANGUAGE.concat(roleToIndexMap.PRONUNCIATION) },
+            LISTENING: { front: roleToIndexMap.TARGET_LANGUAGE, back: roleToIndexMap.BASE_LANGUAGE.concat(roleToIndexMap.PRONUNCIATION) },
+            WRITING: { front: roleToIndexMap.BASE_LANGUAGE, back: roleToIndexMap.TARGET_LANGUAGE },
+            SPOKEN: { front: roleToIndexMap.BASE_LANGUAGE, back: roleToIndexMap.TARGET_LANGUAGE },
+            PRONUNCIATION: { front: roleToIndexMap.TARGET_LANGUAGE.concat(roleToIndexMap.PRONUNCIATION), back: roleToIndexMap.BASE_LANGUAGE }
+        };
+
+        // 4. Apply the rules
+        for (const skillId in presets) {
+            const preset = presets[skillId];
+            const frontContainer = document.getElementById(`front-column-checkboxes-${skillId}`);
+            const backContainer = document.getElementById(`back-column-checkboxes-${skillId}`);
+
+            if (frontContainer) {
+                frontContainer.querySelectorAll('input[type="checkbox"]').forEach(cb => {
+                    cb.checked = preset.front.includes(parseInt(cb.value));
+                });
+            }
+            if (backContainer) {
+                backContainer.querySelectorAll('input[type="checkbox"]').forEach(cb => {
+                    cb.checked = preset.back.includes(parseInt(cb.value));
+                });
+            }
+        }
+
+        // 5. Auto-set TTS Source
+        const ttsSelect = document.getElementById('tts-source-column-selector');
+        if (ttsSelect && roleToIndexMap.TARGET_LANGUAGE.length > 0) {
+            ttsSelect.value = roleToIndexMap.TARGET_LANGUAGE[0];
+        }
+
+        alert('Skill settings have been auto-configured based on column roles.');
+        handleSettingsChange(); // Mark config as dirty
     }
 
     function populateColumnSelectors() {
@@ -517,12 +649,13 @@ document.addEventListener('DOMContentLoaded', () => {
             skillConfig = (currentConfig.skillColumns || {})[SKILLS.READING.id] || { front: [0], back: [1] };
         }
         const frontIndices = skillConfig.front;
-        const originalFrontText = getTextForColumns(frontIndices);
 
         if (card.classList.contains('flipped') && ttsBackCheckbox && ttsBackCheckbox.checked) {
             speak(cardBack.textContent, ttsBackLangSelect.value);
         } else if (!card.classList.contains('flipped') && ttsFrontCheckbox && ttsFrontCheckbox.checked) {
-            speak(originalFrontText, ttsFrontLangSelect.value);
+            const ttsSourceColumn = currentConfig.ttsSourceColumn || frontIndices[0];
+            const ttsText = getTextForColumns([ttsSourceColumn]);
+            speak(ttsText, ttsFrontLangSelect.value);
         }
     }
 
@@ -782,7 +915,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
         card.classList.remove('flipped');
         if (ttsFrontCheckbox && ttsFrontCheckbox.checked && ttsOnHotkeyOnlyCheckbox && !ttsOnHotkeyOnlyCheckbox.checked) {
-            speak(originalFrontText, ttsFrontLangSelect.value);
+            const ttsSourceColumn = currentConfig.ttsSourceColumn || frontIndices[0];
+            const ttsText = getTextForColumns([ttsSourceColumn]);
+            speak(ttsText, ttsFrontLangSelect.value);
         }
 
         renderSkillMastery(stats);
@@ -1211,6 +1346,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const currentConfig = configs[configName] || {};
 
+        const columnRoles = {};
+        document.querySelectorAll('[id^="column-role-"]').forEach(select => {
+            columnRoles[select.dataset.columnIndex] = select.value;
+        });
+
+        const ttsSourceSelector = document.getElementById('tts-source-column-selector');
+
         configs[configName] = {
             ...currentConfig, // Preserve subsetData if it exists
             dataUrl: currentConfig.subsetData ? null : dataUrlInput.value,
@@ -1218,6 +1360,8 @@ document.addEventListener('DOMContentLoaded', () => {
             repetitionIntervals: repetitionIntervalsTextarea.value,
             skillColumns: getSkillColumnSettings(), // New per-skill column settings
             skills: getSelectedSkills(),
+            columnRoles: columnRoles,
+            ttsSourceColumn: ttsSourceSelector ? ttsSourceSelector.value : 0,
             font: fontSelector.value,
             ttsFront: ttsFrontCheckbox.checked,
             ttsBack: ttsBackCheckbox.checked,
@@ -1349,6 +1493,22 @@ document.addEventListener('DOMContentLoaded', () => {
             skillSelectorCheckboxes.querySelectorAll('input').forEach(cb => {
                 cb.checked = skillsToLoad.includes(cb.value);
             });
+        }
+
+        // Load Column Roles and TTS Source
+        if (config.columnRoles) {
+            for (const colIndex in config.columnRoles) {
+                const select = document.getElementById(`column-role-${colIndex}`);
+                if (select) {
+                    select.value = config.columnRoles[colIndex];
+                }
+            }
+        }
+        if (config.ttsSourceColumn) {
+            const ttsSelect = document.getElementById('tts-source-column-selector');
+            if (ttsSelect) {
+                ttsSelect.value = config.ttsSourceColumn;
+            }
         }
 
         if (ttsFrontLangSelect) ttsFrontLangSelect.value = config.ttsFrontLang;
