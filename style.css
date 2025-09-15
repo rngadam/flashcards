@@ -456,20 +456,29 @@ button.danger:hover {
 #writing-input {
     flex-grow: 1;
     max-width: 500px;
-    padding: 15px;
-    font-size: 1.2em;
+    padding: 20px;
+    font-size: 1.5em;
     border: 2px solid #ccc;
     border-radius: 10px;
 }
 
 #writing-submit {
-    padding: 15px 25px;
-    font-size: 1.2em;
+    padding: 20px 30px;
+    font-size: 1.5em;
     cursor: pointer;
     border-radius: 10px;
     border: 1px solid #ccc;
     background-color: #007bff;
     color: white;
+}
+
+#slow-replay-button {
+    padding: 20px;
+    font-size: 1.5em;
+    line-height: 1.5em;
+    width: 2.5em;
+    height: 2.5em;
+    text-align: center;
 }
 
 /* Comparison View Styles */
