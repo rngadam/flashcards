@@ -10,7 +10,6 @@
     <div id="top-bar">
       <h1 id="config-title"></h1>
       <span id="detected-lang"></span>
-      <div id="cache-status"></div>
       <div>
         <button id="history-button">📜</button>
         <button id="settings-button">⚙️</button>
@@ -31,6 +30,11 @@
         <h2>Settings</h2>
 
         <div class="setting">
+            <label for="config-name">Configuration Name:</label>
+            <input type="text" id="config-name" placeholder="e.g., Spanish Vocabulary">
+        </div>
+
+        <div class="setting">
           <label for="config-selector">Load Configuration:</label>
           <select id="config-selector"></select>
         </div>
@@ -46,11 +50,6 @@
         <div class="setting">
           <label for="key-column-selector">Unique Key Column:</label>
           <select id="key-column-selector"></select>
-        </div>
-
-        <div class="setting">
-            <label for="config-name">Configuration Name:</label>
-            <input type="text" id="config-name" placeholder="e.g., Spanish Vocabulary">
         </div>
 
         <div class="tabs" role="tablist">
@@ -137,7 +136,7 @@
         </div>
 
         <div class="button-container">
-            <button id="save-config">Save Configuration</button>
+            <button id="save-config" disabled>Save Configuration</button>
         </div>
       </div>
     </div>
@@ -158,7 +157,10 @@
       <span class="hotkey-hint">Slow Replay (f)</span>
     </div>
 
-    <div id="card-stats"></div>
+    <div id="card-stats">
+        <span id="card-specific-stats"></span>
+        <div id="cache-status"></div>
+    </div>
 
     <div id="explanation-message"></div>
     <script type="module" src="app.js"></script>

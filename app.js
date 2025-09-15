@@ -70,6 +70,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const configSelector = document.getElementById('config-selector');
     const cardContainer = document.getElementById('card-container');
     const cardStatsDisplay = document.getElementById('card-stats');
+    const cardSpecificStats = document.getElementById('card-specific-stats');
     const cardFront = document.querySelector('.card-front');
     const cardBack = document.querySelector('.card-back');
     const flipCardButton = document.getElementById('flip-card');
@@ -96,6 +97,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let replayRate = 1.0; // Tracks the current playback rate for the 'f' key replay feature.
     let cardShownTimestamp = null; // Tracks when the card was shown to calculate response delay.
     let isCurrentCardDue = false; // Tracks if the current card was shown because it was due for review.
+    let isConfigDirty = false; // Tracks if the current config has unsaved changes.
 
     // History table sort state
     let historySortColumn = -1;
@@ -159,6 +161,20 @@ document.addEventListener('DOMContentLoaded', () => {
         card.addEventListener('mouseleave', dragEnd);
     }
     if (createSubsetButton) createSubsetButton.addEventListener('click', createSubset);
+
+    if (settingsModal) {
+        settingsModal.addEventListener('input', handleSettingsChange);
+        settingsModal.addEventListener('change', handleSettingsChange);
+    }
+
+    function handleSettingsChange(e) {
+        const target = e.target;
+        // Check if the change happened on a relevant form element
+        if (target.matches('input, select, textarea')) {
+            isConfigDirty = true;
+            if (saveConfigButton) saveConfigButton.disabled = false;
+        }
+    }
 
     // --- Functions ---
     async function createSubset() {
@@ -610,11 +626,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const timeAgo = formatTimeAgo(previousLastViewed);
         const retentionScore = getRetentionScore(stats);
-        cardStatsDisplay.innerHTML = `
-            <span>Retention Score: ${retentionScore}</span> |
-            <span>View Count: ${stats.viewCount}</span> |
-            <span>Last seen: ${timeAgo}</span>
-        `;
+        if (cardSpecificStats) {
+            cardSpecificStats.innerHTML = `
+                <span>Retention Score: ${retentionScore}</span> |
+                <span>View Count: ${stats.viewCount}</span> |
+                <span>Last seen: ${timeAgo}</span>
+            `;
+        }
 
         if (explanationMessage) {
             let message = '';
@@ -630,8 +648,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     break;
                 case 'deck_learned':
                     if (reason.timeToNextReview !== Infinity) {
-                        const formattedTime = formatTimeDifference(reason.timeToNextReview);
-                        message = `Deck learned! Next review in ${formattedTime}. Reviewing lowest-score cards until then.`;
+                        const formattedMinTime = formatTimeDifference(reason.timeToNextReview);
+                        const formattedMaxTime = formatTimeDifference(reason.timeToLastReview);
+                        message = `Deck learned! Reviews are from ${formattedMinTime} to ${formattedMaxTime}. Reviewing lowest-score cards until then.`;
                     } else {
                         message = 'Congratulations, you have learned this whole deck!';
                     }
@@ -721,15 +740,20 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (allCardsLearned) {
             let minTimeToDue = Infinity;
+            let maxTimeToDue = 0;
             allCardStats.forEach(stats => {
                 const timeToDue = getTimeToDue(stats, now).ms;
                 if (timeToDue > 0 && timeToDue < minTimeToDue) {
                     minTimeToDue = timeToDue;
                 }
+                if (timeToDue > maxTimeToDue) {
+                    maxTimeToDue = timeToDue;
+                }
             });
             reasonForDisplay = {
                 type: 'deck_learned',
-                timeToNextReview: minTimeToDue
+                timeToNextReview: minTimeToDue,
+                timeToLastReview: maxTimeToDue
             };
         } else {
             reasonForDisplay = { type: 'least_learned' };
@@ -1015,6 +1039,8 @@ document.addEventListener('DOMContentLoaded', () => {
         configSelector.value = configName;
         configTitle.textContent = configName;
         alert(`Configuration '${configName}' saved!`);
+        isConfigDirty = false;
+        if (saveConfigButton) saveConfigButton.disabled = true;
     }
 
     async function resetDeckStats() {
@@ -1126,6 +1152,8 @@ document.addEventListener('DOMContentLoaded', () => {
         if (cardData.length > 0) {
             showNextCard();
         }
+        isConfigDirty = false;
+        if (saveConfigButton) saveConfigButton.disabled = true;
     }
 
     /**
