@@ -70,6 +70,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const configSelector = document.getElementById('config-selector');
     const cardContainer = document.getElementById('card-container');
     const cardStatsDisplay = document.getElementById('card-stats');
+    const cardSpecificStats = document.getElementById('card-specific-stats');
     const cardFront = document.querySelector('.card-front');
     const cardBack = document.querySelector('.card-back');
     const flipCardButton = document.getElementById('flip-card');
@@ -79,6 +80,11 @@ document.addEventListener('DOMContentLoaded', () => {
     const iKnowButton = document.getElementById('i-know');
     const iDontKnowButton = document.getElementById('i-dont-know');
     const explanationMessage = document.getElementById('explanation-message');
+    const cacheStatus = document.getElementById('cache-status');
+    const createSubsetButton = document.getElementById('create-subset-config');
+    const subsetConfigNameInput = document.getElementById('subset-config-name');
+    const subsetTextarea = document.getElementById('subset-text');
+
 
     // App state
     let cardData = []; // Holds the parsed card data from the TSV/CSV file.
@@ -91,6 +97,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let replayRate = 1.0; // Tracks the current playback rate for the 'f' key replay feature.
     let cardShownTimestamp = null; // Tracks when the card was shown to calculate response delay.
     let isCurrentCardDue = false; // Tracks if the current card was shown because it was due for review.
+    let isConfigDirty = false; // Tracks if the current config has unsaved changes.
 
     // History table sort state
     let historySortColumn = -1;
@@ -153,29 +160,164 @@ document.addEventListener('DOMContentLoaded', () => {
         card.addEventListener('touchend', dragEnd);
         card.addEventListener('mouseleave', dragEnd);
     }
+    if (createSubsetButton) createSubsetButton.addEventListener('click', createSubset);
+
+    if (settingsModal) {
+        settingsModal.addEventListener('input', handleSettingsChange);
+        settingsModal.addEventListener('change', handleSettingsChange);
+    }
+
+    function handleSettingsChange(e) {
+        const target = e.target;
+        // Check if the change happened on a relevant form element
+        if (target.matches('input, select, textarea')) {
+            isConfigDirty = true;
+            if (saveConfigButton) saveConfigButton.disabled = false;
+        }
+    }
 
     // --- Functions ---
+    async function createSubset() {
+        const newConfigName = subsetConfigNameInput.value.trim();
+        const text = subsetTextarea.value;
+        if (!newConfigName) {
+            alert('Please enter a name for the subset.');
+            return;
+        }
+        if (!text) {
+            alert('Please paste the source text for the subset.');
+            return;
+        }
+        if (cardData.length === 0) {
+            alert('No deck is loaded. Please load a deck first.');
+            return;
+        }
+
+        // 1. Get current config name and settings
+        const currentConfigName = configSelector.value;
+        if (!currentConfigName || !configs[currentConfigName]) {
+            alert('Please save the current configuration before creating a subset.');
+            return;
+        }
+        const currentConfig = { ...configs[currentConfigName] };
+
+        // 2. Parse text to get unique words
+        const words = new Set(text.match(/[\p{L}\p{N}]+/gu).map(w => w.toLowerCase()));
+
+
+        // 3. Filter cardData
+        const keyIndex = parseInt(currentConfig.keyColumn || '0');
+        const subsetData = cardData.filter(card => {
+            const key = card[keyIndex]?.toLowerCase();
+            return key && words.has(key);
+        });
+
+        if (subsetData.length === 0) {
+            alert('No matching cards found in the current deck for the provided text.');
+            return;
+        }
+
+        // 4. Create and save new config
+        const newConfig = {
+            ...currentConfig,
+            dataUrl: null, // Subsets don't have a URL
+            subsetData: subsetData,
+            headers: headers, // Also save the headers
+            sourceConfig: currentConfigName, // Keep track of the origin
+        };
+        configs[newConfigName] = newConfig;
+        await set('flashcard-configs', configs);
+        await set('flashcard-last-config', newConfigName);
+
+        // 5. Reload UI
+        populateConfigSelector();
+        configSelector.value = newConfigName;
+        await loadSelectedConfig(newConfigName);
+
+        alert(`Subset "${newConfigName}" created with ${subsetData.length} cards.`);
+        subsetConfigNameInput.value = '';
+        subsetTextarea.value = '';
+    }
+
+    function updateCacheStatus(response) {
+        if (!cacheStatus) return;
+        const date = response.headers.get('date');
+        const timestamp = date ? new Date(date).toLocaleString() : 'N/A';
+        const isFromCache = response.headers.get('X-From-Cache') === 'true';
+
+        if (isFromCache) {
+            cacheStatus.textContent = `Offline. Data from: ${timestamp}`;
+            cacheStatus.classList.add('cached');
+        } else {
+            cacheStatus.textContent = `Live data. Updated: ${timestamp}`;
+            cacheStatus.classList.remove('cached');
+        }
+    }
     /**
      * Fetches data from the provided URL, parses it, and initializes the deck.
-     * @returns {Promise<void>} A promise that resolves when the data is loaded and the first card is displayed, or rejects on failure.
+     * It uses a cache-then-network strategy managed by the service worker.
+     * @returns {Promise<void>} A promise that resolves when the data is loaded, or rejects on failure.
      */
-    async function loadData() { // Made async
+    async function loadData() {
         const url = dataUrlInput.value;
         if (!url) {
-            alert('Please enter a data source URL.');
-            return; // No need to return promise
+            // This is expected for subset configs, so we don't show an alert.
+            return;
         }
 
         try {
+            // The service worker will handle caching.
+            // We just fetch as normal.
             const response = await fetch(url);
-            if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-            const text = await response.text();
-            await parseData(text); // Await the async parseData
-            // The calling function is now responsible for displaying the first card
+
+            if (!response.ok) {
+                // If the network response is not OK, try to get from cache via SW
+                const cache = await caches.open('flashcards-cache-v1');
+                const cachedResponse = await cache.match(url);
+                if (cachedResponse) {
+                    const text = await cachedResponse.text();
+                    await parseData(text);
+                    updateCacheStatus(cachedResponse);
+                } else {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+            } else {
+                 // Network request was successful
+                const text = await response.text();
+                await parseData(text);
+                updateCacheStatus(response);
+            }
+
             if (settingsModal) settingsModal.classList.add('hidden');
             document.body.classList.add('debug-data-loaded');
+
         } catch (error) {
-            alert(`Failed to load data: ${error.message}`);
+            // This block will be hit if the network fails and there's no cache
+            console.error('Failed to load data, trying cache...', error);
+            try {
+                const cache = await caches.open('flashcards-cache-v1');
+                const cachedResponse = await cache.match(url);
+                if (cachedResponse) {
+                    const text = await cachedResponse.text();
+                    await parseData(text);
+                    // Create a modified response to indicate it's from the cache
+                    const headers = new Headers(cachedResponse.headers);
+                    headers.set('X-From-Cache', 'true');
+                    const syntheticResponse = new Response(cachedResponse.body, {
+                      status: cachedResponse.status,
+                      statusText: cachedResponse.statusText,
+                      headers: headers
+                    });
+                    updateCacheStatus(syntheticResponse);
+
+                    if (settingsModal) settingsModal.classList.add('hidden');
+                    document.body.classList.add('debug-data-loaded');
+                } else {
+                     alert(`Failed to load data: ${error.message}. No cached data available.`);
+                }
+            } catch (cacheError) {
+                 alert(`Failed to load data from both network and cache: ${cacheError.message}`);
+            }
         }
     }
 
@@ -484,11 +626,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const timeAgo = formatTimeAgo(previousLastViewed);
         const retentionScore = getRetentionScore(stats);
-        cardStatsDisplay.innerHTML = `
-            <span>Retention Score: ${retentionScore}</span> |
-            <span>View Count: ${stats.viewCount}</span> |
-            <span>Last seen: ${timeAgo}</span>
-        `;
+        if (cardSpecificStats) {
+            cardSpecificStats.innerHTML = `
+                <span>Retention Score: ${retentionScore}</span> |
+                <span>View Count: ${stats.viewCount}</span> |
+                <span>Last seen: ${timeAgo}</span>
+            `;
+        }
 
         if (explanationMessage) {
             let message = '';
@@ -504,8 +648,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     break;
                 case 'deck_learned':
                     if (reason.timeToNextReview !== Infinity) {
-                        const formattedTime = formatTimeDifference(reason.timeToNextReview);
-                        message = `Deck learned! Next review in ${formattedTime}. Reviewing lowest-score cards until then.`;
+                        const formattedMinTime = formatTimeDifference(reason.timeToNextReview);
+                        const formattedMaxTime = formatTimeDifference(reason.timeToLastReview);
+                        message = `Deck learned! Reviews are from ${formattedMinTime} to ${formattedMaxTime}. Reviewing lowest-score cards until then.`;
                     } else {
                         message = 'Congratulations, you have learned this whole deck!';
                     }
@@ -595,15 +740,20 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (allCardsLearned) {
             let minTimeToDue = Infinity;
+            let maxTimeToDue = 0;
             allCardStats.forEach(stats => {
                 const timeToDue = getTimeToDue(stats, now).ms;
                 if (timeToDue > 0 && timeToDue < minTimeToDue) {
                     minTimeToDue = timeToDue;
                 }
+                if (timeToDue > maxTimeToDue) {
+                    maxTimeToDue = timeToDue;
+                }
             });
             reasonForDisplay = {
                 type: 'deck_learned',
-                timeToNextReview: minTimeToDue
+                timeToNextReview: minTimeToDue,
+                timeToLastReview: maxTimeToDue
             };
         } else {
             reasonForDisplay = { type: 'least_learned' };
@@ -854,16 +1004,19 @@ document.addEventListener('DOMContentLoaded', () => {
      * Saves the current UI settings (URL, columns, font, etc.) as a named configuration
      * to IndexedDB.
      */
-    async function saveConfig() { // Made async
+    async function saveConfig() {
         if (!configNameInput) return;
-        const configName = configNameInput.value;
+        const configName = configNameInput.value.trim();
         if (!configName) {
             alert('Please enter a configuration name.');
             return;
         }
 
+        const currentConfig = configs[configName] || {};
+
         configs[configName] = {
-            dataUrl: dataUrlInput.value,
+            ...currentConfig, // Preserve subsetData if it exists
+            dataUrl: currentConfig.subsetData ? null : dataUrlInput.value,
             keyColumn: keyColumnSelector.value,
             repetitionIntervals: repetitionIntervalsTextarea.value,
             frontColumns: getSelectedColumnIndices(frontColumnCheckboxes),
@@ -879,12 +1032,15 @@ document.addEventListener('DOMContentLoaded', () => {
             audioOnlyFront: audioOnlyFrontCheckbox.checked,
             ttsOnHotkeyOnly: ttsOnHotkeyOnlyCheckbox.checked,
         };
+
         await set('flashcard-configs', configs);
         await set('flashcard-last-config', configName);
         populateConfigSelector();
         configSelector.value = configName;
         configTitle.textContent = configName;
         alert(`Configuration '${configName}' saved!`);
+        isConfigDirty = false;
+        if (saveConfigButton) saveConfigButton.disabled = true;
     }
 
     async function resetDeckStats() {
@@ -916,12 +1072,12 @@ document.addEventListener('DOMContentLoaded', () => {
      * Loads a saved configuration by name, updating the UI and loading its data.
      * @param {string} configName - The name of the configuration to load.
      */
-    async function loadSelectedConfig(configName) { // Made async
+    async function loadSelectedConfig(configName) {
         if (!configName || !configs[configName]) return;
         const config = configs[configName];
 
         configNameInput.value = configName;
-        dataUrlInput.value = config.dataUrl;
+        dataUrlInput.value = config.dataUrl || '';
         fontSelector.value = config.font;
         ttsFrontCheckbox.checked = config.ttsFront;
         ttsBackCheckbox.checked = config.ttsBack;
@@ -929,7 +1085,20 @@ document.addEventListener('DOMContentLoaded', () => {
         configTitle.textContent = configName;
         if (keyColumnSelector) keyColumnSelector.value = config.keyColumn || 0;
 
-        await loadData(); // Await the async function
+        if (config.subsetData && Array.isArray(config.subsetData)) {
+            const tsvString = [
+                config.headers.join('\t'),
+                ...config.subsetData.map(row => row.join('\t'))
+            ].join('\n');
+            await parseData(tsvString);
+            if (cacheStatus) {
+                cacheStatus.textContent = `Loaded from subset "${configName}"`;
+                cacheStatus.classList.add('cached');
+            }
+            if (settingsModal) settingsModal.classList.add('hidden');
+        } else {
+            await loadData();
+        }
 
         if (frontColumnCheckboxes) frontColumnCheckboxes.querySelectorAll('input').forEach(cb => cb.checked = false);
         if (backColumnCheckboxes) backColumnCheckboxes.querySelectorAll('input').forEach(cb => cb.checked = false);
@@ -983,6 +1152,8 @@ document.addEventListener('DOMContentLoaded', () => {
         if (cardData.length > 0) {
             showNextCard();
         }
+        isConfigDirty = false;
+        if (saveConfigButton) saveConfigButton.disabled = true;
     }
 
     /**
@@ -1260,8 +1431,21 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Initial load
     populateVoices();
-    if ('speechSynthesis' in window && speechSynthesis.onvoiceschanged !== undefined) {
+    if ('speechSynthesis'in window && speechSynthesis.onvoiceschanged !== undefined) {
         speechSynthesis.onvoiceschanged = () => populateVoices();
     }
     loadInitialConfigs();
+
+    // --- Service Worker Registration ---
+    if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+            navigator.serviceWorker.register('/sw.js')
+                .then(registration => {
+                    console.log('ServiceWorker registration successful with scope: ', registration.scope);
+                })
+                .catch(error => {
+                    console.log('ServiceWorker registration failed: ', error);
+                });
+        });
+    }
 });
