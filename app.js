@@ -486,7 +486,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // 3. Define preset rules
         const presets = {
             READING: { front: roleToIndexMap.TARGET_LANGUAGE, back: roleToIndexMap.BASE_LANGUAGE.concat(roleToIndexMap.PRONUNCIATION) },
-            LISTENING: { front: roleToIndexMap.TARGET_LANGUAGE, back: roleToIndexMap.BASE_LANGUAGE.concat(roleToIndexMap.PRONUNCIATION) },
+            LISTENING: { front: roleToIndexMap.TARGET_LANGUAGE, back: roleToIndexMap.BASE_LANGUAGE.concat(roleToIndexMap.PRONUNCIATION, roleToIndexMap.TARGET_LANGUAGE) },
             WRITING: { front: roleToIndexMap.BASE_LANGUAGE, back: roleToIndexMap.TARGET_LANGUAGE },
             SPOKEN: { front: roleToIndexMap.BASE_LANGUAGE, back: roleToIndexMap.TARGET_LANGUAGE },
             PRONUNCIATION: { front: roleToIndexMap.TARGET_LANGUAGE.concat(roleToIndexMap.PRONUNCIATION), back: roleToIndexMap.BASE_LANGUAGE }
@@ -870,6 +870,7 @@ document.addEventListener('DOMContentLoaded', () => {
         replayRate = 1.0;
 
         const currentSkillStats = stats.skills[currentSkill];
+        const previousLastViewed = currentSkillStats.lastViewed; // Store previous value
         currentSkillStats.viewCount++;
         currentSkillStats.lastViewed = Date.now();
 
@@ -922,7 +923,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         renderSkillMastery(stats);
 
-        const timeAgo = formatTimeAgo(currentSkillStats.lastViewed);
+        const timeAgo = formatTimeAgo(previousLastViewed);
         const retentionScore = getRetentionScore(currentSkillStats);
         if (cardSpecificStats) {
             cardSpecificStats.innerHTML = `
@@ -1739,12 +1740,23 @@ document.addEventListener('DOMContentLoaded', () => {
                         markCardAsKnown(false);
                         showNextCard({forceNew: true});
                         break;
-                    case 'f':
-                        const text = card.classList.contains('flipped') ? cardBack.textContent : cardFront.textContent;
-                        const voiceName = card.classList.contains('flipped') ? ttsBackLangSelect.value : ttsFrontLangSelect.value;
+                    case 'f': {
+                        let text, voiceName;
+                        if (card.classList.contains('flipped')) {
+                            text = cardBack.textContent;
+                            voiceName = ttsBackLangSelect.value;
+                        } else {
+                            // For the front, always get text from the configured TTS source column
+                            const currentConfigName = configSelector.value;
+                            const currentConfig = configs[currentConfigName] || {};
+                            const ttsSourceColumn = currentConfig.ttsSourceColumn || 0; // Default to 0
+                            text = getTextForColumns([ttsSourceColumn]);
+                            voiceName = ttsFrontLangSelect.value;
+                        }
                         replayRate = Math.max(0.1, replayRate - 0.2);
                         speak(text, voiceName, replayRate);
                         break;
+                    }
                 }
                 break;
             case 'keyup':
