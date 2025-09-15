@@ -509,7 +509,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (ttsOnHotkeyOnlyCheckbox && ttsOnHotkeyOnlyCheckbox.checked) return;
 
-        const frontIndices = getSelectedColumnIndices(frontColumnCheckboxes);
+        // Get the correct column configuration for the current skill to find the text to speak.
+        const currentConfigName = configSelector.value;
+        const currentConfig = configs[currentConfigName] || {};
+        let skillConfig = (currentConfig.skillColumns || {})[currentSkill];
+        if (!skillConfig) {
+            skillConfig = (currentConfig.skillColumns || {})[SKILLS.READING.id] || { front: [0], back: [1] };
+        }
+        const frontIndices = skillConfig.front;
         const originalFrontText = getTextForColumns(frontIndices);
 
         if (card.classList.contains('flipped') && ttsBackCheckbox && ttsBackCheckbox.checked) {
