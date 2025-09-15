@@ -90,6 +90,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const writingInput = document.getElementById('writing-input');
     const writingSubmit = document.getElementById('writing-submit');
     const comparisonContainer = document.getElementById('comparison-container');
+    const slowReplayButton = document.getElementById('slow-replay-button');
 
 
     // App state
@@ -208,6 +209,16 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
+    if (slowReplayButton) slowReplayButton.addEventListener('click', () => {
+        const currentConfigName = configSelector.value;
+        const currentConfig = configs[currentConfigName] || {};
+        const skillConfig = (currentConfig.skillColumns || {})[currentSkill] || {};
+        const frontIndices = skillConfig.front || [0];
+        const ttsSourceColumn = skillConfig.ttsFrontColumn || frontIndices[0];
+        const ttsText = getTextForColumns([ttsSourceColumn]);
+        speak(ttsText, ttsFrontLangSelect.value, 0.7); // Speak at a fixed slow rate
+    });
+
     if (settingsModal) {
         settingsModal.addEventListener('input', handleSettingsChange);
         settingsModal.addEventListener('change', handleSettingsChange);
@@ -224,17 +235,28 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function renderDiff(userAnswer, correctAnswer) {
         const diff = Diff.diffChars(correctAnswer, userAnswer);
-        let html = '<div class="diff-container">';
-        html += `<div><strong>Your Answer:</strong></div><div>`;
+        const fragment = document.createDocumentFragment();
+
+        const userDiv = document.createElement('div');
+        userDiv.innerHTML = '<strong>Your Answer:</strong> ';
+        const userContent = document.createElement('div');
+
         diff.forEach(part => {
-            const colorClass = part.added ? 'diff-added' :
-                part.removed ? 'diff-removed' : 'diff-common';
-            if (!part.removed) {
-                 html += `<span class="${colorClass}">${part.value}</span>`;
-            }
+            if (part.removed) return; // Don't show parts that were in the correct answer but not user's
+            const span = document.createElement('span');
+            span.className = part.added ? 'diff-added' : 'diff-common';
+            span.appendChild(document.createTextNode(part.value));
+            userContent.appendChild(span);
         });
-        html += `</div><div><strong>Correct Answer:</strong></div><div>${correctAnswer}</div></div>`;
-        return html;
+        userDiv.appendChild(userContent);
+
+        const correctDiv = document.createElement('div');
+        correctDiv.innerHTML = `<strong>Correct Answer:</strong> <div>${correctAnswer}</div>`;
+
+        fragment.appendChild(userDiv);
+        fragment.appendChild(correctDiv);
+
+        return fragment;
     }
 
     async function checkWritingAnswer() {
@@ -260,8 +282,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
         await markCardAsKnown(isCorrect);
 
-        comparisonContainer.innerHTML = renderDiff(userAnswer, correctAnswer);
+        comparisonContainer.innerHTML = ''; // Clear previous diff
+        comparisonContainer.appendChild(renderDiff(userAnswer, correctAnswer));
         comparisonContainer.classList.remove('hidden');
+        writingInput.disabled = true;
 
         if (!card.classList.contains('flipped')) {
             flipCard();
@@ -553,6 +577,7 @@ document.addEventListener('DOMContentLoaded', () => {
         };
 
         // 4. Apply the rules
+        const allColumnIndices = headers.map((_, i) => i);
         for (const skillId in presets) {
             const preset = presets[skillId];
             const frontContainer = document.getElementById(`front-column-checkboxes-${skillId}`);
@@ -565,7 +590,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             if (backContainer) {
                 backContainer.querySelectorAll('input[type="checkbox"]').forEach(cb => {
-                    cb.checked = preset.back.includes(parseInt(cb.value));
+                    cb.checked = allColumnIndices.includes(parseInt(cb.value));
                 });
             }
         }
@@ -1071,10 +1096,12 @@ document.addEventListener('DOMContentLoaded', () => {
         const validationColumn = skillConfig.validationColumn;
         if (validationColumn && validationColumn !== 'none') {
             writingPracticeContainer.classList.remove('hidden');
+            writingPracticeContainer.classList.toggle('audio-only-writing', isAudioOnly);
             iKnowButton.classList.add('hidden');
             iDontKnowButton.classList.add('hidden');
             nextCardButton.classList.add('hidden');
             writingInput.value = '';
+            writingInput.disabled = false;
             writingInput.focus();
         } else {
             writingPracticeContainer.classList.add('hidden');
