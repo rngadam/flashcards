@@ -89,6 +89,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const writingPracticeContainer = document.getElementById('writing-practice-container');
     const writingInput = document.getElementById('writing-input');
     const writingSubmit = document.getElementById('writing-submit');
+    const comparisonContainer = document.getElementById('comparison-container');
 
 
     // App state
@@ -221,6 +222,21 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    function renderDiff(userAnswer, correctAnswer) {
+        const diff = Diff.diffChars(correctAnswer, userAnswer);
+        let html = '<div class="diff-container">';
+        html += `<div><strong>Your Answer:</strong></div><div>`;
+        diff.forEach(part => {
+            const colorClass = part.added ? 'diff-added' :
+                part.removed ? 'diff-removed' : 'diff-common';
+            if (!part.removed) {
+                 html += `<span class="${colorClass}">${part.value}</span>`;
+            }
+        });
+        html += `</div><div><strong>Correct Answer:</strong></div><div>${correctAnswer}</div></div>`;
+        return html;
+    }
+
     async function checkWritingAnswer() {
         const userAnswer = writingInput.value.trim();
         if (userAnswer === '') return;
@@ -244,14 +260,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
         await markCardAsKnown(isCorrect);
 
+        comparisonContainer.innerHTML = renderDiff(userAnswer, correctAnswer);
+        comparisonContainer.classList.remove('hidden');
+
         if (!card.classList.contains('flipped')) {
             flipCard();
         }
 
-        // Give user time to see the result before moving on
-        setTimeout(() => {
-            showNextCard({ forceNew: !isCorrect });
-        }, 1500);
+        // Show the next card button to allow the user to proceed
+        nextCardButton.classList.remove('hidden');
     }
 
     // --- Functions ---
@@ -1056,13 +1073,16 @@ document.addEventListener('DOMContentLoaded', () => {
             writingPracticeContainer.classList.remove('hidden');
             iKnowButton.classList.add('hidden');
             iDontKnowButton.classList.add('hidden');
+            nextCardButton.classList.add('hidden');
             writingInput.value = '';
             writingInput.focus();
         } else {
             writingPracticeContainer.classList.add('hidden');
             iKnowButton.classList.remove('hidden');
             iDontKnowButton.classList.remove('hidden');
+            nextCardButton.classList.remove('hidden');
         }
+        comparisonContainer.classList.add('hidden');
 
         await saveCardStats(cardKey, stats);
         cardShownTimestamp = Date.now();
@@ -1834,11 +1854,25 @@ document.addEventListener('DOMContentLoaded', () => {
      * @param {KeyboardEvent} e - The keyboard event object.
      */
     function handleHotkeys(e) {
-        if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
+        if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') {
+            if (e.key === 'Enter' && writingPracticeContainer.classList.contains('hidden')) {
+                 // Allow enter to submit forms in settings, etc.
+                 return;
+            }
+            if (e.key !== 'Enter') {
+                return; // Only allow Enter key in inputs
+            }
+        }
+
 
         switch(e.type) {
             case 'keydown':
                 switch(e.key) {
+                    case 'Enter':
+                        if (!nextCardButton.classList.contains('hidden')) {
+                            showNextCard();
+                        }
+                        break;
                     case ' ':
                         e.preventDefault();
                         if (card && !card.classList.contains('flipped')) {

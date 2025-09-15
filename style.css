@@ -451,3 +451,29 @@ button.danger:hover {
     background-color: #007bff;
     color: white;
 }
+
+/* Comparison View Styles */
+#comparison-container {
+    width: 100%;
+    padding: 10px;
+    box-sizing: border-box;
+    font-size: 1.2em;
+    white-space: pre-wrap;
+    line-height: 1.5;
+}
+
+#comparison-container .diff-added {
+    background-color: #a6f3a6;
+    color: #006400;
+    text-decoration: none;
+}
+
+#comparison-container .diff-removed {
+    background-color: #f8d7da;
+    color: #721c24;
+    text-decoration: line-through;
+}
+
+#comparison-container .diff-common {
+    color: #6c757d;
+}

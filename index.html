@@ -147,7 +147,9 @@
     <div id="card-container">
       <div id="card">
         <div class="card-face card-front"></div>
-        <div class="card-face card-back"></div>
+        <div class="card-face card-back">
+            <div id="comparison-container" class="hidden"></div>
+        </div>
       </div>
       <div id="writing-practice-container" class="hidden">
         <input type="text" id="writing-input" placeholder="Type the answer...">
@@ -172,6 +174,7 @@
     <div id="skill-mastery-dashboard"></div>
 
     <div id="explanation-message"></div>
+    <script src="https://cdn.jsdelivr.net/npm/diff/dist/diff.min.js"></script>
     <script type="module" src="app.js"></script>
   </body>
 </html>
