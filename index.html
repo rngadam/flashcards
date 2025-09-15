@@ -61,12 +61,15 @@
 
         <div id="basic-settings" class="tab-panel active" role="tabpanel" aria-labelledby="basic-tab">
             <div class="setting">
-                <label>Front Column(s):</label>
-                <div id="front-column-checkboxes" class="column-checkbox-group"></div>
+                <label>Practice Skills:</label>
+                <div id="skill-selector-checkboxes" class="column-checkbox-group"></div>
             </div>
-            <div class="setting">
-                <label>Back Column(s):</label>
-                <div id="back-column-checkboxes" class="column-checkbox-group"></div>
+            <div class="setting" id="column-roles-container">
+                 <!-- Master column role configuration will be generated here by JS -->
+            </div>
+            <div class="setting" id="skill-column-config-container">
+                <label>Column Configuration per Skill:</label>
+                <!-- Skill-specific column tabs will be generated here by JS -->
             </div>
             <div class="setting">
                 <label for="font-selector">Font:</label>
@@ -161,6 +164,8 @@
         <span id="card-specific-stats"></span>
         <div id="cache-status"></div>
     </div>
+
+    <div id="skill-mastery-dashboard"></div>
 
     <div id="explanation-message"></div>
     <script type="module" src="app.js"></script>
