@@ -372,3 +372,29 @@ button.danger:hover {
     font-family: 'Courier New', Courier, monospace;
     font-size: 0.9em;
 }
+
+/* Styles for the nested skill-column configuration tabs */
+#skill-column-config-container {
+    border-top: 1px solid #ccc;
+    margin-top: 15px;
+    padding-top: 10px;
+}
+
+#skill-column-config-container .tabs {
+    border-bottom: 1px solid #ddd;
+}
+
+#skill-column-config-container .tab-button {
+    font-size: 0.9em;
+    padding: 8px 12px;
+    color: #333;
+}
+
+#skill-column-config-container .tab-button.active {
+    border-bottom: 3px solid #28a745; /* Green to distinguish from main tabs */
+    color: #000;
+}
+
+#skill-column-config-container .tab-panel {
+    padding-top: 10px;
+}

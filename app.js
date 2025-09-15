@@ -51,8 +51,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const saveConfigButton = document.getElementById('save-config');
     const resetStatsButton = document.getElementById('reset-stats');
     const dataUrlInput = document.getElementById('data-url');
-    const frontColumnCheckboxes = document.getElementById('front-column-checkboxes');
-    const backColumnCheckboxes = document.getElementById('back-column-checkboxes');
+    const skillColumnConfigContainer = document.getElementById('skill-column-config-container');
     const fontSelector = document.getElementById('font-selector');
     const ttsFrontCheckbox = document.getElementById('tts-front');
     const ttsBackCheckbox = document.getElementById('tts-back');
@@ -391,35 +390,102 @@ document.addEventListener('DOMContentLoaded', () => {
         detectAndFilterLanguage();
     }
 
-    /**
-     * Populates the front and back column selection checkboxes in the settings modal
-     * based on the headers from the data file.
-     */
     function populateColumnSelectors() {
-        if (!frontColumnCheckboxes || !backColumnCheckboxes) return;
-        frontColumnCheckboxes.innerHTML = '';
-        backColumnCheckboxes.innerHTML = '';
-        headers.forEach((header, index) => {
-            const idFront = `front-col-${index}`;
-            const checkboxFront = `<div><input type="checkbox" id="${idFront}" value="${index}"><label for="${idFront}">${header}</label></div>`;
-            frontColumnCheckboxes.insertAdjacentHTML('beforeend', checkboxFront);
+        if (!skillColumnConfigContainer) return;
+        skillColumnConfigContainer.innerHTML = ''; // Clear previous content
 
-            const idBack = `back-col-${index}`;
-            const checkboxBack = `<div><input type="checkbox" id="${idBack}" value="${index}"><label for="${idBack}">${header}</label></div>`;
-            backColumnCheckboxes.insertAdjacentHTML('beforeend', checkboxBack);
+        const tabList = document.createElement('div');
+        tabList.className = 'tabs';
+        tabList.setAttribute('role', 'tablist');
+
+        const panelContainer = document.createElement('div');
+
+        headers.forEach((header, index) => {
+            // This part of the logic is now inside the skill loop
         });
 
-        // Default front to first column
-        if (headers.length > 0) {
-            const firstCheckbox = frontColumnCheckboxes.querySelector('input');
-            if (firstCheckbox) firstCheckbox.checked = true;
-        }
-        // Default back to all columns
-        if (backColumnCheckboxes) {
-            backColumnCheckboxes.querySelectorAll('input[type="checkbox"]').forEach(cb => {
-                cb.checked = true;
+        Object.keys(SKILLS).forEach((skillId, i) => {
+            const skill = SKILLS[skillId];
+            const isActive = i === 0;
+
+            // Create Tab Button
+            const button = document.createElement('button');
+            button.className = `tab-button ${isActive ? 'active' : ''}`;
+            button.setAttribute('role', 'tab');
+            button.dataset.tab = `skill-panel-${skillId}`;
+            button.textContent = skill.label;
+            tabList.appendChild(button);
+
+            // Create Tab Panel
+            const panel = document.createElement('div');
+            panel.id = `skill-panel-${skillId}`;
+            panel.className = `tab-panel ${isActive ? 'active' : ''}`;
+            panel.setAttribute('role', 'tabpanel');
+
+            // Create Front and Back Checkbox groups for this skill
+            const frontContainer = document.createElement('div');
+            frontContainer.className = 'column-checkbox-group';
+            frontContainer.id = `front-column-checkboxes-${skillId}`;
+
+            const backContainer = document.createElement('div');
+            backContainer.className = 'column-checkbox-group';
+            backContainer.id = `back-column-checkboxes-${skillId}`;
+
+            headers.forEach((header, index) => {
+                const idFront = `front-col-${skillId}-${index}`;
+                const checkboxFront = `<div><input type="checkbox" id="${idFront}" value="${index}"><label for="${idFront}">${header}</label></div>`;
+                frontContainer.insertAdjacentHTML('beforeend', checkboxFront);
+
+                const idBack = `back-col-${skillId}-${index}`;
+                const checkboxBack = `<div><input type="checkbox" id="${idBack}" value="${index}"><label for="${idBack}">${header}</label></div>`;
+                backContainer.insertAdjacentHTML('beforeend', checkboxBack);
             });
-        }
+
+            // Set default selections for the first skill (Reading)
+            if (skillId === SKILLS.READING.id) {
+                 if (headers.length > 0) {
+                    const firstCheckbox = frontContainer.querySelector('input');
+                    if (firstCheckbox) firstCheckbox.checked = true;
+                }
+                backContainer.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = true);
+            } else { // Default for other skills (e.g., Writing) might be swapped
+                 if (headers.length > 0) {
+                    const firstCheckbox = backContainer.querySelector('input');
+                    if (firstCheckbox) firstCheckbox.checked = true;
+                }
+                frontContainer.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = true);
+            }
+
+
+            panel.innerHTML = `
+                <div class="setting">
+                    <label>Front Column(s):</label>
+                </div>
+                <div class="setting">
+                    <label>Back Column(s):</label>
+                </div>
+            `;
+            panel.querySelector('.setting:nth-child(1)').appendChild(frontContainer);
+            panel.querySelector('.setting:nth-child(2)').appendChild(backContainer);
+
+            panelContainer.appendChild(panel);
+        });
+
+        skillColumnConfigContainer.appendChild(tabList);
+        skillColumnConfigContainer.appendChild(panelContainer);
+
+        // Add event listener for the new tabs
+        tabList.addEventListener('click', e => {
+            if (e.target.matches('.tab-button')) {
+                const button = e.target;
+                tabList.querySelectorAll('.tab-button').forEach(btn => btn.classList.remove('active'));
+                button.classList.add('active');
+
+                panelContainer.querySelectorAll('.tab-panel').forEach(panel => {
+                    panel.classList.toggle('active', panel.id === button.dataset.tab);
+                });
+            }
+        });
     }
 
     function populateKeyColumnSelector() {
@@ -669,14 +735,20 @@ document.addEventListener('DOMContentLoaded', () => {
         currentSkillStats.viewCount++;
         currentSkillStats.lastViewed = Date.now();
 
-        let frontIndices = getSelectedColumnIndices(frontColumnCheckboxes);
-        let backIndices = getSelectedColumnIndices(backColumnCheckboxes);
+        // Get the correct column configuration for the current skill
+        const currentConfigName = configSelector.value;
+        const currentConfig = configs[currentConfigName] || {};
+        let skillConfig = (currentConfig.skillColumns || {})[currentSkill];
 
-        // Skill-specific display logic
-        if (currentSkill === SKILLS.WRITING.id || currentSkill === SKILLS.SPOKEN.id) {
-            [frontIndices, backIndices] = [backIndices, frontIndices]; // Swap front and back
+        // Fallback logic if skill config is missing
+        if (!skillConfig) {
+            skillConfig = (currentConfig.skillColumns || {})[SKILLS.READING.id] || { front: [0], back: [1] };
         }
 
+        const frontIndices = skillConfig.front;
+        const backIndices = skillConfig.back;
+
+        // This replaces the old hard-coded logic
         const originalFrontText = getTextForColumns(frontIndices);
         let displayText = originalFrontText;
         if (alternateUppercaseCheckbox && alternateUppercaseCheckbox.checked) {
@@ -1094,6 +1166,21 @@ document.addEventListener('DOMContentLoaded', () => {
         return [SKILLS.READING.id]; // Default
     }
 
+    function getSkillColumnSettings() {
+        const skillColumns = {};
+        for (const skillId in SKILLS) {
+            const frontContainer = document.getElementById(`front-column-checkboxes-${skillId}`);
+            const backContainer = document.getElementById(`back-column-checkboxes-${skillId}`);
+            if (frontContainer && backContainer) {
+                skillColumns[skillId] = {
+                    front: getSelectedColumnIndices(frontContainer),
+                    back: getSelectedColumnIndices(backContainer)
+                };
+            }
+        }
+        return skillColumns;
+    }
+
     async function saveConfig() {
         if (!configNameInput) return;
         const configName = configNameInput.value.trim();
@@ -1109,8 +1196,7 @@ document.addEventListener('DOMContentLoaded', () => {
             dataUrl: currentConfig.subsetData ? null : dataUrlInput.value,
             keyColumn: keyColumnSelector.value,
             repetitionIntervals: repetitionIntervalsTextarea.value,
-            frontColumns: getSelectedColumnIndices(frontColumnCheckboxes),
-            backColumns: getSelectedColumnIndices(backColumnCheckboxes),
+            skillColumns: getSkillColumnSettings(), // New per-skill column settings
             skills: getSelectedSkills(),
             font: fontSelector.value,
             ttsFront: ttsFrontCheckbox.checked,
@@ -1123,6 +1209,10 @@ document.addEventListener('DOMContentLoaded', () => {
             audioOnlyFront: audioOnlyFrontCheckbox.checked,
             ttsOnHotkeyOnly: ttsOnHotkeyOnlyCheckbox.checked,
         };
+
+        // Remove deprecated properties
+        delete configs[configName].frontColumns;
+        delete configs[configName].backColumns;
 
         await set('flashcard-configs', configs);
         await set('flashcard-last-config', configName);
@@ -1191,21 +1281,47 @@ document.addEventListener('DOMContentLoaded', () => {
             await loadData();
         }
 
-        if (frontColumnCheckboxes) frontColumnCheckboxes.querySelectorAll('input').forEach(cb => cb.checked = false);
-        if (backColumnCheckboxes) backColumnCheckboxes.querySelectorAll('input').forEach(cb => cb.checked = false);
+        // --- Load Column Selections ---
+        if (config.skillColumns) {
+            // New format
+            for (const skillId in config.skillColumns) {
+                const frontContainer = document.getElementById(`front-column-checkboxes-${skillId}`);
+                const backContainer = document.getElementById(`back-column-checkboxes-${skillId}`);
+                const { front, back } = config.skillColumns[skillId];
 
-        if (config.frontColumns) {
-            config.frontColumns.forEach(colIndex => {
-                const cb = frontColumnCheckboxes.querySelector(`input[value="${colIndex}"]`);
-                if (cb) cb.checked = true;
-            });
+                if (frontContainer) {
+                    frontContainer.querySelectorAll('input').forEach(cb => cb.checked = false);
+                    front.forEach(colIndex => {
+                        const cb = frontContainer.querySelector(`input[value="${colIndex}"]`);
+                        if (cb) cb.checked = true;
+                    });
+                }
+                if (backContainer) {
+                    backContainer.querySelectorAll('input').forEach(cb => cb.checked = false);
+                    back.forEach(colIndex => {
+                        const cb = backContainer.querySelector(`input[value="${colIndex}"]`);
+                        if (cb) cb.checked = true;
+                    });
+                }
+            }
+        } else if (config.frontColumns) {
+            // Migration from old format
+            const readingFront = document.getElementById(`front-column-checkboxes-READING`);
+            if (readingFront) {
+                config.frontColumns.forEach(colIndex => {
+                    const cb = readingFront.querySelector(`input[value="${colIndex}"]`);
+                    if (cb) cb.checked = true;
+                });
+            }
+            const readingBack = document.getElementById(`back-column-checkboxes-READING`);
+            if (readingBack) {
+                config.backColumns.forEach(colIndex => {
+                    const cb = readingBack.querySelector(`input[value="${colIndex}"]`);
+                    if (cb) cb.checked = true;
+                });
+            }
         }
-        if (config.backColumns) {
-            config.backColumns.forEach(colIndex => {
-                const cb = backColumnCheckboxes.querySelector(`input[value="${colIndex}"]`);
-                if (cb) cb.checked = true;
-            });
-        }
+        // End of Column Selections
 
         // Load selected skills, default to READING if not set
         const skillsToLoad = config.skills || [SKILLS.READING.id];
@@ -1214,7 +1330,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 cb.checked = skillsToLoad.includes(cb.value);
             });
         }
-
 
         if (ttsFrontLangSelect) ttsFrontLangSelect.value = config.ttsFrontLang;
         if (ttsBackLangSelect) ttsBackLangSelect.value = config.ttsBackLang;
@@ -1226,17 +1341,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (repetitionIntervalsTextarea) {
             const configIntervalsString = config.repetitionIntervals;
-            // Check if the string is null, undefined, or just empty space
             if (configIntervalsString && configIntervalsString.trim() !== '') {
                 repetitionIntervals = configIntervalsString.split(',').map(s => parseInt(s.trim())).filter(n => !isNaN(n));
             }
-
-            // If parsing resulted in an empty array, or if there was no string to begin with, use defaults
             if (repetitionIntervals.length === 0) {
                 repetitionIntervals = [...defaultIntervals];
             }
-
-            // Always update the UI to reflect the actual intervals being used
             repetitionIntervalsTextarea.value = repetitionIntervals.join(', ');
         }
 
