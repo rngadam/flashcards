@@ -51,8 +51,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const saveConfigButton = document.getElementById('save-config');
     const resetStatsButton = document.getElementById('reset-stats');
     const dataUrlInput = document.getElementById('data-url');
-    const columnRolesContainer = document.getElementById('column-roles-container');
-    const skillColumnConfigContainer = document.getElementById('skill-column-config-container');
+    const frontColumnCheckboxes = document.getElementById('front-column-checkboxes');
+    const backColumnCheckboxes = document.getElementById('back-column-checkboxes');
     const fontSelector = document.getElementById('font-selector');
     const ttsFrontCheckbox = document.getElementById('tts-front');
     const ttsBackCheckbox = document.getElementById('tts-back');
@@ -65,13 +65,11 @@ document.addEventListener('DOMContentLoaded', () => {
     const ttsOnHotkeyOnlyCheckbox = document.getElementById('tts-on-hotkey-only');
     const configNameInput = document.getElementById('config-name');
     const keyColumnSelector = document.getElementById('key-column-selector');
-    const skillSelectorCheckboxes = document.getElementById('skill-selector-checkboxes');
     const repetitionIntervalsTextarea = document.getElementById('repetition-intervals');
     const detectedLangSpan = document.getElementById('detected-lang');
     const configSelector = document.getElementById('config-selector');
     const cardContainer = document.getElementById('card-container');
     const cardStatsDisplay = document.getElementById('card-stats');
-    const skillMasteryDashboard = document.getElementById('skill-mastery-dashboard');
     const cardSpecificStats = document.getElementById('card-specific-stats');
     const cardFront = document.querySelector('.card-front');
     const cardBack = document.querySelector('.card-back');
@@ -89,44 +87,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
     // App state
-    const COLUMN_ROLES = {
-        NONE: 'None',
-        TARGET_LANGUAGE: 'Target Language',
-        BASE_LANGUAGE: 'Base Language',
-        PRONUNCIATION: 'Pronunciation Guide',
-        EXAMPLE_SENTENCE: 'Example Sentence',
-    };
-    const SKILLS = {
-        READING: {
-            id: 'READING',
-            label: 'Reading Comprehension',
-            description: 'See Target Language → Recall Base Language'
-        },
-        LISTENING: {
-            id: 'LISTENING',
-            label: 'Listening Comprehension',
-            description: 'Hear Target Language → Recall Base Language'
-        },
-        WRITING: {
-            id: 'WRITING',
-            label: 'Written Production',
-            description: 'See Base Language → Write Target Language'
-        },
-        SPOKEN: {
-            id: 'SPOKEN',
-            label: 'Spoken Production',
-            description: 'See Base Language → Say Target Language'
-        },
-        PRONUNCIATION: {
-            id: 'PRONUNCIATION',
-            label: 'Pronunciation Practice',
-            description: 'See Target Language → Say Target Language'
-        }
-    };
     let cardData = []; // Holds the parsed card data from the TSV/CSV file.
     let headers = []; // Holds the column headers from the data file.
     let currentCardIndex = 0; // The index of the currently displayed card in cardData.
-    let currentSkill = SKILLS.READING.id; // The skill being practiced for the current card.
     let configs = {}; // Stores all saved deck configurations.
     let voices = []; // Holds the list of available TTS voices from the browser.
     let viewHistory = []; // A stack to keep track of the sequence of viewed cards for the "previous" button.
@@ -171,6 +134,8 @@ document.addEventListener('DOMContentLoaded', () => {
     if (prevCardButton) prevCardButton.addEventListener('click', showPrevCard);
     if (iKnowButton) iKnowButton.addEventListener('click', async () => { await markCardAsKnown(true); await showNextCard(); });
     if (iDontKnowButton) iDontKnowButton.addEventListener('click', async () => { await markCardAsKnown(false); await showNextCard({ forceNew: true }); });
+    if (frontColumnCheckboxes) frontColumnCheckboxes.addEventListener('change', async () => await displayCard(currentCardIndex));
+    if (backColumnCheckboxes) backColumnCheckboxes.addEventListener('change', async () => await displayCard(currentCardIndex));
     if (fontSelector) fontSelector.addEventListener('change', () => {
         if (cardContainer) cardContainer.style.fontFamily = fontSelector.value;
     });
@@ -390,232 +355,41 @@ document.addEventListener('DOMContentLoaded', () => {
         // Stats are no longer loaded in bulk here.
 
         viewHistory = [];
-        populateColumnRolesUI();
         populateColumnSelectors();
         populateKeyColumnSelector();
         if (repetitionIntervalsTextarea) repetitionIntervalsTextarea.value = repetitionIntervals.join(', ');
         detectAndFilterLanguage();
     }
 
-    function populateColumnRolesUI() {
-        if (!columnRolesContainer) return;
-        columnRolesContainer.innerHTML = ''; // Clear previous
-
-        const title = document.createElement('label');
-        title.textContent = 'Column Roles (for Auto-Configuration):';
-        title.style.display = 'block';
-        title.style.marginBottom = '10px';
-        columnRolesContainer.appendChild(title);
-
-        const rolesGrid = document.createElement('div');
-        rolesGrid.style.display = 'grid';
-        rolesGrid.style.gridTemplateColumns = 'auto 1fr';
-        rolesGrid.style.gap = '5px 10px';
-        rolesGrid.style.alignItems = 'center';
-
-
-        headers.forEach((header, index) => {
-            const label = document.createElement('label');
-            label.textContent = header;
-            label.htmlFor = `column-role-${index}`;
-
-            const select = document.createElement('select');
-            select.id = `column-role-${index}`;
-            select.dataset.columnIndex = index;
-
-            for (const roleKey in COLUMN_ROLES) {
-                const option = new Option(COLUMN_ROLES[roleKey], roleKey);
-                select.add(option);
-            }
-            // Auto-detect basic roles
-            if (header.toLowerCase().includes('target') || header.toLowerCase().includes('greek')) select.value = 'TARGET_LANGUAGE';
-            if (header.toLowerCase().includes('base') || header.toLowerCase().includes('english')) select.value = 'BASE_LANGUAGE';
-            if (header.toLowerCase().includes('pronunciation')) select.value = 'PRONUNCIATION';
-
-
-            rolesGrid.appendChild(label);
-            rolesGrid.appendChild(select);
-        });
-
-        // Add TTS source selector
-        const ttsLabel = document.createElement('label');
-        ttsLabel.textContent = 'TTS Source Column:';
-        ttsLabel.htmlFor = 'tts-source-column-selector';
-        const ttsSelect = document.createElement('select');
-        ttsSelect.id = 'tts-source-column-selector';
-        headers.forEach((header, index) => {
-            const option = new Option(header, index);
-            ttsSelect.add(option);
-        });
-
-        // Add Auto-configure button
-        const autoConfigButton = document.createElement('button');
-        autoConfigButton.id = 'auto-configure-button';
-        autoConfigButton.textContent = 'Auto-Configure Skill Settings';
-        autoConfigButton.style.gridColumn = '1 / -1'; // Span across both columns
-        autoConfigButton.style.marginTop = '10px';
-
-
-        columnRolesContainer.appendChild(rolesGrid);
-        rolesGrid.appendChild(ttsLabel);
-        rolesGrid.appendChild(ttsSelect);
-        rolesGrid.appendChild(autoConfigButton);
-
-        autoConfigButton.addEventListener('click', autoConfigureSkills);
-    }
-
-    function autoConfigureSkills() {
-        // 1. Read the current role assignments from the UI
-        const columnRoles = {};
-        document.querySelectorAll('[id^="column-role-"]').forEach(select => {
-            columnRoles[select.dataset.columnIndex] = select.value;
-        });
-
-        // 2. Map roles to arrays of column indices
-        const roleToIndexMap = {};
-        for (const roleKey in COLUMN_ROLES) {
-            roleToIndexMap[roleKey] = [];
-        }
-        for (const colIndex in columnRoles) {
-            const role = columnRoles[colIndex];
-            if (role !== 'NONE') {
-                roleToIndexMap[role].push(parseInt(colIndex));
-            }
-        }
-
-        // 3. Define preset rules
-        const presets = {
-            READING: { front: roleToIndexMap.TARGET_LANGUAGE, back: roleToIndexMap.BASE_LANGUAGE.concat(roleToIndexMap.PRONUNCIATION) },
-            LISTENING: { front: roleToIndexMap.TARGET_LANGUAGE, back: roleToIndexMap.BASE_LANGUAGE.concat(roleToIndexMap.PRONUNCIATION, roleToIndexMap.TARGET_LANGUAGE) },
-            WRITING: { front: roleToIndexMap.BASE_LANGUAGE, back: roleToIndexMap.TARGET_LANGUAGE },
-            SPOKEN: { front: roleToIndexMap.BASE_LANGUAGE, back: roleToIndexMap.TARGET_LANGUAGE },
-            PRONUNCIATION: { front: roleToIndexMap.TARGET_LANGUAGE.concat(roleToIndexMap.PRONUNCIATION), back: roleToIndexMap.BASE_LANGUAGE }
-        };
-
-        // 4. Apply the rules
-        for (const skillId in presets) {
-            const preset = presets[skillId];
-            const frontContainer = document.getElementById(`front-column-checkboxes-${skillId}`);
-            const backContainer = document.getElementById(`back-column-checkboxes-${skillId}`);
-
-            if (frontContainer) {
-                frontContainer.querySelectorAll('input[type="checkbox"]').forEach(cb => {
-                    cb.checked = preset.front.includes(parseInt(cb.value));
-                });
-            }
-            if (backContainer) {
-                backContainer.querySelectorAll('input[type="checkbox"]').forEach(cb => {
-                    cb.checked = preset.back.includes(parseInt(cb.value));
-                });
-            }
-        }
-
-        // 5. Auto-set TTS Source
-        const ttsSelect = document.getElementById('tts-source-column-selector');
-        if (ttsSelect && roleToIndexMap.TARGET_LANGUAGE.length > 0) {
-            ttsSelect.value = roleToIndexMap.TARGET_LANGUAGE[0];
-        }
-
-        alert('Skill settings have been auto-configured based on column roles.');
-        handleSettingsChange(); // Mark config as dirty
-    }
-
+    /**
+     * Populates the front and back column selection checkboxes in the settings modal
+     * based on the headers from the data file.
+     */
     function populateColumnSelectors() {
-        if (!skillColumnConfigContainer) return;
-        skillColumnConfigContainer.innerHTML = ''; // Clear previous content
-
-        const tabList = document.createElement('div');
-        tabList.className = 'tabs';
-        tabList.setAttribute('role', 'tablist');
-
-        const panelContainer = document.createElement('div');
-
+        if (!frontColumnCheckboxes || !backColumnCheckboxes) return;
+        frontColumnCheckboxes.innerHTML = '';
+        backColumnCheckboxes.innerHTML = '';
         headers.forEach((header, index) => {
-            // This part of the logic is now inside the skill loop
+            const idFront = `front-col-${index}`;
+            const checkboxFront = `<div><input type="checkbox" id="${idFront}" value="${index}"><label for="${idFront}">${header}</label></div>`;
+            frontColumnCheckboxes.insertAdjacentHTML('beforeend', checkboxFront);
+
+            const idBack = `back-col-${index}`;
+            const checkboxBack = `<div><input type="checkbox" id="${idBack}" value="${index}"><label for="${idBack}">${header}</label></div>`;
+            backColumnCheckboxes.insertAdjacentHTML('beforeend', checkboxBack);
         });
 
-        Object.keys(SKILLS).forEach((skillId, i) => {
-            const skill = SKILLS[skillId];
-            const isActive = i === 0;
-
-            // Create Tab Button
-            const button = document.createElement('button');
-            button.className = `tab-button ${isActive ? 'active' : ''}`;
-            button.setAttribute('role', 'tab');
-            button.dataset.tab = `skill-panel-${skillId}`;
-            button.textContent = skill.label;
-            tabList.appendChild(button);
-
-            // Create Tab Panel
-            const panel = document.createElement('div');
-            panel.id = `skill-panel-${skillId}`;
-            panel.className = `tab-panel ${isActive ? 'active' : ''}`;
-            panel.setAttribute('role', 'tabpanel');
-
-            // Create Front and Back Checkbox groups for this skill
-            const frontContainer = document.createElement('div');
-            frontContainer.className = 'column-checkbox-group';
-            frontContainer.id = `front-column-checkboxes-${skillId}`;
-
-            const backContainer = document.createElement('div');
-            backContainer.className = 'column-checkbox-group';
-            backContainer.id = `back-column-checkboxes-${skillId}`;
-
-            headers.forEach((header, index) => {
-                const idFront = `front-col-${skillId}-${index}`;
-                const checkboxFront = `<div><input type="checkbox" id="${idFront}" value="${index}"><label for="${idFront}">${header}</label></div>`;
-                frontContainer.insertAdjacentHTML('beforeend', checkboxFront);
-
-                const idBack = `back-col-${skillId}-${index}`;
-                const checkboxBack = `<div><input type="checkbox" id="${idBack}" value="${index}"><label for="${idBack}">${header}</label></div>`;
-                backContainer.insertAdjacentHTML('beforeend', checkboxBack);
+        // Default front to first column
+        if (headers.length > 0) {
+            const firstCheckbox = frontColumnCheckboxes.querySelector('input');
+            if (firstCheckbox) firstCheckbox.checked = true;
+        }
+        // Default back to all columns
+        if (backColumnCheckboxes) {
+            backColumnCheckboxes.querySelectorAll('input[type="checkbox"]').forEach(cb => {
+                cb.checked = true;
             });
-
-            // Set default selections for the first skill (Reading)
-            if (skillId === SKILLS.READING.id) {
-                 if (headers.length > 0) {
-                    const firstCheckbox = frontContainer.querySelector('input');
-                    if (firstCheckbox) firstCheckbox.checked = true;
-                }
-                backContainer.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = true);
-            } else { // Default for other skills (e.g., Writing) might be swapped
-                 if (headers.length > 0) {
-                    const firstCheckbox = backContainer.querySelector('input');
-                    if (firstCheckbox) firstCheckbox.checked = true;
-                }
-                frontContainer.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = true);
-            }
-
-
-            panel.innerHTML = `
-                <div class="setting">
-                    <label>Front Column(s):</label>
-                </div>
-                <div class="setting">
-                    <label>Back Column(s):</label>
-                </div>
-            `;
-            panel.querySelector('.setting:nth-child(1)').appendChild(frontContainer);
-            panel.querySelector('.setting:nth-child(2)').appendChild(backContainer);
-
-            panelContainer.appendChild(panel);
-        });
-
-        skillColumnConfigContainer.appendChild(tabList);
-        skillColumnConfigContainer.appendChild(panelContainer);
-
-        // Add event listener for the new tabs
-        tabList.addEventListener('click', e => {
-            if (e.target.matches('.tab-button')) {
-                const button = e.target;
-                tabList.querySelectorAll('.tab-button').forEach(btn => btn.classList.remove('active'));
-                button.classList.add('active');
-
-                panelContainer.querySelectorAll('.tab-panel').forEach(panel => {
-                    panel.classList.toggle('active', panel.id === button.dataset.tab);
-                });
-            }
-        });
+        }
     }
 
     function populateKeyColumnSelector() {
@@ -641,21 +415,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (ttsOnHotkeyOnlyCheckbox && ttsOnHotkeyOnlyCheckbox.checked) return;
 
-        // Get the correct column configuration for the current skill to find the text to speak.
-        const currentConfigName = configSelector.value;
-        const currentConfig = configs[currentConfigName] || {};
-        let skillConfig = (currentConfig.skillColumns || {})[currentSkill];
-        if (!skillConfig) {
-            skillConfig = (currentConfig.skillColumns || {})[SKILLS.READING.id] || { front: [0], back: [1] };
-        }
-        const frontIndices = skillConfig.front;
+        const frontIndices = getSelectedColumnIndices(frontColumnCheckboxes);
+        const originalFrontText = getTextForColumns(frontIndices);
 
         if (card.classList.contains('flipped') && ttsBackCheckbox && ttsBackCheckbox.checked) {
             speak(cardBack.textContent, ttsBackLangSelect.value);
         } else if (!card.classList.contains('flipped') && ttsFrontCheckbox && ttsFrontCheckbox.checked) {
-            const ttsSourceColumn = currentConfig.ttsSourceColumn || frontIndices[0];
-            const ttsText = getTextForColumns([ttsSourceColumn]);
-            speak(ttsText, ttsFrontLangSelect.value);
+            speak(originalFrontText, ttsFrontLangSelect.value);
         }
     }
 
@@ -732,15 +498,15 @@ document.addEventListener('DOMContentLoaded', () => {
         return `${days}d`;
     }
 
-    function getTimeToDue(skillStats, now = Date.now()) {
-        if (!skillStats.lastViewed) {
+    function getTimeToDue(stats, now = Date.now()) {
+        if (!stats.lastViewed) {
             return { ms: -1, formatted: 'N/A' }; // N/A for cards never seen
         }
-        const intervalSeconds = repetitionIntervals[skillStats.intervalIndex];
+        const intervalSeconds = repetitionIntervals[stats.intervalIndex];
         if (intervalSeconds === undefined) {
              return { ms: Infinity, formatted: 'Learned' }; // Card is fully learned
         }
-        const dueDate = skillStats.lastViewed + (intervalSeconds * 1000);
+        const dueDate = stats.lastViewed + (intervalSeconds * 1000);
         const timeToDueMs = dueDate - now;
 
         return {
@@ -770,15 +536,15 @@ document.addEventListener('DOMContentLoaded', () => {
         return indices.map(colIndex => cardData[currentCardIndex][colIndex]).join('\n');
     }
 
-    function getRetentionScore(skillStats) {
-        if (!skillStats || typeof skillStats !== 'object') {
+    function getRetentionScore(stats) {
+        if (!stats || typeof stats !== 'object') {
             return 0;
         }
-        return (skillStats.successTimestamps?.length || 0) - (skillStats.failureTimestamps?.length || 0);
+        return (stats.successTimestamps?.length || 0) - (stats.failureTimestamps?.length || 0);
     }
 
-    function createDefaultSkillStats() {
-        return {
+    async function getSanitizedStats(cardKey) {
+        const defaultStats = {
             successTimestamps: [],
             failureTimestamps: [],
             responseDelays: [],
@@ -786,62 +552,15 @@ document.addEventListener('DOMContentLoaded', () => {
             intervalIndex: 0,
             viewCount: 0
         };
-    }
 
-    async function getSanitizedStats(cardKey) {
-        let cardStats = await get(cardKey);
+        let stats = await get(cardKey);
 
-        // Migration from old format
-        if (cardStats && !cardStats.skills) {
-            console.log(`Migrating old stats for card: ${cardKey}`);
-            const oldStats = { ...cardStats };
-            cardStats = {
-                skills: {
-                    [SKILLS.READING.id]: {
-                        successTimestamps: oldStats.successTimestamps || [],
-                        failureTimestamps: oldStats.failureTimestamps || [],
-                        responseDelays: oldStats.responseDelays || [],
-                        lastViewed: oldStats.lastViewed || null,
-                        intervalIndex: oldStats.intervalIndex || 0,
-                        viewCount: oldStats.viewCount || 0,
-                    }
-                }
-            };
+        if (!stats || typeof stats !== 'object') {
+            stats = defaultStats;
+        } else {
+            stats = { ...defaultStats, ...stats };
         }
-
-        // Ensure the structure is valid
-        if (!cardStats || typeof cardStats !== 'object' || !cardStats.skills) {
-            cardStats = { skills: {} };
-        }
-
-        // Ensure all defined skills have a stats object
-        for (const skillId in SKILLS) {
-            if (!cardStats.skills[skillId]) {
-                cardStats.skills[skillId] = createDefaultSkillStats();
-            }
-        }
-
-        return cardStats;
-    }
-
-    function renderSkillMastery(cardStats) {
-        if (!skillMasteryDashboard) return;
-
-        let html = '';
-        for (const skillId in SKILLS) {
-            const skill = SKILLS[skillId];
-            const skillStats = cardStats.skills[skillId];
-            const score = getRetentionScore(skillStats);
-            const timeToDue = getTimeToDue(skillStats);
-
-            html += `
-                <div class="skill-mastery-item ${skillId === currentSkill ? 'active' : ''}" title="${skill.label} - Next review: ${timeToDue.formatted}">
-                    <span class="skill-name">${skill.label.match(/\b(\w)/g).join('')}</span>
-                    <span class="skill-score">${score}</span>
-                </div>
-            `;
-        }
-        skillMasteryDashboard.innerHTML = html;
+        return stats;
     }
 
     /**
@@ -861,33 +580,21 @@ document.addEventListener('DOMContentLoaded', () => {
         const cardKey = getCardKey(cardData[index]);
         const stats = await getSanitizedStats(cardKey);
 
-        if (!isNavigatingBack && (index !== currentCardIndex || reason.skill !== currentSkill)) {
-             viewHistory.push({ cardIndex: currentCardIndex, skill: currentSkill });
+        if (!isNavigatingBack && index !== currentCardIndex) {
+            viewHistory.push(currentCardIndex);
         }
 
         currentCardIndex = index;
-        // The currentSkill is now set by showNextCard
         replayRate = 1.0;
 
-        const currentSkillStats = stats.skills[currentSkill];
-        const previousLastViewed = currentSkillStats.lastViewed; // Store previous value
-        currentSkillStats.viewCount++;
-        currentSkillStats.lastViewed = Date.now();
+        const previousLastViewed = stats.lastViewed;
 
-        // Get the correct column configuration for the current skill
-        const currentConfigName = configSelector.value;
-        const currentConfig = configs[currentConfigName] || {};
-        let skillConfig = (currentConfig.skillColumns || {})[currentSkill];
+        stats.viewCount++;
+        stats.lastViewed = Date.now();
 
-        // Fallback logic if skill config is missing
-        if (!skillConfig) {
-            skillConfig = (currentConfig.skillColumns || {})[SKILLS.READING.id] || { front: [0], back: [1] };
-        }
+        const frontIndices = getSelectedColumnIndices(frontColumnCheckboxes);
+        const backIndices = getSelectedColumnIndices(backColumnCheckboxes);
 
-        const frontIndices = skillConfig.front;
-        const backIndices = skillConfig.back;
-
-        // This replaces the old hard-coded logic
         const originalFrontText = getTextForColumns(frontIndices);
         let displayText = originalFrontText;
         if (alternateUppercaseCheckbox && alternateUppercaseCheckbox.checked) {
@@ -897,9 +604,7 @@ document.addEventListener('DOMContentLoaded', () => {
             useUppercase = !useUppercase;
         }
 
-        const isAudioOnly = (audioOnlyFrontCheckbox && audioOnlyFrontCheckbox.checked) || currentSkill === SKILLS.LISTENING.id;
-
-        if (isAudioOnly) {
+        if (audioOnlyFrontCheckbox && audioOnlyFrontCheckbox.checked) {
             cardFront.innerHTML = '<span class="speech-icon">🔊</span>';
         } else {
             cardFront.textContent = displayText;
@@ -916,20 +621,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
         card.classList.remove('flipped');
         if (ttsFrontCheckbox && ttsFrontCheckbox.checked && ttsOnHotkeyOnlyCheckbox && !ttsOnHotkeyOnlyCheckbox.checked) {
-            const ttsSourceColumn = currentConfig.ttsSourceColumn || frontIndices[0];
-            const ttsText = getTextForColumns([ttsSourceColumn]);
-            speak(ttsText, ttsFrontLangSelect.value);
+            speak(originalFrontText, ttsFrontLangSelect.value);
         }
 
-        renderSkillMastery(stats);
-
         const timeAgo = formatTimeAgo(previousLastViewed);
-        const retentionScore = getRetentionScore(currentSkillStats);
+        const retentionScore = getRetentionScore(stats);
         if (cardSpecificStats) {
             cardSpecificStats.innerHTML = `
-                <span>Skill: ${SKILLS[currentSkill].label}</span> |
                 <span>Retention Score: ${retentionScore}</span> |
-                <span>View Count: ${currentSkillStats.viewCount}</span> |
+                <span>View Count: ${stats.viewCount}</span> |
                 <span>Last seen: ${timeAgo}</span>
             `;
         }
@@ -949,8 +649,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 case 'deck_learned':
                     if (reason.timeToNextReview !== Infinity) {
                         const formattedMinTime = formatTimeDifference(reason.timeToNextReview);
-                        const formattedMaxTime = formatTimeDifference(reason.timeToLastReview);
-                        message = `Deck learned! Reviews are from ${formattedMinTime} to ${formattedMaxTime}. Reviewing lowest-score cards until then.`;
+                        message = `Congratulations! This deck is learned for now. Your next review is in ${formattedMinTime}. Come back then!`;
                     } else {
                         message = 'Congratulations, you have learned this whole deck!';
                     }
@@ -969,98 +668,125 @@ document.addEventListener('DOMContentLoaded', () => {
         return Promise.all(promises);
     }
 
+    /**
+     * Determines the next card to show based on the spaced repetition algorithm.
+     * It prioritizes cards with the lowest retention score.
+     * @param {object} [options] - Optional parameters.
+     * @param {boolean} [options.forceNew=false] - If true, ensures the next card is different from the current one, even if it also has a low score. Used for "I don't know".
+     */
     async function showNextCard({ forceNew = false, now = Date.now() } = {}) {
-        if (cardData.length === 0) return;
+        if (cardData.length === 0) {
+            return;
+        }
+        if (cardData.length === 1) {
+            await displayCard(0);
+            return;
+        }
 
-        // 1. Get user's selected skills for the current session
-        const activeSkills = getActiveSkills();
         const allCardStats = await getAllCardStats();
 
-        // 2. Create a flat list of all possible (card, skill) combinations to review
-        const reviewableItems = [];
-        allCardStats.forEach((cardStats, cardIndex) => {
-            activeSkills.forEach(skillId => {
-                reviewableItems.push({
-                    cardIndex,
-                    skillId,
-                    skillStats: cardStats.skills[skillId]
-                });
-            });
-        });
-
-        if (reviewableItems.length === 0) return;
-
-        // --- Heuristic 1: Find "Due" Items ---
-        const dueItems = reviewableItems.filter(item => {
-            if (!item.skillStats.lastViewed) return false;
-            const intervalSeconds = repetitionIntervals[item.skillStats.intervalIndex];
-            if (intervalSeconds === undefined) return false; // Already fully learned
-            return now - item.skillStats.lastViewed > intervalSeconds * 1000;
-        });
-
-        if (dueItems.length > 0) {
-            shuffleArray(dueItems);
-            dueItems.sort((a, b) => getRetentionScore(a.skillStats) - getRetentionScore(b.skillStats));
-            let nextItem = dueItems[0];
-
-            if (forceNew && nextItem.cardIndex === currentCardIndex && nextItem.skillId === currentSkill && dueItems.length > 1) {
-                nextItem = dueItems[1];
+        // --- Heuristic Step 1: Find and show a "due" card ---
+        const dueCardIndices = [];
+        allCardStats.forEach((stats, index) => {
+            // A card is due if it has been seen before and its review interval has passed.
+            if (stats.lastViewed) {
+                const intervalSeconds = repetitionIntervals[stats.intervalIndex] || defaultIntervals[defaultIntervals.length - 1];
+                if (now - stats.lastViewed > intervalSeconds * 1000) {
+                    dueCardIndices.push(index);
+                }
             }
-            currentCardIndex = nextItem.cardIndex;
-            currentSkill = nextItem.skillId;
-            const reason = { type: 'due_review', expiredInterval: formatDuration(repetitionIntervals[nextItem.skillStats.intervalIndex]), nextInterval: formatDuration(repetitionIntervals[nextItem.skillStats.intervalIndex + 1] || 0) };
-            await displayCard(currentCardIndex, { reason });
+        });
+
+        if (dueCardIndices.length > 0) {
+            // Find the due card with the lowest retention score to prioritize it.
+            // If scores are equal, shuffle to introduce randomness.
+            shuffleArray(dueCardIndices); // Randomize before sorting to break ties
+            dueCardIndices.sort((a, b) => getRetentionScore(allCardStats[a]) - getRetentionScore(allCardStats[b]));
+
+            let nextIndex = dueCardIndices[0];
+            // Avoid showing the same card twice in a row if there are other due cards.
+            if (nextIndex === currentCardIndex && dueCardIndices.length > 1) {
+                nextIndex = dueCardIndices[1];
+            }
+
+            const stats = allCardStats[nextIndex];
+            const expiredInterval = formatDuration(repetitionIntervals[stats.intervalIndex]);
+            const nextInterval = formatDuration(repetitionIntervals[stats.intervalIndex + 1] || repetitionIntervals[stats.intervalIndex]);
+            await displayCard(nextIndex, { reason: { type: 'due_review', expiredInterval, nextInterval } });
             return;
         }
 
-        // --- Heuristic 2: Find "New" Items ---
-        const newItems = reviewableItems.filter(item => item.skillStats.viewCount === 0);
-        if (newItems.length > 0) {
-            const nextItem = newItems[Math.floor(Math.random() * newItems.length)];
-            currentCardIndex = nextItem.cardIndex;
-            currentSkill = nextItem.skillId;
-            await displayCard(currentCardIndex, { reason: { type: 'new_card' } });
+        // --- Heuristic Step 2: Find and show a "new" card ---
+        const newCardIndices = [];
+        allCardStats.forEach((stats, index) => {
+            if (stats.viewCount === 0) {
+                newCardIndices.push(index);
+            }
+        });
+
+        if (newCardIndices.length > 0) {
+            // Pick a random new card to show.
+            const nextIndex = newCardIndices[Math.floor(Math.random() * newCardIndices.length)];
+            await displayCard(nextIndex, { reason: { type: 'new_card' } });
             return;
         }
 
-        // --- Heuristic 3: Find "Least Learned" Item ---
+        // --- Heuristic Step 3: Find and show the "least learned" card ---
+        // If no cards are due and none are new, find the card with the lowest retention score.
+
+        const allCardsLearned = allCardStats.every(stats => getRetentionScore(stats) > 0);
         let reasonForDisplay;
-        const allSkillsLearned = reviewableItems.every(item => getRetentionScore(item.skillStats) > 0);
-        if (allSkillsLearned) {
-                let minTimeToDue = Infinity;
-                let maxTimeToDue = 0;
-                reviewableItems.forEach(item => {
-                    const timeToDue = getTimeToDue(item.skillStats, now).ms;
-                    if (timeToDue > 0 && timeToDue < minTimeToDue) minTimeToDue = timeToDue;
-                    if (timeToDue > maxTimeToDue) maxTimeToDue = timeToDue;
-                });
-                reasonForDisplay = { type: 'deck_learned', timeToNextReview: minTimeToDue, timeToLastReview: maxTimeToDue };
+
+        if (allCardsLearned) {
+            let minTimeToDue = Infinity;
+            let maxTimeToDue = 0;
+            allCardStats.forEach(stats => {
+                const timeToDue = getTimeToDue(stats, now).ms;
+                if (timeToDue > 0 && timeToDue < minTimeToDue) {
+                    minTimeToDue = timeToDue;
+                }
+                if (timeToDue > maxTimeToDue) {
+                    maxTimeToDue = timeToDue;
+                }
+            });
+            reasonForDisplay = {
+                type: 'deck_learned',
+                timeToNextReview: minTimeToDue,
+                timeToLastReview: maxTimeToDue
+            };
         } else {
             reasonForDisplay = { type: 'least_learned' };
         }
 
-        let candidateItems = [...reviewableItems];
-        if (forceNew && candidateItems.length > 1) {
-            candidateItems = candidateItems.filter(item => item.cardIndex !== currentCardIndex || item.skillId !== currentSkill);
-        }
-        if (candidateItems.length === 0) {
-            candidateItems = [...reviewableItems];
+        // Create a list of all card indices except the current one if forceNew is true
+        let candidateIndices = allCardStats.map((_, index) => index);
+        if (forceNew && candidateIndices.length > 1) {
+            candidateIndices = candidateIndices.filter(index => index !== currentCardIndex);
         }
 
-        shuffleArray(candidateItems);
-        candidateItems.sort((a, b) => {
-            const scoreA = getRetentionScore(a.skillStats);
-            const scoreB = getRetentionScore(b.skillStats);
-            if (scoreA !== scoreB) return scoreA - scoreB;
-            const lastViewedA = a.skillStats.lastViewed || 0;
-            const lastViewedB = b.skillStats.lastViewed || 0;
+        if (candidateIndices.length === 0) {
+            // This can happen if forceNew is true and there's only one card left.
+            // In this case, just show that one card.
+            candidateIndices.push(currentCardIndex);
+        }
+
+        // Sort by retention score (ascending), then by last viewed time (ascending - oldest first)
+        // Shuffle first to break ties in both score and lastViewed
+        shuffleArray(candidateIndices);
+        candidateIndices.sort((a, b) => {
+            const scoreA = getRetentionScore(allCardStats[a]);
+            const scoreB = getRetentionScore(allCardStats[b]);
+            if (scoreA !== scoreB) {
+                return scoreA - scoreB;
+            }
+            // If scores are equal, show the one that was seen longer ago.
+            const lastViewedA = allCardStats[a].lastViewed || 0;
+            const lastViewedB = allCardStats[b].lastViewed || 0;
             return lastViewedA - lastViewedB;
         });
 
-        const nextItem = candidateItems[0];
-        currentCardIndex = nextItem.cardIndex;
-        currentSkill = nextItem.skillId;
-        await displayCard(currentCardIndex, { reason: reasonForDisplay });
+        const nextIndex = candidateIndices[0];
+        await displayCard(nextIndex, { reason: reasonForDisplay });
     }
 
     /**
@@ -1068,9 +794,8 @@ document.addEventListener('DOMContentLoaded', () => {
      */
     async function showPrevCard() {
         if (viewHistory.length > 0) {
-            const prevState = viewHistory.pop();
-            currentSkill = prevState.skill; // Restore the skill for that card
-            await displayCard(prevState.cardIndex, { isNavigatingBack: true });
+            const prevIndex = viewHistory.pop();
+            await displayCard(prevIndex, { isNavigatingBack: true });
         }
     }
 
@@ -1082,43 +807,12 @@ document.addEventListener('DOMContentLoaded', () => {
             item.card.forEach(cell => {
                 tbodyHtml += `<td>${cell}</td>`;
             });
-
-            // Mastery column
-            const masteryHtml = Object.keys(SKILLS).map(skillId => {
-                const skill = SKILLS[skillId];
-                const initial = skill.label.match(/\b(\w)/g).join('');
-                const score = getRetentionScore(item.stats.skills[skillId]);
-                return `<span title="${skill.label}: ${score}">${initial}:${score}</span>`;
-            }).join(' ');
-            tbodyHtml += `<td>${masteryHtml}</td>`;
-
-            // Overall View Count & Last Seen
-            let totalViews = 0;
-            let lastSeen = 0;
-            Object.values(item.stats.skills).forEach(s => {
-                totalViews += s.viewCount;
-                if (s.lastViewed > lastSeen) {
-                    lastSeen = s.lastViewed;
-                }
-            });
-            tbodyHtml += `<td>${totalViews}</td>`;
-            tbodyHtml += `<td>${formatTimeAgo(lastSeen)}</td>`;
-
-            // Time to Next Due
-            const dueTimesMs = Object.values(item.stats.skills).map(s => getTimeToDue(s, now).ms);
-            const validDueTimes = dueTimesMs.filter(ms => ms !== -1); // Filter out N/A
-
-            let nextDueFormatted;
-            if (validDueTimes.length === 0) {
-                nextDueFormatted = 'N/A';
-            } else if (validDueTimes.some(ms => ms <= 0)) {
-                nextDueFormatted = 'Now';
-            } else {
-                const nextDueTime = Math.min(...validDueTimes);
-                nextDueFormatted = nextDueTime === Infinity ? 'Learned' : formatTimeDifference(nextDueTime);
-            }
-            tbodyHtml += `<td>${nextDueFormatted}</td>`;
-
+            const retentionScore = getRetentionScore(item.stats);
+            tbodyHtml += `<td>${retentionScore}</td>`;
+            tbodyHtml += `<td>${item.stats.viewCount}</td>`;
+            tbodyHtml += `<td>${formatTimeAgo(item.stats.lastViewed)}</td>`;
+            const timeToDue = getTimeToDue(item.stats, now);
+            tbodyHtml += `<td>${timeToDue.formatted}</td>`;
             tbodyHtml += '</tr>';
         });
         tbodyHtml += '</tbody>';
@@ -1137,10 +831,10 @@ document.addEventListener('DOMContentLoaded', () => {
         headers.forEach((header, index) => {
             tableHTML += `<th class="sortable" data-column-index="${index}">${header}</th>`;
         });
-        tableHTML += `<th class="sortable" data-column-index="${headers.length}">Mastery</th>`;
+        tableHTML += `<th class="sortable" data-column-index="${headers.length}">Retention Score</th>`;
         tableHTML += `<th class="sortable" data-column-index="${headers.length + 1}">View Count</th>`;
         tableHTML += `<th class="sortable" data-column-index="${headers.length + 2}">Last Seen</th>`;
-        tableHTML += `<th class="sortable" data-column-index="${headers.length + 3}">Next Due</th>`;
+        tableHTML += `<th class="sortable" data-column-index="${headers.length + 3}">Time to Due</th>`;
         tableHTML += '</tr></thead>';
 
         const allCardStats = await getAllCardStats();
@@ -1177,66 +871,68 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const allCardStats = await getAllCardStats();
 
+        // Create a combined array for sorting directly from in-memory state
         const combinedData = cardData.map((card, index) => ({
             card: card,
-            stats: allCardStats[index]
+            stats: allCardStats[index] // The whole stats object
         }));
 
         combinedData.sort((a, b) => {
             let valA, valB;
 
             if (columnIndex < headers.length) {
+                // It's a data column
                 valA = a.card[columnIndex];
                 valB = b.card[columnIndex];
             } else {
+                // It's a stats column
                 const statsKeyIndex = columnIndex - headers.length;
-                const skillsA = Object.values(a.stats.skills);
-                const skillsB = Object.values(b.stats.skills);
-
-                if (statsKeyIndex === 0) { // Mastery (sort by average score)
-                    const avgA = skillsA.reduce((sum, s) => sum + getRetentionScore(s), 0) / skillsA.length;
-                    const avgB = skillsB.reduce((sum, s) => sum + getRetentionScore(s), 0) / skillsB.length;
-                    valA = avgA;
-                    valB = avgB;
-                } else if (statsKeyIndex === 1) { // View Count (sort by total)
-                    valA = skillsA.reduce((sum, s) => sum + s.viewCount, 0);
-                    valB = skillsB.reduce((sum, s) => sum + s.viewCount, 0);
-                } else if (statsKeyIndex === 2) { // Last Seen (sort by most recent)
-                    valA = Math.max(...skillsA.map(s => s.lastViewed || 0));
-                    valB = Math.max(...skillsB.map(s => s.lastViewed || 0));
-                } else { // Time to Due (sort by soonest)
-                    const getSortableDueTime = (skills) => {
-                        const dueTimesMs = skills.map(s => getTimeToDue(s, now).ms);
-                        const validDueTimes = dueTimesMs.filter(ms => ms !== -1);
-                        if (validDueTimes.length === 0) return Infinity; // N/A sorts last
-                        if (validDueTimes.some(ms => ms <= 0)) return -1; // "Now" sorts first
-                        return Math.min(...validDueTimes);
-                    };
-                    valA = getSortableDueTime(skillsA);
-                    valB = getSortableDueTime(skillsB);
+                if (statsKeyIndex === 0) { // Retention Score
+                    valA = getRetentionScore(a.stats);
+                    valB = getRetentionScore(b.stats);
+                } else if (statsKeyIndex === 1) { // View Count
+                    valA = a.stats.viewCount;
+                    valB = b.stats.viewCount;
+                } else if (statsKeyIndex === 2) { // Last Seen
+                    valA = a.stats.lastViewed;
+                    valB = b.stats.lastViewed;
+                } else { // Time to Due
+                    valA = getTimeToDue(a.stats, now).ms;
+                    valB = getTimeToDue(b.stats, now).ms;
                 }
             }
 
+            // Handle nulls to sort them at the end
             if (valA === null || valA === undefined) valA = historySortDirection === 'asc' ? Infinity : -Infinity;
             if (valB === null || valB === undefined) valB = historySortDirection === 'asc' ? Infinity : -Infinity;
 
+            // Type-aware comparison
             if (typeof valA === 'number' && typeof valB === 'number') {
-                // Numeric comparison
+                // Direct numeric comparison (for status, view count, and timestamp)
             } else {
+                // Fallback to string comparison
                 valA = String(valA).toLowerCase();
                 valB = String(valB).toLowerCase();
             }
 
-            if (valA < valB) return historySortDirection === 'asc' ? -1 : 1;
-            if (valA > valB) return historySortDirection === 'asc' ? 1 : -1;
+            if (valA < valB) {
+                return historySortDirection === 'asc' ? -1 : 1;
+            }
+            if (valA > valB) {
+                return historySortDirection === 'asc' ? 1 : -1;
+            }
             return 0;
         });
 
+        // Generate a new table body from the sorted data
         const newTbodyHtml = buildHistoryTbodyHtml(combinedData);
+
+        // Replace only the table body, leaving the main app state untouched
         const table = historyTableContainer.querySelector('table');
         if (table) {
             const oldTbody = table.querySelector('tbody');
             if (oldTbody) {
+                // oldTbody.innerHTML = newTbodyHtml; // This is not right, it would insert '<tbody>...</tbody>' inside another tbody
                 table.removeChild(oldTbody);
                 table.insertAdjacentHTML('beforeend', newTbodyHtml);
             } else {
@@ -1244,6 +940,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
 
+        // Also update the header classes to show sort direction
         historyTableContainer.querySelectorAll('th.sortable').forEach(th => {
             th.classList.remove('asc', 'desc');
             if (parseInt(th.dataset.columnIndex) === historySortColumn) {
@@ -1281,62 +978,31 @@ document.addEventListener('DOMContentLoaded', () => {
      */
     async function markCardAsKnown(known) {
         const cardKey = getCardKey(cardData[currentCardIndex]);
-        const cardStats = await getSanitizedStats(cardKey);
-        const skillStats = cardStats.skills[currentSkill];
+        const stats = await getSanitizedStats(cardKey);
 
         if (cardShownTimestamp) {
             const delay = Date.now() - cardShownTimestamp;
-            skillStats.responseDelays = skillStats.responseDelays || [];
-            skillStats.responseDelays.push(delay);
+            stats.responseDelays = stats.responseDelays || [];
+            stats.responseDelays.push(delay);
         }
 
         if (known) {
-            skillStats.successTimestamps.push(Date.now());
+            stats.successTimestamps.push(Date.now());
             // Only advance the interval if the card was due for review.
-            if (isCurrentCardDue && skillStats.intervalIndex < repetitionIntervals.length - 1) {
-                skillStats.intervalIndex++;
+            if (isCurrentCardDue && stats.intervalIndex < repetitionIntervals.length - 1) {
+                stats.intervalIndex++;
             }
         } else {
-            skillStats.failureTimestamps.push(Date.now());
-            skillStats.intervalIndex = 0; // Reset interval on failure
+            stats.failureTimestamps.push(Date.now());
+            stats.intervalIndex = 0; // Reset interval on failure
         }
-        await saveCardStats(cardKey, cardStats);
+        await saveCardStats(cardKey, stats);
     }
 
     /**
      * Saves the current UI settings (URL, columns, font, etc.) as a named configuration
      * to IndexedDB.
      */
-    function getSelectedSkills() {
-        if (!skillSelectorCheckboxes) return [SKILLS.READING.id]; // Default to reading
-        const selected = Array.from(skillSelectorCheckboxes.querySelectorAll('input:checked')).map(cb => cb.value);
-        // If no skills are selected in the UI, default to reading to avoid a broken state.
-        return selected.length > 0 ? selected : [SKILLS.READING.id];
-    }
-
-    function getActiveSkills() {
-        const currentConfigName = configSelector.value;
-        if (currentConfigName && configs[currentConfigName] && configs[currentConfigName].skills) {
-            return configs[currentConfigName].skills;
-        }
-        return [SKILLS.READING.id]; // Default
-    }
-
-    function getSkillColumnSettings() {
-        const skillColumns = {};
-        for (const skillId in SKILLS) {
-            const frontContainer = document.getElementById(`front-column-checkboxes-${skillId}`);
-            const backContainer = document.getElementById(`back-column-checkboxes-${skillId}`);
-            if (frontContainer && backContainer) {
-                skillColumns[skillId] = {
-                    front: getSelectedColumnIndices(frontContainer),
-                    back: getSelectedColumnIndices(backContainer)
-                };
-            }
-        }
-        return skillColumns;
-    }
-
     async function saveConfig() {
         if (!configNameInput) return;
         const configName = configNameInput.value.trim();
@@ -1347,22 +1013,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const currentConfig = configs[configName] || {};
 
-        const columnRoles = {};
-        document.querySelectorAll('[id^="column-role-"]').forEach(select => {
-            columnRoles[select.dataset.columnIndex] = select.value;
-        });
-
-        const ttsSourceSelector = document.getElementById('tts-source-column-selector');
-
         configs[configName] = {
             ...currentConfig, // Preserve subsetData if it exists
             dataUrl: currentConfig.subsetData ? null : dataUrlInput.value,
             keyColumn: keyColumnSelector.value,
             repetitionIntervals: repetitionIntervalsTextarea.value,
-            skillColumns: getSkillColumnSettings(), // New per-skill column settings
-            skills: getSelectedSkills(),
-            columnRoles: columnRoles,
-            ttsSourceColumn: ttsSourceSelector ? ttsSourceSelector.value : 0,
+            frontColumns: getSelectedColumnIndices(frontColumnCheckboxes),
+            backColumns: getSelectedColumnIndices(backColumnCheckboxes),
             font: fontSelector.value,
             ttsFront: ttsFrontCheckbox.checked,
             ttsBack: ttsBackCheckbox.checked,
@@ -1374,10 +1031,6 @@ document.addEventListener('DOMContentLoaded', () => {
             audioOnlyFront: audioOnlyFrontCheckbox.checked,
             ttsOnHotkeyOnly: ttsOnHotkeyOnlyCheckbox.checked,
         };
-
-        // Remove deprecated properties
-        delete configs[configName].frontColumns;
-        delete configs[configName].backColumns;
 
         await set('flashcard-configs', configs);
         await set('flashcard-last-config', configName);
@@ -1446,70 +1099,20 @@ document.addEventListener('DOMContentLoaded', () => {
             await loadData();
         }
 
-        // --- Load Column Selections ---
-        if (config.skillColumns) {
-            // New format
-            for (const skillId in config.skillColumns) {
-                const frontContainer = document.getElementById(`front-column-checkboxes-${skillId}`);
-                const backContainer = document.getElementById(`back-column-checkboxes-${skillId}`);
-                const { front, back } = config.skillColumns[skillId];
+        if (frontColumnCheckboxes) frontColumnCheckboxes.querySelectorAll('input').forEach(cb => cb.checked = false);
+        if (backColumnCheckboxes) backColumnCheckboxes.querySelectorAll('input').forEach(cb => cb.checked = false);
 
-                if (frontContainer) {
-                    frontContainer.querySelectorAll('input').forEach(cb => cb.checked = false);
-                    front.forEach(colIndex => {
-                        const cb = frontContainer.querySelector(`input[value="${colIndex}"]`);
-                        if (cb) cb.checked = true;
-                    });
-                }
-                if (backContainer) {
-                    backContainer.querySelectorAll('input').forEach(cb => cb.checked = false);
-                    back.forEach(colIndex => {
-                        const cb = backContainer.querySelector(`input[value="${colIndex}"]`);
-                        if (cb) cb.checked = true;
-                    });
-                }
-            }
-        } else if (config.frontColumns) {
-            // Migration from old format
-            const readingFront = document.getElementById(`front-column-checkboxes-READING`);
-            if (readingFront) {
-                config.frontColumns.forEach(colIndex => {
-                    const cb = readingFront.querySelector(`input[value="${colIndex}"]`);
-                    if (cb) cb.checked = true;
-                });
-            }
-            const readingBack = document.getElementById(`back-column-checkboxes-READING`);
-            if (readingBack) {
-                config.backColumns.forEach(colIndex => {
-                    const cb = readingBack.querySelector(`input[value="${colIndex}"]`);
-                    if (cb) cb.checked = true;
-                });
-            }
-        }
-        // End of Column Selections
-
-        // Load selected skills, default to READING if not set
-        const skillsToLoad = config.skills || [SKILLS.READING.id];
-        if (skillSelectorCheckboxes) {
-            skillSelectorCheckboxes.querySelectorAll('input').forEach(cb => {
-                cb.checked = skillsToLoad.includes(cb.value);
+        if (config.frontColumns) {
+            config.frontColumns.forEach(colIndex => {
+                const cb = frontColumnCheckboxes.querySelector(`input[value="${colIndex}"]`);
+                if (cb) cb.checked = true;
             });
         }
-
-        // Load Column Roles and TTS Source
-        if (config.columnRoles) {
-            for (const colIndex in config.columnRoles) {
-                const select = document.getElementById(`column-role-${colIndex}`);
-                if (select) {
-                    select.value = config.columnRoles[colIndex];
-                }
-            }
-        }
-        if (config.ttsSourceColumn) {
-            const ttsSelect = document.getElementById('tts-source-column-selector');
-            if (ttsSelect) {
-                ttsSelect.value = config.ttsSourceColumn;
-            }
+        if (config.backColumns) {
+            config.backColumns.forEach(colIndex => {
+                const cb = backColumnCheckboxes.querySelector(`input[value="${colIndex}"]`);
+                if (cb) cb.checked = true;
+            });
         }
 
         if (ttsFrontLangSelect) ttsFrontLangSelect.value = config.ttsFrontLang;
@@ -1522,12 +1125,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (repetitionIntervalsTextarea) {
             const configIntervalsString = config.repetitionIntervals;
+            // Check if the string is null, undefined, or just empty space
             if (configIntervalsString && configIntervalsString.trim() !== '') {
                 repetitionIntervals = configIntervalsString.split(',').map(s => parseInt(s.trim())).filter(n => !isNaN(n));
             }
+
+            // If parsing resulted in an empty array, or if there was no string to begin with, use defaults
             if (repetitionIntervals.length === 0) {
                 repetitionIntervals = [...defaultIntervals];
             }
+
+            // Always update the UI to reflect the actual intervals being used
             repetitionIntervalsTextarea.value = repetitionIntervals.join(', ');
         }
 
@@ -1740,23 +1348,12 @@ document.addEventListener('DOMContentLoaded', () => {
                         markCardAsKnown(false);
                         showNextCard({forceNew: true});
                         break;
-                    case 'f': {
-                        let text, voiceName;
-                        if (card.classList.contains('flipped')) {
-                            text = cardBack.textContent;
-                            voiceName = ttsBackLangSelect.value;
-                        } else {
-                            // For the front, always get text from the configured TTS source column
-                            const currentConfigName = configSelector.value;
-                            const currentConfig = configs[currentConfigName] || {};
-                            const ttsSourceColumn = currentConfig.ttsSourceColumn || 0; // Default to 0
-                            text = getTextForColumns([ttsSourceColumn]);
-                            voiceName = ttsFrontLangSelect.value;
-                        }
+                    case 'f':
+                        const text = card.classList.contains('flipped') ? cardBack.textContent : cardFront.textContent;
+                        const voiceName = card.classList.contains('flipped') ? ttsBackLangSelect.value : ttsFrontLangSelect.value;
                         replayRate = Math.max(0.1, replayRate - 0.2);
                         speak(text, voiceName, replayRate);
                         break;
-                    }
                 }
                 break;
             case 'keyup':
@@ -1831,24 +1428,8 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
 
-    function populateSkillSelector() {
-        if (!skillSelectorCheckboxes) return;
-        skillSelectorCheckboxes.innerHTML = '';
-        for (const skillId in SKILLS) {
-            const skill = SKILLS[skillId];
-            const id = `skill-checkbox-${skill.id}`;
-            const checkboxHtml = `
-                <div>
-                    <input type="checkbox" id="${id}" value="${skill.id}" checked>
-                    <label for="${id}" title="${skill.description}">${skill.label}</label>
-                </div>`;
-            skillSelectorCheckboxes.insertAdjacentHTML('beforeend', checkboxHtml);
-        }
-    }
-
     // Initial load
     populateVoices();
-    populateSkillSelector();
     if ('speechSynthesis'in window && speechSynthesis.onvoiceschanged !== undefined) {
         speechSynthesis.onvoiceschanged = () => populateVoices();
     }
