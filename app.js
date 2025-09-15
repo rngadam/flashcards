@@ -86,6 +86,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const createSubsetButton = document.getElementById('create-subset-config');
     const subsetConfigNameInput = document.getElementById('subset-config-name');
     const subsetTextarea = document.getElementById('subset-text');
+    const writingPracticeContainer = document.getElementById('writing-practice-container');
+    const writingInput = document.getElementById('writing-input');
+    const writingSubmit = document.getElementById('writing-submit');
 
 
     // App state
@@ -109,7 +112,7 @@ document.addEventListener('DOMContentLoaded', () => {
         },
         WRITING: {
             id: 'WRITING',
-            label: 'Written Production',
+            label: 'Validated Writing Practice',
             description: 'See Base Language → Write Target Language'
         },
         SPOKEN: {
@@ -197,6 +200,13 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     if (createSubsetButton) createSubsetButton.addEventListener('click', createSubset);
 
+    if (writingSubmit) writingSubmit.addEventListener('click', checkWritingAnswer);
+    if (writingInput) writingInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+            checkWritingAnswer();
+        }
+    });
+
     if (settingsModal) {
         settingsModal.addEventListener('input', handleSettingsChange);
         settingsModal.addEventListener('change', handleSettingsChange);
@@ -209,6 +219,39 @@ document.addEventListener('DOMContentLoaded', () => {
             isConfigDirty = true;
             if (saveConfigButton) saveConfigButton.disabled = false;
         }
+    }
+
+    async function checkWritingAnswer() {
+        const userAnswer = writingInput.value.trim();
+        if (userAnswer === '') return;
+
+        const currentConfigName = configSelector.value;
+        const currentConfig = configs[currentConfigName] || {};
+        let skillConfig = (currentConfig.skillColumns || {})[currentSkill];
+        if (!skillConfig) {
+            skillConfig = (currentConfig.skillColumns || {})[SKILLS.READING.id] || { front: [0], back: [1], validationColumn: 'none' };
+        }
+        const validationColumnIndex = skillConfig.validationColumn;
+        if (!validationColumnIndex || validationColumnIndex === 'none') {
+            console.error("checkWritingAnswer called but no validation column is configured for this skill.");
+            return;
+        }
+        const correctAnswer = cardData[currentCardIndex][validationColumnIndex];
+
+        const normalize = (str) => str.normalize('NFC').toLowerCase();
+
+        const isCorrect = normalize(userAnswer) === normalize(correctAnswer);
+
+        await markCardAsKnown(isCorrect);
+
+        if (!card.classList.contains('flipped')) {
+            flipCard();
+        }
+
+        // Give user time to see the result before moving on
+        setTimeout(() => {
+            showNextCard({ forceNew: !isCorrect });
+        }, 1500);
     }
 
     // --- Functions ---
@@ -510,11 +553,38 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
 
-        // 5. Auto-set TTS Source
+        // 5. Auto-set TTS Source and Validation columns per skill
+        for (const skillId in presets) {
+            const validationSelector = document.getElementById(`validation-column-selector-${skillId}`);
+            const ttsFrontSelector = document.getElementById(`tts-front-column-selector-${skillId}`);
+            if (!validationSelector || !ttsFrontSelector) continue;
+
+            // Default TTS is always the target language if available
+            if (roleToIndexMap.TARGET_LANGUAGE.length > 0) {
+                ttsFrontSelector.value = roleToIndexMap.TARGET_LANGUAGE[0];
+            }
+
+            // Default validation settings
+            switch (skillId) {
+                case 'LISTENING':
+                case 'WRITING':
+                    if (roleToIndexMap.TARGET_LANGUAGE.length > 0) {
+                        validationSelector.value = roleToIndexMap.TARGET_LANGUAGE[0];
+                    }
+                    break;
+                default:
+                    validationSelector.value = 'none';
+                    break;
+            }
+        }
+
+
+        // Auto-set the main TTS source as a fallback
         const ttsSelect = document.getElementById('tts-source-column-selector');
         if (ttsSelect && roleToIndexMap.TARGET_LANGUAGE.length > 0) {
             ttsSelect.value = roleToIndexMap.TARGET_LANGUAGE[0];
         }
+
 
         alert('Skill settings have been auto-configured based on column roles.');
         handleSettingsChange(); // Mark config as dirty
@@ -588,15 +658,35 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
             panel.innerHTML = `
-                <div class="setting">
-                    <label>Front Column(s):</label>
-                </div>
-                <div class="setting">
-                    <label>Back Column(s):</label>
+                <div class="setting-grid">
+                    <div><label>Front Column(s):</label></div>
+                    <div><label>Back Column(s):</label></div>
+                    <div>${frontContainer.outerHTML}</div>
+                    <div>${backContainer.outerHTML}</div>
+                    <div>
+                        <label for="validation-column-selector-${skillId}">Validation Column:</label>
+                        <select id="validation-column-selector-${skillId}"></select>
+                    </div>
+                    <div>
+                        <label for="tts-front-column-selector-${skillId}">TTS (Front) Column:</label>
+                        <select id="tts-front-column-selector-${skillId}"></select>
+                    </div>
                 </div>
             `;
-            panel.querySelector('.setting:nth-child(1)').appendChild(frontContainer);
-            panel.querySelector('.setting:nth-child(2)').appendChild(backContainer);
+
+            // Populate the new dropdowns
+            const validationSelector = panel.querySelector(`#validation-column-selector-${skillId}`);
+            const ttsFrontSelector = panel.querySelector(`#tts-front-column-selector-${skillId}`);
+
+            const noneOption = new Option('None', 'none');
+            validationSelector.add(noneOption);
+
+            headers.forEach((header, index) => {
+                const optionValidation = new Option(header, index);
+                const optionTts = new Option(header, index);
+                validationSelector.add(optionValidation);
+                ttsFrontSelector.add(optionTts);
+            });
 
             panelContainer.appendChild(panel);
         });
@@ -916,7 +1006,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         card.classList.remove('flipped');
         if (ttsFrontCheckbox && ttsFrontCheckbox.checked && ttsOnHotkeyOnlyCheckbox && !ttsOnHotkeyOnlyCheckbox.checked) {
-            const ttsSourceColumn = currentConfig.ttsSourceColumn || frontIndices[0];
+            const ttsSourceColumn = skillConfig.ttsFrontColumn || frontIndices[0];
             const ttsText = getTextForColumns([ttsSourceColumn]);
             speak(ttsText, ttsFrontLangSelect.value);
         }
@@ -958,6 +1048,20 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             explanationMessage.textContent = message;
             explanationMessage.classList.toggle('visible', !!message);
+        }
+
+        // Handle UI changes for Writing skill
+        const validationColumn = skillConfig.validationColumn;
+        if (validationColumn && validationColumn !== 'none') {
+            writingPracticeContainer.classList.remove('hidden');
+            iKnowButton.classList.add('hidden');
+            iDontKnowButton.classList.add('hidden');
+            writingInput.value = '';
+            writingInput.focus();
+        } else {
+            writingPracticeContainer.classList.add('hidden');
+            iKnowButton.classList.remove('hidden');
+            iDontKnowButton.classList.remove('hidden');
         }
 
         await saveCardStats(cardKey, stats);
@@ -1327,10 +1431,15 @@ document.addEventListener('DOMContentLoaded', () => {
         for (const skillId in SKILLS) {
             const frontContainer = document.getElementById(`front-column-checkboxes-${skillId}`);
             const backContainer = document.getElementById(`back-column-checkboxes-${skillId}`);
-            if (frontContainer && backContainer) {
+            const validationSelector = document.getElementById(`validation-column-selector-${skillId}`);
+            const ttsFrontSelector = document.getElementById(`tts-front-column-selector-${skillId}`);
+
+            if (frontContainer && backContainer && validationSelector && ttsFrontSelector) {
                 skillColumns[skillId] = {
                     front: getSelectedColumnIndices(frontContainer),
-                    back: getSelectedColumnIndices(backContainer)
+                    back: getSelectedColumnIndices(backContainer),
+                    validationColumn: validationSelector.value,
+                    ttsFrontColumn: ttsFrontSelector.value
                 };
             }
         }
@@ -1467,6 +1576,16 @@ document.addEventListener('DOMContentLoaded', () => {
                         const cb = backContainer.querySelector(`input[value="${colIndex}"]`);
                         if (cb) cb.checked = true;
                     });
+                }
+
+                const validationSelector = document.getElementById(`validation-column-selector-${skillId}`);
+                if (validationSelector) {
+                    validationSelector.value = config.skillColumns[skillId].validationColumn || 'none';
+                }
+
+                const ttsFrontSelector = document.getElementById(`tts-front-column-selector-${skillId}`);
+                if (ttsFrontSelector) {
+                    ttsFrontSelector.value = config.skillColumns[skillId].ttsFrontColumn || 0;
                 }
             }
         } else if (config.frontColumns) {
@@ -1732,14 +1851,26 @@ document.addEventListener('DOMContentLoaded', () => {
                     case 'ArrowLeft':
                         showPrevCard();
                         break;
-                    case 'k':
-                        markCardAsKnown(true);
-                        showNextCard();
+                    case 'k': {
+                        const currentConfigName = configSelector.value;
+                        const currentConfig = configs[currentConfigName] || {};
+                        const skillConfig = (currentConfig.skillColumns || {})[currentSkill] || {};
+                        if (!skillConfig.validationColumn || skillConfig.validationColumn === 'none') {
+                            markCardAsKnown(true);
+                            showNextCard();
+                        }
                         break;
-                    case 'j':
-                        markCardAsKnown(false);
-                        showNextCard({forceNew: true});
+                    }
+                    case 'j': {
+                        const currentConfigName = configSelector.value;
+                        const currentConfig = configs[currentConfigName] || {};
+                        const skillConfig = (currentConfig.skillColumns || {})[currentSkill] || {};
+                        if (!skillConfig.validationColumn || skillConfig.validationColumn === 'none') {
+                            markCardAsKnown(false);
+                            showNextCard({forceNew: true});
+                        }
                         break;
+                    }
                     case 'f': {
                         let text, voiceName;
                         if (card.classList.contains('flipped')) {

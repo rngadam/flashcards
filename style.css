@@ -398,3 +398,56 @@ button.danger:hover {
 #skill-column-config-container .tab-panel {
     padding-top: 10px;
 }
+
+.setting-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 15px;
+}
+
+.setting-grid > div:nth-child(2n+1) {
+    grid-column: 1;
+}
+
+.setting-grid > div:nth-child(2n) {
+    grid-column: 2;
+}
+
+.setting-grid > div > label {
+    display: block;
+    margin-bottom: 5px;
+    font-weight: bold;
+}
+
+/* Writing Practice Styles */
+#writing-practice-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 10px;
+    margin-top: 20px;
+    width: 100%;
+}
+
+#writing-practice-container.hidden {
+    display: none;
+}
+
+#writing-input {
+    flex-grow: 1;
+    max-width: 500px;
+    padding: 15px;
+    font-size: 1.2em;
+    border: 2px solid #ccc;
+    border-radius: 10px;
+}
+
+#writing-submit {
+    padding: 15px 25px;
+    font-size: 1.2em;
+    cursor: pointer;
+    border-radius: 10px;
+    border: 1px solid #ccc;
+    background-color: #007bff;
+    color: white;
+}
