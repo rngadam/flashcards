@@ -324,3 +324,51 @@ button.danger:hover {
     background-color: #c0392b;
     border-color: #c0392b;
 }
+
+#skill-mastery-dashboard {
+    display: flex;
+    justify-content: center;
+    gap: 10px;
+    margin-top: 15px;
+}
+
+.skill-mastery-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 5px 10px;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+    background-color: #f9f9f9;
+    transition: all 0.3s ease;
+    cursor: default;
+}
+
+.skill-mastery-item.active {
+    border-color: #007bff;
+    background-color: #e7f3ff;
+    transform: translateY(-2px);
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.skill-name {
+    font-size: 0.8em;
+    font-weight: bold;
+    color: #555;
+}
+
+.skill-score {
+    font-size: 1.2em;
+    font-weight: bold;
+}
+
+/* History Table Mastery Column */
+#history-panel td span {
+    display: inline-block;
+    padding: 2px 5px;
+    border-radius: 3px;
+    background-color: #eee;
+    margin-right: 4px;
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 0.9em;
+}
