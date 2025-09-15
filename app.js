@@ -163,8 +163,6 @@ document.addEventListener('DOMContentLoaded', () => {
     if (prevCardButton) prevCardButton.addEventListener('click', showPrevCard);
     if (iKnowButton) iKnowButton.addEventListener('click', async () => { await markCardAsKnown(true); await showNextCard(); });
     if (iDontKnowButton) iDontKnowButton.addEventListener('click', async () => { await markCardAsKnown(false); await showNextCard({ forceNew: true }); });
-    if (frontColumnCheckboxes) frontColumnCheckboxes.addEventListener('change', async () => await displayCard(currentCardIndex));
-    if (backColumnCheckboxes) backColumnCheckboxes.addEventListener('change', async () => await displayCard(currentCardIndex));
     if (fontSelector) fontSelector.addEventListener('change', () => {
         if (cardContainer) cardContainer.style.fontFamily = fontSelector.value;
     });
@@ -964,11 +962,19 @@ document.addEventListener('DOMContentLoaded', () => {
             tbodyHtml += `<td>${formatTimeAgo(lastSeen)}</td>`;
 
             // Time to Next Due
-            const nextDueTime = Math.min(
-                ...Object.values(item.stats.skills).map(s => getTimeToDue(s, now).ms).filter(ms => ms >= 0)
-            );
-            const timeToDueFormatted = nextDueTime === Infinity ? 'Learned' : formatTimeDifference(nextDueTime);
-            tbodyHtml += `<td>${timeToDueFormatted}</td>`;
+            const dueTimesMs = Object.values(item.stats.skills).map(s => getTimeToDue(s, now).ms);
+            const validDueTimes = dueTimesMs.filter(ms => ms !== -1); // Filter out N/A
+
+            let nextDueFormatted;
+            if (validDueTimes.length === 0) {
+                nextDueFormatted = 'N/A';
+            } else if (validDueTimes.some(ms => ms <= 0)) {
+                nextDueFormatted = 'Now';
+            } else {
+                const nextDueTime = Math.min(...validDueTimes);
+                nextDueFormatted = nextDueTime === Infinity ? 'Learned' : formatTimeDifference(nextDueTime);
+            }
+            tbodyHtml += `<td>${nextDueFormatted}</td>`;
 
             tbodyHtml += '</tr>';
         });
@@ -1056,8 +1062,15 @@ document.addEventListener('DOMContentLoaded', () => {
                     valA = Math.max(...skillsA.map(s => s.lastViewed || 0));
                     valB = Math.max(...skillsB.map(s => s.lastViewed || 0));
                 } else { // Time to Due (sort by soonest)
-                    valA = Math.min(...skillsA.map(s => getTimeToDue(s, now).ms).filter(ms => ms >= 0));
-                    valB = Math.min(...skillsB.map(s => getTimeToDue(s, now).ms).filter(ms => ms >= 0));
+                    const getSortableDueTime = (skills) => {
+                        const dueTimesMs = skills.map(s => getTimeToDue(s, now).ms);
+                        const validDueTimes = dueTimesMs.filter(ms => ms !== -1);
+                        if (validDueTimes.length === 0) return Infinity; // N/A sorts last
+                        if (validDueTimes.some(ms => ms <= 0)) return -1; // "Now" sorts first
+                        return Math.min(...validDueTimes);
+                    };
+                    valA = getSortableDueTime(skillsA);
+                    valB = getSortableDueTime(skillsB);
                 }
             }
 
