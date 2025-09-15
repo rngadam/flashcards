@@ -188,6 +188,16 @@ body.is-flipping {
 
 .card-back {
   transform: rotateY(180deg);
+  flex-direction: column;
+  justify-content: space-around;
+}
+
+#card-back-content {
+    flex-grow: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
 }
 
 #controls {

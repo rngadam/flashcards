@@ -75,6 +75,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const cardSpecificStats = document.getElementById('card-specific-stats');
     const cardFront = document.querySelector('.card-front');
     const cardBack = document.querySelector('.card-back');
+    const cardBackContent = document.getElementById('card-back-content');
     const flipCardButton = document.getElementById('flip-card');
     const card = document.getElementById('card');
     const nextCardButton = document.getElementById('next-card');
@@ -233,9 +234,14 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    function renderDiff(userAnswer, correctAnswer) {
+    function renderDiff(userAnswer, correctAnswer, isCorrect) {
         const diff = Diff.diffChars(correctAnswer, userAnswer);
         const fragment = document.createDocumentFragment();
+
+        const resultDiv = document.createElement('div');
+        resultDiv.innerHTML = `<strong>${isCorrect ? 'Correct!' : 'Incorrect.'}</strong>`;
+        resultDiv.style.color = isCorrect ? 'green' : 'red';
+        fragment.appendChild(resultDiv);
 
         const userDiv = document.createElement('div');
         userDiv.innerHTML = '<strong>Your Answer:</strong> ';
@@ -283,7 +289,7 @@ document.addEventListener('DOMContentLoaded', () => {
         await markCardAsKnown(isCorrect);
 
         comparisonContainer.innerHTML = ''; // Clear previous diff
-        comparisonContainer.appendChild(renderDiff(userAnswer, correctAnswer));
+        comparisonContainer.appendChild(renderDiff(userAnswer, correctAnswer, isCorrect));
         comparisonContainer.classList.remove('hidden');
         writingInput.disabled = true;
 
@@ -1036,14 +1042,14 @@ document.addEventListener('DOMContentLoaded', () => {
         } else {
             cardFront.textContent = displayText;
         }
-        cardBack.textContent = getTextForColumns(backIndices);
+        cardBackContent.textContent = getTextForColumns(backIndices);
 
         cardFront.style.fontSize = '';
-        cardBack.style.fontSize = '';
+        cardBackContent.style.fontSize = '';
 
         setTimeout(() => {
             adjustFontSize(cardFront);
-            adjustFontSize(cardBack);
+            adjustFontSize(cardBackContent);
         }, 50);
 
         card.classList.remove('flipped');
