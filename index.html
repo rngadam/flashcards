@@ -54,22 +54,15 @@
 
         <div class="tabs" role="tablist">
           <button class="tab-button active" id="basic-tab" data-tab="basic-settings" role="tab" aria-controls="basic-settings" aria-selected="true">Basic</button>
+          <button class="tab-button" id="skills-tab" data-tab="skills-settings" role="tab" aria-controls="skills-settings" aria-selected="false">Skills</button>
           <button class="tab-button" id="advanced-tab" data-tab="advanced-settings" role="tab" aria-controls="advanced-settings" aria-selected="false">Advanced</button>
           <button class="tab-button" id="subset-tab" data-tab="subset-settings" role="tab" aria-controls="subset-settings" aria-selected="false">Subset</button>
           <button class="tab-button" id="dangerous-tab" data-tab="dangerous-settings" role="tab" aria-controls="dangerous-settings" aria-selected="false">Dangerous</button>
         </div>
 
         <div id="basic-settings" class="tab-panel active" role="tabpanel" aria-labelledby="basic-tab">
-            <div class="setting">
-                <label>Practice Skills:</label>
-                <div id="skill-selector-checkboxes" class="column-checkbox-group"></div>
-            </div>
             <div class="setting" id="column-roles-container">
                  <!-- Master column role configuration will be generated here by JS -->
-            </div>
-            <div class="setting" id="skill-column-config-container">
-                <label>Column Configuration per Skill:</label>
-                <!-- Skill-specific column tabs will be generated here by JS -->
             </div>
             <div class="setting">
                 <label for="font-selector">Font:</label>
@@ -89,6 +82,17 @@
                 <input type="checkbox" id="tts-back">
                 <label for="tts-back">Text-to-Speech on Back</label>
                 <select id="tts-back-lang"></select>
+            </div>
+        </div>
+
+        <div id="skills-settings" class="tab-panel" role="tabpanel" aria-labelledby="skills-tab">
+            <div class="setting">
+                <label>Practice Skills:</label>
+                <div id="skill-selector-checkboxes" class="column-checkbox-group"></div>
+            </div>
+            <div class="setting" id="skill-column-config-container">
+                <label>Column Configuration per Skill:</label>
+                <!-- Skill-specific column tabs will be generated here by JS -->
             </div>
         </div>
 
@@ -147,7 +151,15 @@
     <div id="card-container">
       <div id="card">
         <div class="card-face card-front"></div>
-        <div class="card-face card-back"></div>
+        <div class="card-face card-back">
+            <div id="card-back-content"></div>
+            <div id="comparison-container" class="hidden"></div>
+        </div>
+      </div>
+      <div id="writing-practice-container" class="hidden">
+        <button id="slow-replay-button">🔊</button>
+        <input type="text" id="writing-input" placeholder="Type the answer...">
+        <button id="writing-submit">Submit</button>
       </div>
     </div>
 
@@ -168,6 +180,7 @@
     <div id="skill-mastery-dashboard"></div>
 
     <div id="explanation-message"></div>
+    <script src="https://cdn.jsdelivr.net/npm/diff/dist/diff.min.js"></script>
     <script type="module" src="app.js"></script>
   </body>
 </html>

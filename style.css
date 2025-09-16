@@ -188,6 +188,16 @@ body.is-flipping {
 
 .card-back {
   transform: rotateY(180deg);
+  flex-direction: column;
+  justify-content: space-around;
+}
+
+#card-back-content {
+    flex-grow: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
 }
 
 #controls {
@@ -397,4 +407,102 @@ button.danger:hover {
 
 #skill-column-config-container .tab-panel {
     padding-top: 10px;
+}
+
+.setting-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 15px;
+}
+
+.setting-grid > div:nth-child(2n+1) {
+    grid-column: 1;
+}
+
+.setting-grid > div:nth-child(2n) {
+    grid-column: 2;
+}
+
+.setting-grid > div > label {
+    display: block;
+    margin-bottom: 5px;
+    font-weight: bold;
+}
+
+/* Writing Practice Styles */
+#writing-practice-container {
+    display: flex;
+    justify-content: center;
+    align-items: flex-end; /* Align to bottom by default */
+    gap: 10px;
+    position: absolute;
+    bottom: 20px;
+    left: 0;
+    width: 100%;
+    padding: 0 20px;
+    box-sizing: border-box;
+}
+
+#writing-practice-container.audio-only-writing {
+    align-items: center; /* Center vertically for audio-only */
+    height: 100%;
+    bottom: 0;
+}
+
+#writing-practice-container.hidden {
+    display: none;
+}
+
+#writing-input {
+    flex-grow: 1;
+    max-width: 500px;
+    padding: 20px;
+    font-size: 1.5em;
+    border: 2px solid #ccc;
+    border-radius: 10px;
+}
+
+#writing-submit {
+    padding: 20px 30px;
+    font-size: 1.5em;
+    cursor: pointer;
+    border-radius: 10px;
+    border: 1px solid #ccc;
+    background-color: #007bff;
+    color: white;
+}
+
+#slow-replay-button {
+    padding: 20px;
+    font-size: 1.5em;
+    line-height: 1.5em;
+    width: 2.5em;
+    height: 2.5em;
+    text-align: center;
+}
+
+/* Comparison View Styles */
+#comparison-container {
+    width: 100%;
+    padding: 10px;
+    box-sizing: border-box;
+    font-size: 1.2em;
+    white-space: pre-wrap;
+    line-height: 1.5;
+}
+
+#comparison-container .diff-added {
+    background-color: #a6f3a6;
+    color: #006400;
+    text-decoration: none;
+}
+
+#comparison-container .diff-removed {
+    background-color: #f8d7da;
+    color: #721c24;
+    text-decoration: line-through;
+}
+
+#comparison-container .diff-common {
+    color: #6c757d;
 }
