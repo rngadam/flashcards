@@ -107,6 +107,7 @@ document.addEventListener('DOMContentLoaded', () => {
         COMMON_COLLOCATION: 'Common Collocation',
         RELATED_WORD: 'Related Word',
         RELATION_TYPE: 'Relation Type',
+        GRAMMATICAL_TYPE: 'Grammatical Type',
     };
     const SKILLS = {
         READING: {
@@ -267,9 +268,10 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function renderDiff(userAnswer, correctAnswer, isCorrect) {
-        // We diff the correct answer against the user's answer to see
-        // what the user added (incorrect) or removed (missed).
-        const diff = Diff.diffChars(correctAnswer, userAnswer);
+        const userAnswerLower = userAnswer.toLowerCase();
+        const correctAnswerLower = correctAnswer.toLowerCase();
+        // The user wants to see how to get from THEIR answer to the correct one.
+        const diff = Diff.diffChars(userAnswerLower, correctAnswerLower);
         const fragment = document.createDocumentFragment();
 
         const resultDiv = document.createElement('div');
@@ -277,22 +279,47 @@ document.addEventListener('DOMContentLoaded', () => {
         resultDiv.style.color = isCorrect ? 'green' : 'red';
         fragment.appendChild(resultDiv);
 
-        const diffDiv = document.createElement('div');
-        diffDiv.style.whiteSpace = 'pre-wrap'; // Preserve whitespace for multi-line answers
-
+        // --- Your Answer ---
+        const userDiv = document.createElement('div');
+        userDiv.innerHTML = '<strong>Your Answer:</strong> ';
+        const userContent = document.createElement('div');
+        let userPointer = 0;
         diff.forEach(part => {
-            const span = document.createElement('span');
-            // 'added' means the user typed it, but it wasn't in the correct answer (error).
-            // 'removed' means it was in the correct answer, but the user missed it (error).
-            span.className = part.added ? 'diff-added' : (part.removed ? 'diff-removed' : 'diff-common');
-            span.appendChild(document.createTextNode(part.value));
-            diffDiv.appendChild(span);
-        });
+            // We only care about parts that were in the original user answer
+            if (part.added) return;
 
-        const comparisonTitle = document.createElement('div');
-        comparisonTitle.innerHTML = '<strong>Comparison (Your Answer vs. Correct):</strong>';
-        fragment.appendChild(comparisonTitle);
-        fragment.appendChild(diffDiv);
+            const span = document.createElement('span');
+            // 'removed' means it's in the user's answer but not the correct one (an error).
+            span.className = part.removed ? 'diff-removed' : 'diff-common';
+            const originalText = userAnswer.substring(userPointer, userPointer + part.value.length);
+            span.appendChild(document.createTextNode(originalText));
+            userContent.appendChild(span);
+            userPointer += part.value.length;
+        });
+        userDiv.appendChild(userContent);
+
+        // --- Correct Answer ---
+        const correctDiv = document.createElement('div');
+        correctDiv.innerHTML = '<strong>Correct Answer:</strong> ';
+        const correctContent = document.createElement('div');
+        let correctPointer = 0;
+        diff.forEach(part => {
+             // We only care about parts that ended up in the correct answer
+            if (part.removed) return;
+
+            const span = document.createElement('span');
+            // 'added' means it's in the correct answer but not the user's (a good addition).
+            span.className = part.added ? 'diff-added' : 'diff-common';
+            const originalText = correctAnswer.substring(correctPointer, correctPointer + part.value.length);
+            span.appendChild(document.createTextNode(originalText));
+            correctContent.appendChild(span);
+            correctPointer += part.value.length;
+        });
+        correctDiv.appendChild(correctContent);
+
+
+        fragment.appendChild(userDiv);
+        fragment.appendChild(correctDiv);
 
         return fragment;
     }
@@ -1481,7 +1508,19 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         if (known) {
+            const currentScore = getRetentionScore(skillStats);
             skillStats.successTimestamps.push(Date.now());
+
+            if (currentScore < 0) {
+                const successes = skillStats.successTimestamps.length;
+                const failures = skillStats.failureTimestamps.length;
+                const failuresToRemove = failures - successes;
+                if (failuresToRemove > 0) {
+                    // Remove the oldest failures to bring the score to 0
+                    skillStats.failureTimestamps.splice(0, failuresToRemove);
+                }
+            }
+
             // Only advance the interval if the card was due for review.
             if (isCurrentCardDue && skillStats.intervalIndex < repetitionIntervals.length - 1) {
                 skillStats.intervalIndex++;

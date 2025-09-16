@@ -593,8 +593,8 @@ button.danger:hover {
 }
 
 #comparison-container .diff-added {
-    background-color: #f8d7da;
-    color: #721c24;
+    background-color: #a6f3a6;
+    color: #006400;
     text-decoration: none;
 }
 
