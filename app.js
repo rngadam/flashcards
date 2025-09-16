@@ -1176,6 +1176,7 @@ document.addEventListener('DOMContentLoaded', () => {
             nextCardButton.classList.remove('hidden');
         }
         comparisonContainer.classList.add('hidden');
+        comparisonContainer.innerHTML = ''; // Clear previous diff content
 
         await saveCardStats(cardKey, stats);
         cardShownTimestamp = Date.now();
