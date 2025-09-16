@@ -45,6 +45,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const mobileHistoryButton = document.getElementById('mobile-history-button');
     const mobileSettingsButton = document.getElementById('mobile-settings-button');
     const mobileHelpButton = document.getElementById('mobile-help-button');
+    const fullscreenButton = document.getElementById('fullscreen-button');
+    const mobileFullscreenButton = document.getElementById('mobile-fullscreen-button');
     const settingsButton = document.getElementById('settings-button');
     const closeSettingsButton = document.getElementById('close-settings-button');
     const settingsModal = document.getElementById('settings-modal');
@@ -197,6 +199,23 @@ document.addEventListener('DOMContentLoaded', () => {
         helpModal.classList.remove('hidden');
     });
     if (closeHelpButton) closeHelpButton.addEventListener('click', () => helpModal.classList.add('hidden'));
+
+    function toggleFullscreen() {
+        if (!document.fullscreenElement) {
+            document.documentElement.requestFullscreen();
+        } else {
+            if (document.exitFullscreen) {
+                document.exitFullscreen();
+            }
+        }
+    }
+
+    if (fullscreenButton) fullscreenButton.addEventListener('click', toggleFullscreen);
+    if (mobileFullscreenButton) mobileFullscreenButton.addEventListener('click', () => {
+        mobileMenuOverlay.classList.add('hidden');
+        toggleFullscreen();
+    });
+
     if (loadDataButton) {
         loadDataButton.addEventListener('click', async () => { // make listener async
             await loadData(); // await the async function
@@ -921,11 +940,11 @@ document.addEventListener('DOMContentLoaded', () => {
      * Uses a binary search approach for efficiency.
      * @param {HTMLElement} element - The text element to resize.
      */
-    function adjustFontSize(element) {
+    function adjustFontSize(element, isFront) {
         if (!element) return;
         const container = element.closest('.card-face');
         if (!container) return;
-        let min = 10, max = 80;
+        let min = 10, max = isFront ? 150 : 80;
         let bestSize = min;
 
         while (min <= max) {
@@ -1182,9 +1201,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
         setTimeout(() => {
             if (!isAudioOnly) {
-                adjustFontSize(cardFront.querySelector('span'));
+                adjustFontSize(cardFront.querySelector('span'), true);
             }
-            adjustFontSize(cardBackContent.querySelector('span'));
+            adjustFontSize(cardBackContent.querySelector('span'), false);
         }, 50);
 
         card.classList.remove('flipped');
@@ -2167,28 +2186,31 @@ document.addEventListener('DOMContentLoaded', () => {
 
         card.style.transition = 'transform 0.3s ease';
 
-        // Check for vertical swipe (flip)
-        if (Math.abs(diffY) > verticalDragThreshold && Math.abs(diffX) < dragThreshold) {
-            flipCard();
-            card.style.transform = ''; // Snap back to center after flip
-        }
-        // Check for horizontal swipe (know/don't know)
-        else if (Math.abs(diffX) > dragThreshold) {
-            card.classList.add(diffX > 0 ? 'swipe-right' : 'swipe-left');
-            setTimeout(() => {
-                if (diffX > 0) {
-                    markCardAsKnown(true);
-                    showNextCard();
-                } else {
-                    markCardAsKnown(false);
-                    showNextCard({ forceNew: true });
-                }
-                card.style.transform = '';
-                card.classList.remove('swipe-right', 'swipe-left');
-            }, 300);
+        // Prioritize dominant axis
+        if (Math.abs(diffX) > Math.abs(diffY)) {
+            // Horizontal swipe is dominant
+            if (Math.abs(diffX) > dragThreshold) {
+                card.classList.add(diffX > 0 ? 'swipe-right' : 'swipe-left');
+                setTimeout(() => {
+                    if (diffX > 0) {
+                        markCardAsKnown(true);
+                        showNextCard();
+                    } else {
+                        markCardAsKnown(false);
+                        showNextCard({ forceNew: true });
+                    }
+                    card.style.transform = '';
+                    card.classList.remove('swipe-right', 'swipe-left');
+                }, 300);
+            } else {
+                card.style.transform = ''; // Not enough horizontal, snap back
+            }
         } else {
-            // No significant swipe, snap back
-            card.style.transform = '';
+            // Vertical swipe is dominant
+            if (Math.abs(diffY) > verticalDragThreshold) {
+                flipCard();
+            }
+            card.style.transform = ''; // Always snap back after vertical attempt
         }
     }
 

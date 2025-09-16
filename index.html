@@ -13,6 +13,7 @@
         <button id="history-button">📜</button>
         <button id="settings-button">⚙️</button>
         <button id="help-button">?</button>
+        <button id="fullscreen-button">⛶</button>
       </div>
       <button id="hamburger-menu" class="mobile-only-button">☰</button>
     </div>
@@ -22,6 +23,7 @@
             <button id="mobile-history-button">📜 History</button>
             <button id="mobile-settings-button">⚙️ Settings</button>
             <button id="mobile-help-button">? Help</button>
+            <button id="mobile-fullscreen-button">⛶ Fullscreen</button>
             <button id="close-mobile-menu-button">Close</button>
         </div>
     </div>
@@ -210,15 +212,15 @@
 
     <div id="card-container">
       <div id="card">
-        <div id="deck-title"></div>
-        <div id="last-seen"></div>
         <div class="card-face card-front"></div>
         <div class="card-face card-back">
             <div id="card-back-content"></div>
             <div id="comparison-container" class="hidden"></div>
         </div>
-        <div id="skill-mastery-dashboard"></div>
       </div>
+      <div id="deck-title"></div>
+      <div id="last-seen"></div>
+      <div id="skill-mastery-dashboard"></div>
       <div id="writing-practice-container" class="hidden">
         <button id="slow-replay-button">🔊</button>
         <input type="text" id="writing-input" placeholder="Type the answer...">
@@ -232,7 +234,7 @@
       <button id="flip-card"><span>🔄</span><span class="btn-text"> Flip (Space)</span></button>
       <button id="i-know"><span>✅</span><span class="btn-text"> I know this (k)</span></button>
       <button id="next-card"><span>➡️</span><span class="btn-text"> Next (&rarr;)</span></button>
-      <button id="slow-replay-hotkey" class="hotkey-hint">Slow Replay (f)</button>
+      <button id="slow-replay-hotkey"><span>🔁</span><span class="btn-text"> Replay (f)</span></button>
     </div>
 
     <div id="explanation-message"></div>

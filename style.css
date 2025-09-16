@@ -75,18 +75,25 @@ body.is-flipping {
 #hamburger-menu {
     display: block;
 }
-#config-title {
-    display: none; /* Hidden on mobile */
-}
-#skill-selector-bar {
-    display: none; /* Hidden on mobile */
-}
 .btn-text {
     display: none; /* Icons only on mobile */
 }
 
 
 /* Desktop */
+body.desktop .desktop-only-buttons {
+    display: flex;
+    align-items: center;
+}
+/* Mobile First (Default) */
+.desktop-only-buttons {
+    display: none;
+}
+#hamburger-menu {
+    display: block;
+}
+
+/* Desktop Overrides */
 body.desktop .desktop-only-buttons {
     display: flex;
     align-items: center;
@@ -98,7 +105,7 @@ body.desktop #config-title {
     display: block;
 }
 body.desktop #skill-selector-bar {
-    display: flex; /* This is the default from its own rule, but being explicit */
+    display: flex;
 }
 body.desktop .btn-text {
     display: inline;
@@ -255,6 +262,7 @@ body.desktop .btn-text {
   width: 80%;
   height: 60%;
   perspective: 1000px;
+  position: relative;
 }
 
 #card {
@@ -330,18 +338,9 @@ body.desktop .btn-text {
     width: 100%;
 }
 
-#slow-replay-hotkey {
-    padding: 10px 15px;
-    font-size: 1em;
-    margin: 0 5px;
-}
 
 #controls {
   margin-top: 20px;
-}
-
-#card-stats {
-    display: none;
 }
 
 button {
@@ -407,16 +406,28 @@ th.sortable.desc::after {
 #explanation-message {
     position: fixed;
     bottom: 10px;
-    left: 50%;
-    transform: translateX(-50%);
-    background: rgba(0,0,0,0.7);
+    left: 10px;
+    right: 10px;
+    transform: translateX(0);
+    background: rgba(0,0,0,0.8);
     color: white;
-    padding: 8px 15px;
-    border-radius: 20px;
-    font-size: 0.9em;
+    padding: 12px 18px;
+    border-radius: 10px;
+    font-size: 1em;
     opacity: 0;
     transition: opacity 0.5s;
     z-index: 10;
+    text-align: center;
+}
+
+@media (min-width: 600px) {
+    #explanation-message {
+        left: 50%;
+        right: auto;
+        transform: translateX(-50%);
+        width: auto;
+        max-width: 80%;
+    }
 }
 
 #explanation-message.visible {
