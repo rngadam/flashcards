@@ -1,6 +1,4 @@
-<!DOCTYPE html>
-<html lang="en">
-  <head>
+<!DOCTYPE html><html lang="en"><head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Flashcards</title>
@@ -77,7 +75,7 @@
 
         <div class="setting">
             <label for="config-name">Configuration Name:</label>
-            <input type="text" id="config-name" placeholder="e.g., Spanish Vocabulary">
+            <input type="text" id="config-name" placeholder="e.g., Spanish Vocabulary" style="">
         </div>
 
         <div class="setting">
@@ -88,7 +86,7 @@
         <div class="setting data-source-setting">
           <label for="data-url">Data Source URL (TSV/CSV):</label>
           <div class="input-with-button">
-            <input type="text" id="data-url" value="https://docs.google.com/spreadsheets/d/e/2PACX-1vSW_KeHCyth3-9kWtpYHXl9aPVwoOhurjGINbJ4oNHWGoQMjSHyZl0J9LeraGDt51ZUjIsqrv9DXO27/pub?gid=2060234086&single=true&output=tsv">
+            <input type="text" id="data-url" value="https://docs.google.com/spreadsheets/d/e/2PACX-1vSW_KeHCyth3-9kWtpYHXl9aPVwoOhurjGINbJ4oNHWGoQMjSHyZl0J9LeraGDt51ZUjIsqrv9DXO27/pub?gid=2060234086&amp;single=true&amp;output=tsv" style="">
             <button id="load-data">Load</button>
           </div>
         </div>
@@ -120,12 +118,12 @@
                 </select>
             </div>
             <div class="setting">
-                <input type="checkbox" id="tts-front">
+                <input type="checkbox" id="tts-front" style="">
                 <label for="tts-front">Text-to-Speech on Front</label>
                 <select id="tts-front-lang"></select>
             </div>
             <div class="setting">
-                <input type="checkbox" id="tts-back">
+                <input type="checkbox" id="tts-back" style="">
                 <label for="tts-back">Text-to-Speech on Back</label>
                 <select id="tts-back-lang"></select>
             </div>
@@ -141,38 +139,38 @@
         <div id="advanced-settings" class="tab-panel" role="tabpanel" aria-labelledby="advanced-tab">
             <div class="setting">
                 <label for="tts-rate">Reading Speed:</label>
-                <input type="range" id="tts-rate" min="0.1" max="2" value="1" step="0.1">
+                <input type="range" id="tts-rate" min="0.1" max="2" value="1" step="0.1" style="">
             </div>
             <div class="setting">
-                <input type="checkbox" id="alternate-uppercase">
+                <input type="checkbox" id="alternate-uppercase" style="">
                 <label for="alternate-uppercase">Alternate Uppercase on Front</label>
             </div>
             <div class="setting">
-                <input type="checkbox" id="disable-animation">
+                <input type="checkbox" id="disable-animation" style="">
                 <label for="disable-animation">Disable Flip Animation</label>
             </div>
             <div class="setting">
-                <input type="checkbox" id="audio-only-front">
+                <input type="checkbox" id="audio-only-front" style="">
                 <label for="audio-only-front">Audio-Only Front</label>
             </div>
             <div class="setting">
-                <input type="checkbox" id="tts-on-hotkey-only">
+                <input type="checkbox" id="tts-on-hotkey-only" style="">
                 <label for="tts-on-hotkey-only">Only read on hotkey (f)</label>
             </div>
             <div class="setting">
                 <label for="repetition-intervals">Repetition Intervals (seconds, comma-separated):</label>
-                <textarea id="repetition-intervals" rows="3"></textarea>
+                <textarea id="repetition-intervals" rows="3" style=""></textarea>
             </div>
         </div>
 
         <div id="subset-settings" class="tab-panel" role="tabpanel" aria-labelledby="subset-tab">
             <div class="setting">
                 <label for="subset-config-name">New Subset Name:</label>
-                <input type="text" id="subset-config-name" placeholder="e.g., Chapter 1 Words">
+                <input type="text" id="subset-config-name" placeholder="e.g., Chapter 1 Words" style="">
             </div>
             <div class="setting">
                 <label for="subset-text">Source Text:</label>
-                <textarea id="subset-text" rows="5" placeholder="Paste text here..."></textarea>
+                <textarea id="subset-text" rows="5" placeholder="Paste text here..." style=""></textarea>
             </div>
             <button id="create-subset-config">Create and Load Subset</button>
         </div>
@@ -185,7 +183,7 @@
         </div>
 
         <div class="button-container">
-            <button id="save-config" disabled>Save Configuration</button>
+            <button id="save-config" disabled="">Save Configuration</button>
         </div>
       </div>
     </div>
@@ -205,17 +203,17 @@
       </div>
       <div id="writing-practice-container" class="hidden">
         <button id="slow-replay-button">🔊</button>
-        <input type="text" id="writing-input" placeholder="Type the answer...">
+        <input type="text" id="writing-input" placeholder="Type the answer..." style="">
         <button id="writing-submit">Submit</button>
       </div>
     </div>
 
     <div id="controls">
-      <button id="prev-card"><span>⬅️</span><span class="btn-text"> Prev (&larr;)</span></button>
+      <button id="prev-card"><span>⬅️</span><span class="btn-text"> Prev (←)</span></button>
       <button id="i-dont-know"><span>❌</span><span class="btn-text"> I don't know (j)</span></button>
       <button id="flip-card"><span>🔄</span><span class="btn-text"> Flip (Space)</span></button>
       <button id="i-know"><span>✅</span><span class="btn-text"> I know this (k)</span></button>
-      <button id="next-card"><span>➡️</span><span class="btn-text"> Next (&rarr;)</span></button>
+      <button id="next-card"><span>➡️</span><span class="btn-text"> Next (→)</span></button>
       <span class="hotkey-hint">Slow Replay (f)</span>
     </div>
 
@@ -229,5 +227,6 @@
     <div id="explanation-message"></div>
     <script src="https://cdn.jsdelivr.net/npm/diff/dist/diff.min.js"></script>
     <script type="module" src="app.js"></script>
-  </body>
-</html>
+
+
+</body></html>

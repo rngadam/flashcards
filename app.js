@@ -208,6 +208,20 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     if (createSubsetButton) createSubsetButton.addEventListener('click', createSubset);
 
+    if (skillSelectorCheckboxes) {
+        skillSelectorCheckboxes.addEventListener('change', async (e) => {
+            if (e.target.matches('input[type="checkbox"]')) {
+                const currentConfigName = configSelector.value;
+                if (currentConfigName && configs[currentConfigName]) {
+                    configs[currentConfigName].skills = getSelectedSkills();
+                    isConfigDirty = true;
+                    if (saveConfigButton) saveConfigButton.disabled = false;
+                    await showNextCard();
+                }
+            }
+        });
+    }
+
     if (writingSubmit) writingSubmit.addEventListener('click', checkWritingAnswer);
     if (writingInput) writingInput.addEventListener('keydown', (e) => {
         if (e.key === 'Enter') {
@@ -264,28 +278,22 @@ document.addEventListener('DOMContentLoaded', () => {
         userDiv.innerHTML = '<strong>Your Answer:</strong> ';
         const userContent = document.createElement('div');
 
-        // This implementation of diff visualization will display the user's answer in lowercase.
-        // A more complex implementation would be needed to preserve casing while showing diffs.
+        // Reconstruct the user's answer with original casing while applying diff styles.
         let userPointer = 0;
         diff.forEach(part => {
+            // Only process parts that are common or added (present in the user's answer).
             if (part.removed) return;
+
             const span = document.createElement('span');
             span.className = part.added ? 'diff-added' : 'diff-common';
-            // We use the original user answer for text content to preserve case.
-            let originalText = '';
-            if (part.added || part.common) {
-                const searchStr = userAnswer.substring(userPointer).toLowerCase();
-                const partValue = part.value.toLowerCase();
-                const partIndex = searchStr.indexOf(partValue);
-                if (partIndex !== -1) {
-                    originalText = userAnswer.substring(userPointer + partIndex, userPointer + partIndex + part.value.length);
-                     userPointer += partIndex + part.value.length;
-                } else {
-                    originalText = part.value; // Fallback
-                }
-            }
-            span.appendChild(document.createTextNode(originalText || part.value));
+
+            // Slice the original userAnswer to get the text with correct casing.
+            const originalText = userAnswer.substring(userPointer, userPointer + part.value.length);
+            span.appendChild(document.createTextNode(originalText));
             userContent.appendChild(span);
+
+            // Move the pointer forward.
+            userPointer += part.value.length;
         });
         userDiv.appendChild(userContent);
 
@@ -1770,19 +1778,31 @@ document.addEventListener('DOMContentLoaded', () => {
      * If a "last used" configuration is found, it is loaded automatically.
      * Otherwise, the settings modal is shown.
      */
-    async function loadInitialConfigs() { // Made async
-        const savedConfigs = await get('flashcard-configs');
-        if (savedConfigs) {
-            configs = savedConfigs; // No JSON.parse needed
-            populateConfigSelector();
-        }
+    async function loadInitialConfigs() {
+        try {
+            const savedConfigs = await get('flashcard-configs');
+            if (savedConfigs) {
+                configs = savedConfigs;
+                populateConfigSelector();
+            }
 
-        const lastConfig = await get('flashcard-last-config');
-        if (lastConfig && configs[lastConfig]) {
-            configSelector.value = lastConfig;
-            loadSelectedConfig(lastConfig);
-        } else {
-            if (settingsModal) settingsModal.classList.remove('hidden');
+            const lastConfig = await get('flashcard-last-config');
+            if (lastConfig && configs[lastConfig]) {
+                configSelector.value = lastConfig;
+                await loadSelectedConfig(lastConfig);
+            } else {
+                // This is the path for a new user
+                if (settingsModal) {
+                    settingsModal.classList.remove('hidden');
+                }
+            }
+        } catch (error) {
+            // If anything goes wrong with IndexedDB, show the settings modal as a fallback.
+            console.error("Error loading initial configs from IndexedDB:", error);
+            document.body.style.backgroundColor = 'red'; // Visual indicator of an error
+            if (settingsModal) {
+                 settingsModal.classList.remove('hidden');
+            }
         }
     }
 

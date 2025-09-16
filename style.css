@@ -39,7 +39,7 @@ body.is-flipping {
   cursor: pointer;
 }
 
-#settings-modal {
+.modal-overlay {
   position: fixed;
   top: 0;
   left: 0;
@@ -52,21 +52,8 @@ body.is-flipping {
   z-index: 100;
 }
 
-#settings-modal.hidden, #history-modal.hidden, #help-modal.hidden {
+.modal-overlay.hidden {
   display: none;
-}
-
-#help-modal {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background-color: rgba(0,0,0,0.5);
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  z-index: 100;
 }
 
 #help-panel {
@@ -120,19 +107,6 @@ body.is-flipping {
 }
 #close-help-button:hover {
     color: #333;
-}
-
-#history-modal {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background-color: rgba(0,0,0,0.5);
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  z-index: 100;
 }
 
 #history-panel {
@@ -495,11 +469,60 @@ button.danger:hover {
     font-weight: bold;
 }
 
+#skill-selector-bar {
+    margin-bottom: 15px;
+    padding: 10px;
+    background-color: #fff;
+    border-radius: 8px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    width: 80%;
+    max-width: 900px; /* Or match card container */
+}
+
+#skill-selector-checkboxes {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 15px;
+}
+
+#skill-selector-checkboxes div {
+    display: flex;
+    align-items: center;
+}
+
+#skill-selector-checkboxes label {
+    cursor: pointer;
+    padding: 5px 10px;
+    border: 1px solid #ccc;
+    border-radius: 20px;
+    transition: all 0.2s ease-in-out;
+}
+
+#skill-selector-checkboxes input[type="checkbox"] {
+    display: none; /* Hide the actual checkbox */
+}
+
+#skill-selector-checkboxes input[type="checkbox"]:checked + label {
+    background-color: #007bff;
+    color: white;
+    border-color: #007bff;
+}
+
+#skill-selector-checkboxes label:hover {
+    background-color: #f0f0f0;
+}
+
+#skill-selector-checkboxes input[type="checkbox"]:checked + label:hover {
+    background-color: #0056b3;
+}
+
+
 /* Writing Practice Styles */
 #writing-practice-container {
     display: flex;
     justify-content: center;
-    align-items: flex-end; /* Align to bottom by default */
+    align-items: center; /* Vertically center the items */
     gap: 10px;
     position: absolute;
     bottom: 20px;
@@ -539,12 +562,14 @@ button.danger:hover {
 }
 
 #slow-replay-button {
-    padding: 20px;
+    padding: 0; /* Reset padding */
     font-size: 1.5em;
-    line-height: 1.5em;
-    width: 2.5em;
-    height: 2.5em;
-    text-align: center;
+    line-height: 1;
+    width: 68px;  /* Match height of other buttons (padding + font-size) */
+    height: 68px; /* Match height of other buttons */
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
 /* Comparison View Styles */
