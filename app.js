@@ -234,8 +234,18 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    function renderDiff(userAnswer, correctAnswer, isCorrect) {
-        const diff = Diff.diffChars(correctAnswer, userAnswer);
+    function getLenientString(str) {
+        if (typeof str !== 'string') return '';
+        return str
+            .toLowerCase()
+            .normalize('NFD')
+            .replace(/[\u0300-\u036f]/g, '')
+            .replace(/[.,/#!$%^&*;:{}=\-_`~()?]/g, '')
+            .trim();
+    }
+
+    function renderDiff(userAnswerLower, correctAnswerLower, isCorrect) {
+        const diff = Diff.diffChars(correctAnswerLower, userAnswerLower);
         const fragment = document.createDocumentFragment();
 
         const resultDiv = document.createElement('div');
@@ -282,14 +292,12 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         const correctAnswer = cardData[currentCardIndex][validationColumnIndex];
 
-        const normalize = (str) => str.normalize('NFC').toLowerCase();
-
-        const isCorrect = normalize(userAnswer) === normalize(correctAnswer);
+        const isCorrect = getLenientString(userAnswer) === getLenientString(correctAnswer);
 
         await markCardAsKnown(isCorrect);
 
         comparisonContainer.innerHTML = ''; // Clear previous diff
-        comparisonContainer.appendChild(renderDiff(userAnswer, correctAnswer, isCorrect));
+        comparisonContainer.appendChild(renderDiff(userAnswer.toLowerCase(), correctAnswer.toLowerCase(), isCorrect));
         comparisonContainer.classList.remove('hidden');
         writingInput.disabled = true;
 
