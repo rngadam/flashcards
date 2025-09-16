@@ -104,6 +104,10 @@ document.addEventListener('DOMContentLoaded', () => {
         BASE_LANGUAGE: 'Base Language',
         PRONUNCIATION: 'Pronunciation Guide',
         EXAMPLE_SENTENCE: 'Example Sentence',
+        COMMON_COLLOCATION: 'Common Collocation',
+        RELATED_WORD: 'Related Word',
+        RELATION_TYPE: 'Relation Type',
+        GRAMMATICAL_TYPE: 'Grammatical Type',
     };
     const SKILLS = {
         READING: {
@@ -224,7 +228,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (writingSubmit) writingSubmit.addEventListener('click', checkWritingAnswer);
     if (writingInput) writingInput.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') {
+        if (e.code === 'Enter') {
             checkWritingAnswer();
         }
     });
@@ -266,7 +270,8 @@ document.addEventListener('DOMContentLoaded', () => {
     function renderDiff(userAnswer, correctAnswer, isCorrect) {
         const userAnswerLower = userAnswer.toLowerCase();
         const correctAnswerLower = correctAnswer.toLowerCase();
-        const diff = Diff.diffChars(correctAnswerLower, userAnswerLower);
+        // The user wants to see how to get from THEIR answer to the correct one.
+        const diff = Diff.diffChars(userAnswerLower, correctAnswerLower);
         const fragment = document.createDocumentFragment();
 
         const resultDiv = document.createElement('div');
@@ -274,32 +279,44 @@ document.addEventListener('DOMContentLoaded', () => {
         resultDiv.style.color = isCorrect ? 'green' : 'red';
         fragment.appendChild(resultDiv);
 
+        // --- Your Answer ---
         const userDiv = document.createElement('div');
         userDiv.innerHTML = '<strong>Your Answer:</strong> ';
         const userContent = document.createElement('div');
-
-        // Reconstruct the user's answer with original casing while applying diff styles.
         let userPointer = 0;
         diff.forEach(part => {
-            // Only process parts that are common or added (present in the user's answer).
-            if (part.removed) return;
+            // We only care about parts that were in the original user answer
+            if (part.added) return;
 
             const span = document.createElement('span');
-            span.className = part.added ? 'diff-added' : 'diff-common';
-
-            // Slice the original userAnswer to get the text with correct casing.
+            // 'removed' means it's in the user's answer but not the correct one (an error).
+            span.className = part.removed ? 'diff-removed' : 'diff-common';
             const originalText = userAnswer.substring(userPointer, userPointer + part.value.length);
             span.appendChild(document.createTextNode(originalText));
             userContent.appendChild(span);
-
-            // Move the pointer forward.
             userPointer += part.value.length;
         });
         userDiv.appendChild(userContent);
 
-
+        // --- Correct Answer ---
         const correctDiv = document.createElement('div');
-        correctDiv.innerHTML = `<strong>Correct Answer:</strong> <div>${correctAnswer}</div>`;
+        correctDiv.innerHTML = '<strong>Correct Answer:</strong> ';
+        const correctContent = document.createElement('div');
+        let correctPointer = 0;
+        diff.forEach(part => {
+             // We only care about parts that ended up in the correct answer
+            if (part.removed) return;
+
+            const span = document.createElement('span');
+            // 'added' means it's in the correct answer but not the user's (a good addition).
+            span.className = part.added ? 'diff-added' : 'diff-common';
+            const originalText = correctAnswer.substring(correctPointer, correctPointer + part.value.length);
+            span.appendChild(document.createTextNode(originalText));
+            correctContent.appendChild(span);
+            correctPointer += part.value.length;
+        });
+        correctDiv.appendChild(correctContent);
+
 
         fragment.appendChild(userDiv);
         fragment.appendChild(correctDiv);
@@ -1115,6 +1132,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (explanationMessage) {
             let message = '';
+            explanationMessage.classList.remove('deck-learned-message'); // Reset class first
             switch (reason.type) {
                 case 'due_review':
                     message = `This card is due for its ${reason.expiredInterval} review. Next review in ${reason.nextInterval}.`;
@@ -1126,6 +1144,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     message = 'Reviewing card with the lowest score.';
                     break;
                 case 'deck_learned':
+                    explanationMessage.classList.add('deck-learned-message');
                     if (reason.timeToNextReview !== Infinity) {
                         const formattedMinTime = formatTimeDifference(reason.timeToNextReview);
                         const formattedMaxTime = formatTimeDifference(reason.timeToLastReview);
@@ -1489,7 +1508,19 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         if (known) {
+            const currentScore = getRetentionScore(skillStats);
             skillStats.successTimestamps.push(Date.now());
+
+            if (currentScore < 0) {
+                const successes = skillStats.successTimestamps.length;
+                const failures = skillStats.failureTimestamps.length;
+                const failuresToRemove = failures - successes;
+                if (failuresToRemove > 0) {
+                    // Remove the oldest failures to bring the score to 0
+                    skillStats.failureTimestamps.splice(0, failuresToRemove);
+                }
+            }
+
             // Only advance the interval if the card was due for review.
             if (isCurrentCardDue && skillStats.intervalIndex < repetitionIntervals.length - 1) {
                 skillStats.intervalIndex++;
@@ -1941,11 +1972,11 @@ document.addEventListener('DOMContentLoaded', () => {
      */
     function handleHotkeys(e) {
         if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') {
-            if (e.key === 'Enter' && writingPracticeContainer.classList.contains('hidden')) {
+            if (e.code === 'Enter' && writingPracticeContainer.classList.contains('hidden')) {
                  // Allow enter to submit forms in settings, etc.
                  return;
             }
-            if (e.key !== 'Enter') {
+            if (e.code !== 'Enter') {
                 return; // Only allow Enter key in inputs
             }
         }
@@ -1953,13 +1984,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
         switch(e.type) {
             case 'keydown':
-                switch(e.key) {
+                switch(e.code) {
                     case 'Enter':
                         if (!nextCardButton.classList.contains('hidden')) {
                             showNextCard();
                         }
                         break;
-                    case ' ':
+                    case 'Space':
                         e.preventDefault();
                         if (card && !card.classList.contains('flipped')) {
                             flipCard();
@@ -1971,7 +2002,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     case 'ArrowLeft':
                         showPrevCard();
                         break;
-                    case 'k': {
+                    case 'KeyK': {
                         const currentConfigName = configSelector.value;
                         const currentConfig = configs[currentConfigName] || {};
                         const skillConfig = (currentConfig.skillColumns || {})[currentSkill] || {};
@@ -1981,7 +2012,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         }
                         break;
                     }
-                    case 'j': {
+                    case 'KeyJ': {
                         const currentConfigName = configSelector.value;
                         const currentConfig = configs[currentConfigName] || {};
                         const skillConfig = (currentConfig.skillColumns || {})[currentSkill] || {};
@@ -1991,7 +2022,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         }
                         break;
                     }
-                    case 'f': {
+                    case 'KeyF': {
                         let text, voiceName;
                         if (card.classList.contains('flipped')) {
                             text = cardBack.textContent;
@@ -2011,8 +2042,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
                 break;
             case 'keyup':
-                switch(e.key) {
-                    case ' ':
+                switch(e.code) {
+                    case 'Space':
                         e.preventDefault();
                         if (card && card.classList.contains('flipped')) {
                             flipCard();

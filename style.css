@@ -27,7 +27,9 @@ body.is-flipping {
 
 #config-title {
   margin: 0;
-  font-size: 1.5em;
+  font-size: 2em;
+  font-weight: bold;
+  text-transform: uppercase;
   flex-grow: 1;
   text-align: center;
 }
@@ -323,6 +325,12 @@ th.sortable.desc::after {
     opacity: 1;
 }
 
+#explanation-message.deck-learned-message {
+    background-color: #d4edda; /* A light green color */
+    color: #155724; /* A dark green color for text */
+    border: 1px solid #c3e6cb;
+}
+
 /* Tab Styles */
 .tabs {
     display: flex;
@@ -476,14 +484,16 @@ button.danger:hover {
     border-radius: 8px;
     box-shadow: 0 2px 5px rgba(0,0,0,0.1);
     width: 80%;
-    max-width: 900px; /* Or match card container */
+    max-width: 1400px;
 }
 
 #skill-selector-checkboxes {
     display: flex;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
     justify-content: center;
     gap: 15px;
+    overflow-x: auto;
+    padding-bottom: 5px;
 }
 
 #skill-selector-checkboxes div {
