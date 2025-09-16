@@ -34,11 +34,74 @@ body.is-flipping {
   text-align: center;
 }
 
-#settings-button, #help-button {
+#settings-button, #help-button, #history-button {
   font-size: 2em;
   background: none;
   border: none;
   cursor: pointer;
+}
+
+.mobile-only-button {
+    display: block;
+    font-size: 2em;
+    background: none;
+    border: none;
+    cursor: pointer;
+}
+
+#mobile-menu-panel {
+    background: white;
+    padding: 20px;
+    border-radius: 8px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+#mobile-menu-panel button {
+    font-size: 1.2em;
+    text-align: left;
+    padding: 15px 20px;
+}
+
+
+/* --- Responsive Layout --- */
+
+/* Mobile First (Default) */
+.desktop-only-buttons {
+    display: none;
+}
+#hamburger-menu {
+    display: block;
+}
+#config-title {
+    display: none; /* Hidden on mobile */
+}
+#skill-selector-bar {
+    display: none; /* Hidden on mobile */
+}
+.btn-text {
+    display: none; /* Icons only on mobile */
+}
+
+
+/* Desktop */
+body.desktop .desktop-only-buttons {
+    display: flex;
+    align-items: center;
+}
+body.desktop #hamburger-menu {
+    display: none;
+}
+body.desktop #config-title {
+    display: block;
+}
+body.desktop #skill-selector-bar {
+    display: flex; /* This is the default from its own rule, but being explicit */
+}
+body.desktop .btn-text {
+    display: inline;
 }
 
 .modal-overlay {
@@ -227,6 +290,7 @@ body.is-flipping {
     left: 15px;
     font-size: 0.8em;
     color: #888;
+    z-index: 6; /* Higher than skill-mastery-dashboard */
 }
 
 .card-face {
@@ -439,9 +503,14 @@ button.danger:hover {
     cursor: default;
 }
 
-.skill-mastery-item.active {
+.skill-mastery-item.active-session {
     border-color: #007bff;
     background-color: #e7f3ff;
+}
+
+.skill-mastery-item.active {
+    background-color: #d4edda; /* Light green */
+    border-color: #28a745;
     transform: translateY(-2px);
     box-shadow: 0 2px 4px rgba(0,0,0,0.1);
 }

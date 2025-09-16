@@ -9,11 +9,21 @@
   <body>
     <div id="top-bar">
       <h1 id="config-title"></h1>
-      <div>
+      <div class="desktop-only-buttons">
         <button id="history-button">📜</button>
         <button id="settings-button">⚙️</button>
         <button id="help-button">?</button>
       </div>
+      <button id="hamburger-menu" class="mobile-only-button">☰</button>
+    </div>
+
+    <div id="mobile-menu-overlay" class="modal-overlay hidden">
+        <div id="mobile-menu-panel">
+            <button id="mobile-history-button">📜 History</button>
+            <button id="mobile-settings-button">⚙️ Settings</button>
+            <button id="mobile-help-button">? Help</button>
+            <button id="close-mobile-menu-button">Close</button>
+        </div>
     </div>
 
     <div id="help-modal" class="modal-overlay hidden">

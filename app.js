@@ -39,6 +39,12 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // DOM Elements
+    const hamburgerMenu = document.getElementById('hamburger-menu');
+    const mobileMenuOverlay = document.getElementById('mobile-menu-overlay');
+    const closeMobileMenuButton = document.getElementById('close-mobile-menu-button');
+    const mobileHistoryButton = document.getElementById('mobile-history-button');
+    const mobileSettingsButton = document.getElementById('mobile-settings-button');
+    const mobileHelpButton = document.getElementById('mobile-help-button');
     const settingsButton = document.getElementById('settings-button');
     const closeSettingsButton = document.getElementById('close-settings-button');
     const settingsModal = document.getElementById('settings-modal');
@@ -162,16 +168,34 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Drag state for swipe gestures
     let isDragging = false; // True if a card is currently being dragged.
-    let startX = 0; // The starting X coordinate of a drag.
-    let currentX = 0; // The current X coordinate during a drag.
+    let startX = 0, startY = 0; // The starting X and Y coordinates of a drag.
+    let currentX = 0, currentY = 0; // The current X and Y coordinates during a drag.
     let dragThreshold = 100; // The pixel distance a card must be dragged to trigger a swipe action.
+    let verticalDragThreshold = 50; // The pixel distance for a vertical flip.
 
     // --- Event Listeners ---
+    if (hamburgerMenu) hamburgerMenu.addEventListener('click', () => mobileMenuOverlay.classList.remove('hidden'));
+    if (closeMobileMenuButton) closeMobileMenuButton.addEventListener('click', () => mobileMenuOverlay.classList.add('hidden'));
+
     if (settingsButton) settingsButton.addEventListener('click', () => settingsModal.classList.remove('hidden'));
+    if (mobileSettingsButton) mobileSettingsButton.addEventListener('click', () => {
+        mobileMenuOverlay.classList.add('hidden');
+        settingsModal.classList.remove('hidden');
+    });
     if (closeSettingsButton) closeSettingsButton.addEventListener('click', () => settingsModal.classList.add('hidden'));
+
     if (historyButton) historyButton.addEventListener('click', renderHistoryTable);
+    if (mobileHistoryButton) mobileHistoryButton.addEventListener('click', () => {
+        mobileMenuOverlay.classList.add('hidden');
+        renderHistoryTable();
+    });
     if (closeHistoryButton) closeHistoryButton.addEventListener('click', () => historyModal.classList.add('hidden'));
+
     if (helpButton) helpButton.addEventListener('click', () => helpModal.classList.remove('hidden'));
+    if (mobileHelpButton) mobileHelpButton.addEventListener('click', () => {
+        mobileMenuOverlay.classList.add('hidden');
+        helpModal.classList.remove('hidden');
+    });
     if (closeHelpButton) closeHelpButton.addEventListener('click', () => helpModal.classList.add('hidden'));
     if (loadDataButton) {
         loadDataButton.addEventListener('click', async () => { // make listener async
@@ -214,6 +238,37 @@ document.addEventListener('DOMContentLoaded', () => {
         card.addEventListener('mouseleave', dragEnd);
     }
     if (createSubsetButton) createSubsetButton.addEventListener('click', createSubset);
+
+    if (skillMasteryDashboard) {
+        skillMasteryDashboard.addEventListener('click', async (e) => {
+            const skillItem = e.target.closest('.skill-mastery-item');
+            if (!skillItem) return;
+
+            const skillId = skillItem.dataset.skillId;
+            if (!skillId) return;
+
+            const currentConfigName = configSelector.value;
+            if (!currentConfigName || !configs[currentConfigName]) return;
+
+            const activeSkills = new Set(configs[currentConfigName].skills || []);
+            if (activeSkills.has(skillId)) {
+                if (activeSkills.size > 1) { // Prevent removing the last skill
+                    activeSkills.delete(skillId);
+                }
+            } else {
+                activeSkills.add(skillId);
+            }
+            configs[currentConfigName].skills = [...activeSkills];
+            isConfigDirty = true;
+            if (saveConfigButton) saveConfigButton.disabled = false;
+
+            // Re-render the dashboard and show a new card
+            const cardKey = getCardKey(cardData[currentCardIndex]);
+            const stats = await getSanitizedStats(cardKey);
+            renderSkillMastery(stats); // Re-render to update styles
+            await showNextCard();
+        });
+    }
 
     if (skillSelectorCheckboxes) {
         skillSelectorCheckboxes.addEventListener('change', async (e) => {
@@ -868,9 +923,9 @@ document.addEventListener('DOMContentLoaded', () => {
      */
     function adjustFontSize(element) {
         if (!element) return;
-        const container = element.parentElement;
+        const container = element.closest('.card-face');
         if (!container) return;
-        let min = 10, max = 150;
+        let min = 10, max = 80;
         let bestSize = min;
 
         while (min <= max) {
@@ -1029,6 +1084,9 @@ document.addEventListener('DOMContentLoaded', () => {
     function renderSkillMastery(cardStats) {
         if (!skillMasteryDashboard) return;
 
+        const currentConfigName = configSelector.value;
+        const activeSkills = new Set((configs[currentConfigName] || {}).skills || []);
+
         let html = '';
         for (const skillId in SKILLS) {
             const skill = SKILLS[skillId];
@@ -1036,8 +1094,15 @@ document.addEventListener('DOMContentLoaded', () => {
             const score = getRetentionScore(skillStats);
             const timeToDue = getTimeToDue(skillStats);
 
+            const isCurrent = skillId === currentSkill;
+            const isActiveSession = activeSkills.has(skillId);
+
+            let classes = 'skill-mastery-item';
+            if (isCurrent) classes += ' active'; // Light green for current
+            if (isActiveSession) classes += ' active-session'; // Light blue for active in session
+
             html += `
-                <div class="skill-mastery-item ${skillId === currentSkill ? 'active' : ''}" title="${skill.label} - Next review: ${timeToDue.formatted}">
+                <div class="${classes}" data-skill-id="${skillId}" title="${skill.label} - Next review: ${timeToDue.formatted}">
                     <span class="skill-name">${skill.label.match(/\b(\w)/g).join('')}</span>
                     <span class="skill-score">${score}</span>
                 </div>
@@ -2070,7 +2135,9 @@ document.addEventListener('DOMContentLoaded', () => {
         if (e.target.closest('button')) return; // Don't drag if clicking a button on the card
         isDragging = true;
         startX = e.pageX || e.touches[0].pageX;
-        currentX = startX; // Initialize currentX
+        startY = e.pageY || e.touches[0].pageY;
+        currentX = startX;
+        currentY = startY;
         card.style.transition = 'none'; // Disable transition for smooth dragging
     }
 
@@ -2078,8 +2145,11 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!isDragging) return;
         e.preventDefault();
         currentX = e.pageX || e.touches[0].pageX;
+        currentY = e.pageY || e.touches[0].pageY;
         const diffX = currentX - startX;
-        card.style.transform = `translateX(${diffX}px) rotate(${diffX / 20}deg)`;
+        const diffY = currentY - startY;
+        // Allow both horizontal and vertical movement for a more natural feel
+        card.style.transform = `translate(${diffX}px, ${diffY}px) rotate(${diffX / 20}deg)`;
     }
 
     function dragEnd(e) {
@@ -2087,25 +2157,23 @@ document.addEventListener('DOMContentLoaded', () => {
         isDragging = false;
 
         const diffX = currentX - startX;
+        const diffY = currentY - startY;
 
-        // Reset drag state for the next interaction
+        // Reset drag state
         startX = 0;
+        startY = 0;
         currentX = 0;
-
-        // Treat very small movements as a tap
-        if (Math.abs(diffX) < 10) {
-            card.style.transform = '';
-            // Don't flip if the mouse just left the card while dragging
-            if (e.type !== 'mouseleave') {
-                flipCard();
-            }
-            return;
-        }
+        currentY = 0;
 
         card.style.transition = 'transform 0.3s ease';
 
-        if (Math.abs(diffX) > dragThreshold) {
-            // A real swipe
+        // Check for vertical swipe (flip)
+        if (Math.abs(diffY) > verticalDragThreshold && Math.abs(diffX) < dragThreshold) {
+            flipCard();
+            card.style.transform = ''; // Snap back to center after flip
+        }
+        // Check for horizontal swipe (know/don't know)
+        else if (Math.abs(diffX) > dragThreshold) {
             card.classList.add(diffX > 0 ? 'swipe-right' : 'swipe-left');
             setTimeout(() => {
                 if (diffX > 0) {
@@ -2119,7 +2187,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 card.classList.remove('swipe-right', 'swipe-left');
             }, 300);
         } else {
-            // A short drag, but not a tap, so snap back
+            // No significant swipe, snap back
             card.style.transform = '';
         }
     }
