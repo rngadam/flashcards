@@ -34,11 +34,81 @@ body.is-flipping {
   text-align: center;
 }
 
-#settings-button, #help-button {
+#settings-button, #help-button, #history-button {
   font-size: 2em;
   background: none;
   border: none;
   cursor: pointer;
+}
+
+.mobile-only-button {
+    display: block;
+    font-size: 2em;
+    background: none;
+    border: none;
+    cursor: pointer;
+}
+
+#mobile-menu-panel {
+    background: white;
+    padding: 20px;
+    border-radius: 8px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+#mobile-menu-panel button {
+    font-size: 1.2em;
+    text-align: left;
+    padding: 15px 20px;
+}
+
+
+/* --- Responsive Layout --- */
+
+/* Mobile First (Default) */
+.desktop-only-buttons {
+    display: none;
+}
+#hamburger-menu {
+    display: block;
+}
+.btn-text {
+    display: none; /* Icons only on mobile */
+}
+
+
+/* Desktop */
+body.desktop .desktop-only-buttons {
+    display: flex;
+    align-items: center;
+}
+/* Mobile First (Default) */
+.desktop-only-buttons {
+    display: none;
+}
+#hamburger-menu {
+    display: block;
+}
+
+/* Desktop Overrides */
+body.desktop .desktop-only-buttons {
+    display: flex;
+    align-items: center;
+}
+body.desktop #hamburger-menu {
+    display: none;
+}
+body.desktop #config-title {
+    display: block;
+}
+body.desktop #skill-selector-bar {
+    display: flex;
+}
+body.desktop .btn-text {
+    display: inline;
 }
 
 .modal-overlay {
@@ -192,6 +262,7 @@ body.is-flipping {
   width: 80%;
   height: 60%;
   perspective: 1000px;
+  position: relative;
 }
 
 #card {
@@ -200,6 +271,7 @@ body.is-flipping {
   position: relative;
   transform-style: preserve-3d;
   transition: transform 0.6s;
+  position: relative;
 }
 
 #card.no-animation {
@@ -210,27 +282,51 @@ body.is-flipping {
   transform: rotateY(180deg);
 }
 
+#deck-title {
+    position: absolute;
+    top: 10px;
+    left: 15px;
+    font-size: 0.8em;
+    color: #888;
+    font-weight: bold;
+    text-transform: uppercase;
+}
+
+#last-seen {
+    position: absolute;
+    bottom: 10px;
+    left: 15px;
+    font-size: 0.8em;
+    color: #888;
+    z-index: 6; /* Higher than skill-mastery-dashboard */
+}
+
 .card-face {
   position: absolute;
   width: 100%;
   height: 100%;
   backface-visibility: hidden;
   display: flex;
+  flex-direction: column; /* Changed to column for better control */
   align-items: center;
   justify-content: center;
   border: 2px solid #ccc;
   border-radius: 10px;
   background-color: white;
-  padding: 20px;
+  padding: 40px 20px; /* Increased top/bottom padding for corner elements */
   box-sizing: border-box;
   word-wrap: break-word;
   text-align: center;
   white-space: pre-wrap;
 }
 
+.card-face > span, #card-back-content > span {
+    display: inline-block;
+    max-width: 100%;
+}
+
 .card-back {
   transform: rotateY(180deg);
-  flex-direction: column;
   justify-content: space-around;
 }
 
@@ -241,6 +337,7 @@ body.is-flipping {
     justify-content: center;
     width: 100%;
 }
+
 
 #controls {
   margin-top: 20px;
@@ -309,16 +406,28 @@ th.sortable.desc::after {
 #explanation-message {
     position: fixed;
     bottom: 10px;
-    left: 50%;
-    transform: translateX(-50%);
-    background: rgba(0,0,0,0.7);
+    left: 10px;
+    right: 10px;
+    transform: translateX(0);
+    background: rgba(0,0,0,0.8);
     color: white;
-    padding: 8px 15px;
-    border-radius: 20px;
-    font-size: 0.9em;
+    padding: 12px 18px;
+    border-radius: 10px;
+    font-size: 1em;
     opacity: 0;
     transition: opacity 0.5s;
     z-index: 10;
+    text-align: center;
+}
+
+@media (min-width: 600px) {
+    #explanation-message {
+        left: 50%;
+        right: auto;
+        transform: translateX(-50%);
+        width: auto;
+        max-width: 80%;
+    }
 }
 
 #explanation-message.visible {
@@ -384,10 +493,13 @@ button.danger:hover {
 }
 
 #skill-mastery-dashboard {
+    position: absolute;
+    bottom: 10px;
+    right: 10px;
     display: flex;
     justify-content: center;
-    gap: 10px;
-    margin-top: 15px;
+    gap: 5px; /* Reduced gap for smaller space */
+    z-index: 5; /* Ensure it's above the card face */
 }
 
 .skill-mastery-item {
@@ -402,9 +514,14 @@ button.danger:hover {
     cursor: default;
 }
 
-.skill-mastery-item.active {
+.skill-mastery-item.active-session {
     border-color: #007bff;
     background-color: #e7f3ff;
+}
+
+.skill-mastery-item.active {
+    background-color: #d4edda; /* Light green */
+    border-color: #28a745;
     transform: translateY(-2px);
     box-shadow: 0 2px 4px rgba(0,0,0,0.1);
 }

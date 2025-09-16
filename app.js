@@ -39,6 +39,14 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // DOM Elements
+    const hamburgerMenu = document.getElementById('hamburger-menu');
+    const mobileMenuOverlay = document.getElementById('mobile-menu-overlay');
+    const closeMobileMenuButton = document.getElementById('close-mobile-menu-button');
+    const mobileHistoryButton = document.getElementById('mobile-history-button');
+    const mobileSettingsButton = document.getElementById('mobile-settings-button');
+    const mobileHelpButton = document.getElementById('mobile-help-button');
+    const fullscreenButton = document.getElementById('fullscreen-button');
+    const mobileFullscreenButton = document.getElementById('mobile-fullscreen-button');
     const settingsButton = document.getElementById('settings-button');
     const closeSettingsButton = document.getElementById('close-settings-button');
     const settingsModal = document.getElementById('settings-modal');
@@ -95,6 +103,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const writingSubmit = document.getElementById('writing-submit');
     const comparisonContainer = document.getElementById('comparison-container');
     const slowReplayButton = document.getElementById('slow-replay-button');
+    const slowReplayHotkey = document.getElementById('slow-replay-hotkey');
+    const deckTitle = document.getElementById('deck-title');
+    const lastSeen = document.getElementById('last-seen');
 
 
     // App state
@@ -159,17 +170,52 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Drag state for swipe gestures
     let isDragging = false; // True if a card is currently being dragged.
-    let startX = 0; // The starting X coordinate of a drag.
-    let currentX = 0; // The current X coordinate during a drag.
+    let startX = 0, startY = 0; // The starting X and Y coordinates of a drag.
+    let currentX = 0, currentY = 0; // The current X and Y coordinates during a drag.
     let dragThreshold = 100; // The pixel distance a card must be dragged to trigger a swipe action.
+    let verticalDragThreshold = 50; // The pixel distance for a vertical flip.
 
     // --- Event Listeners ---
+    if (hamburgerMenu) hamburgerMenu.addEventListener('click', () => mobileMenuOverlay.classList.remove('hidden'));
+    if (closeMobileMenuButton) closeMobileMenuButton.addEventListener('click', () => mobileMenuOverlay.classList.add('hidden'));
+
     if (settingsButton) settingsButton.addEventListener('click', () => settingsModal.classList.remove('hidden'));
+    if (mobileSettingsButton) mobileSettingsButton.addEventListener('click', () => {
+        mobileMenuOverlay.classList.add('hidden');
+        settingsModal.classList.remove('hidden');
+    });
     if (closeSettingsButton) closeSettingsButton.addEventListener('click', () => settingsModal.classList.add('hidden'));
+
     if (historyButton) historyButton.addEventListener('click', renderHistoryTable);
+    if (mobileHistoryButton) mobileHistoryButton.addEventListener('click', () => {
+        mobileMenuOverlay.classList.add('hidden');
+        renderHistoryTable();
+    });
     if (closeHistoryButton) closeHistoryButton.addEventListener('click', () => historyModal.classList.add('hidden'));
+
     if (helpButton) helpButton.addEventListener('click', () => helpModal.classList.remove('hidden'));
+    if (mobileHelpButton) mobileHelpButton.addEventListener('click', () => {
+        mobileMenuOverlay.classList.add('hidden');
+        helpModal.classList.remove('hidden');
+    });
     if (closeHelpButton) closeHelpButton.addEventListener('click', () => helpModal.classList.add('hidden'));
+
+    function toggleFullscreen() {
+        if (!document.fullscreenElement) {
+            document.documentElement.requestFullscreen();
+        } else {
+            if (document.exitFullscreen) {
+                document.exitFullscreen();
+            }
+        }
+    }
+
+    if (fullscreenButton) fullscreenButton.addEventListener('click', toggleFullscreen);
+    if (mobileFullscreenButton) mobileFullscreenButton.addEventListener('click', () => {
+        mobileMenuOverlay.classList.add('hidden');
+        toggleFullscreen();
+    });
+
     if (loadDataButton) {
         loadDataButton.addEventListener('click', async () => { // make listener async
             await loadData(); // await the async function
@@ -212,6 +258,37 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     if (createSubsetButton) createSubsetButton.addEventListener('click', createSubset);
 
+    if (skillMasteryDashboard) {
+        skillMasteryDashboard.addEventListener('click', async (e) => {
+            const skillItem = e.target.closest('.skill-mastery-item');
+            if (!skillItem) return;
+
+            const skillId = skillItem.dataset.skillId;
+            if (!skillId) return;
+
+            const currentConfigName = configSelector.value;
+            if (!currentConfigName || !configs[currentConfigName]) return;
+
+            const activeSkills = new Set(configs[currentConfigName].skills || []);
+            if (activeSkills.has(skillId)) {
+                if (activeSkills.size > 1) { // Prevent removing the last skill
+                    activeSkills.delete(skillId);
+                }
+            } else {
+                activeSkills.add(skillId);
+            }
+            configs[currentConfigName].skills = [...activeSkills];
+            isConfigDirty = true;
+            if (saveConfigButton) saveConfigButton.disabled = false;
+
+            // Re-render the dashboard and show a new card
+            const cardKey = getCardKey(cardData[currentCardIndex]);
+            const stats = await getSanitizedStats(cardKey);
+            renderSkillMastery(stats); // Re-render to update styles
+            await showNextCard();
+        });
+    }
+
     if (skillSelectorCheckboxes) {
         skillSelectorCheckboxes.addEventListener('change', async (e) => {
             if (e.target.matches('input[type="checkbox"]')) {
@@ -233,7 +310,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    if (slowReplayButton) slowReplayButton.addEventListener('click', () => {
+    const handleSlowReplay = () => {
         const currentConfigName = configSelector.value;
         const currentConfig = configs[currentConfigName] || {};
         const skillConfig = (currentConfig.skillColumns || {})[currentSkill] || {};
@@ -241,7 +318,10 @@ document.addEventListener('DOMContentLoaded', () => {
         const ttsSourceColumn = skillConfig.ttsFrontColumn || frontIndices[0];
         const ttsText = getTextForColumns([ttsSourceColumn]);
         speak(ttsText, ttsFrontLangSelect.value, 0.7); // Speak at a fixed slow rate
-    });
+    };
+
+    if (slowReplayButton) slowReplayButton.addEventListener('click', handleSlowReplay);
+    if (slowReplayHotkey) slowReplayHotkey.addEventListener('click', handleSlowReplay);
 
     if (settingsModal) {
         settingsModal.addEventListener('input', handleSettingsChange);
@@ -860,11 +940,11 @@ document.addEventListener('DOMContentLoaded', () => {
      * Uses a binary search approach for efficiency.
      * @param {HTMLElement} element - The text element to resize.
      */
-    function adjustFontSize(element) {
+    function adjustFontSize(element, isFront) {
         if (!element) return;
-        const container = element.parentElement;
+        const container = element.closest('.card-face');
         if (!container) return;
-        let min = 10, max = 150;
+        let min = 10, max = isFront ? 150 : 80;
         let bestSize = min;
 
         while (min <= max) {
@@ -1023,6 +1103,9 @@ document.addEventListener('DOMContentLoaded', () => {
     function renderSkillMastery(cardStats) {
         if (!skillMasteryDashboard) return;
 
+        const currentConfigName = configSelector.value;
+        const activeSkills = new Set((configs[currentConfigName] || {}).skills || []);
+
         let html = '';
         for (const skillId in SKILLS) {
             const skill = SKILLS[skillId];
@@ -1030,8 +1113,15 @@ document.addEventListener('DOMContentLoaded', () => {
             const score = getRetentionScore(skillStats);
             const timeToDue = getTimeToDue(skillStats);
 
+            const isCurrent = skillId === currentSkill;
+            const isActiveSession = activeSkills.has(skillId);
+
+            let classes = 'skill-mastery-item';
+            if (isCurrent) classes += ' active'; // Light green for current
+            if (isActiveSession) classes += ' active-session'; // Light blue for active in session
+
             html += `
-                <div class="skill-mastery-item ${skillId === currentSkill ? 'active' : ''}" title="${skill.label} - Next review: ${timeToDue.formatted}">
+                <div class="${classes}" data-skill-id="${skillId}" title="${skill.label} - Next review: ${timeToDue.formatted}">
                     <span class="skill-name">${skill.label.match(/\b(\w)/g).join('')}</span>
                     <span class="skill-score">${score}</span>
                 </div>
@@ -1095,19 +1185,25 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const isAudioOnly = (audioOnlyFrontCheckbox && audioOnlyFrontCheckbox.checked) || currentSkill === SKILLS.LISTENING.id;
 
+        cardFront.innerHTML = ''; // Clear previous content
+        cardBackContent.innerHTML = ''; // Clear previous content
+
         if (isAudioOnly) {
             cardFront.innerHTML = '<span class="speech-icon">🔊</span>';
         } else {
-            cardFront.textContent = displayText;
+            cardFront.innerHTML = `<span>${displayText.replace(/\n/g, '<br>')}</span>`;
         }
-        cardBackContent.textContent = getTextForColumns(backIndices);
+
+        cardBackContent.innerHTML = `<span>${getTextForColumns(backIndices).replace(/\n/g, '<br>')}</span>`;
 
         cardFront.style.fontSize = '';
         cardBackContent.style.fontSize = '';
 
         setTimeout(() => {
-            adjustFontSize(cardFront);
-            adjustFontSize(cardBackContent);
+            if (!isAudioOnly) {
+                adjustFontSize(cardFront.querySelector('span'), true);
+            }
+            adjustFontSize(cardBackContent.querySelector('span'), false);
         }, 50);
 
         card.classList.remove('flipped');
@@ -1120,14 +1216,11 @@ document.addEventListener('DOMContentLoaded', () => {
         renderSkillMastery(stats);
 
         const timeAgo = formatTimeAgo(previousLastViewed);
-        const retentionScore = getRetentionScore(currentSkillStats);
+        if (lastSeen) {
+            lastSeen.textContent = `Last seen: ${timeAgo}`;
+        }
         if (cardSpecificStats) {
-            cardSpecificStats.innerHTML = `
-                <span>Skill: ${SKILLS[currentSkill].label}</span> |
-                <span>Retention Score: ${retentionScore}</span> |
-                <span>View Count: ${currentSkillStats.viewCount}</span> |
-                <span>Last seen: ${timeAgo}</span>
-            `;
+            cardSpecificStats.innerHTML = ``;
         }
 
         if (explanationMessage) {
@@ -1618,7 +1711,8 @@ document.addEventListener('DOMContentLoaded', () => {
         await set('flashcard-last-config', configName);
         populateConfigSelector();
         configSelector.value = configName;
-        configTitle.textContent = configName;
+        if (configTitle) configTitle.textContent = configName;
+        if (deckTitle) deckTitle.textContent = configName;
         alert(`Configuration '${configName}' saved!`);
         isConfigDirty = false;
         if (saveConfigButton) saveConfigButton.disabled = true;
@@ -1663,7 +1757,8 @@ document.addEventListener('DOMContentLoaded', () => {
         ttsFrontCheckbox.checked = config.ttsFront;
         ttsBackCheckbox.checked = config.ttsBack;
         cardContainer.style.fontFamily = config.font;
-        configTitle.textContent = configName;
+        if (configTitle) configTitle.textContent = configName;
+        if (deckTitle) deckTitle.textContent = configName;
         if (keyColumnSelector) keyColumnSelector.value = config.keyColumn || 0;
 
         if (config.subsetData && Array.isArray(config.subsetData)) {
@@ -2059,7 +2154,9 @@ document.addEventListener('DOMContentLoaded', () => {
         if (e.target.closest('button')) return; // Don't drag if clicking a button on the card
         isDragging = true;
         startX = e.pageX || e.touches[0].pageX;
-        currentX = startX; // Initialize currentX
+        startY = e.pageY || e.touches[0].pageY;
+        currentX = startX;
+        currentY = startY;
         card.style.transition = 'none'; // Disable transition for smooth dragging
     }
 
@@ -2067,8 +2164,11 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!isDragging) return;
         e.preventDefault();
         currentX = e.pageX || e.touches[0].pageX;
+        currentY = e.pageY || e.touches[0].pageY;
         const diffX = currentX - startX;
-        card.style.transform = `translateX(${diffX}px) rotate(${diffX / 20}deg)`;
+        const diffY = currentY - startY;
+        // Allow both horizontal and vertical movement for a more natural feel
+        card.style.transform = `translate(${diffX}px, ${diffY}px) rotate(${diffX / 20}deg)`;
     }
 
     function dragEnd(e) {
@@ -2076,40 +2176,41 @@ document.addEventListener('DOMContentLoaded', () => {
         isDragging = false;
 
         const diffX = currentX - startX;
+        const diffY = currentY - startY;
 
-        // Reset drag state for the next interaction
+        // Reset drag state
         startX = 0;
+        startY = 0;
         currentX = 0;
-
-        // Treat very small movements as a tap
-        if (Math.abs(diffX) < 10) {
-            card.style.transform = '';
-            // Don't flip if the mouse just left the card while dragging
-            if (e.type !== 'mouseleave') {
-                flipCard();
-            }
-            return;
-        }
+        currentY = 0;
 
         card.style.transition = 'transform 0.3s ease';
 
-        if (Math.abs(diffX) > dragThreshold) {
-            // A real swipe
-            card.classList.add(diffX > 0 ? 'swipe-right' : 'swipe-left');
-            setTimeout(() => {
-                if (diffX > 0) {
-                    markCardAsKnown(true);
-                    showNextCard();
-                } else {
-                    markCardAsKnown(false);
-                    showNextCard({ forceNew: true });
-                }
-                card.style.transform = '';
-                card.classList.remove('swipe-right', 'swipe-left');
-            }, 300);
+        // Prioritize dominant axis
+        if (Math.abs(diffX) > Math.abs(diffY)) {
+            // Horizontal swipe is dominant
+            if (Math.abs(diffX) > dragThreshold) {
+                card.classList.add(diffX > 0 ? 'swipe-right' : 'swipe-left');
+                setTimeout(() => {
+                    if (diffX > 0) {
+                        markCardAsKnown(true);
+                        showNextCard();
+                    } else {
+                        markCardAsKnown(false);
+                        showNextCard({ forceNew: true });
+                    }
+                    card.style.transform = '';
+                    card.classList.remove('swipe-right', 'swipe-left');
+                }, 300);
+            } else {
+                card.style.transform = ''; // Not enough horizontal, snap back
+            }
         } else {
-            // A short drag, but not a tap, so snap back
-            card.style.transform = '';
+            // Vertical swipe is dominant
+            if (Math.abs(diffY) > verticalDragThreshold) {
+                flipCard();
+            }
+            card.style.transform = ''; // Always snap back after vertical attempt
         }
     }
 
