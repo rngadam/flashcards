@@ -45,6 +45,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const historyButton = document.getElementById('history-button');
     const closeHistoryButton = document.getElementById('close-history-button');
     const historyModal = document.getElementById('history-modal');
+    const helpButton = document.getElementById('help-button');
+    const closeHelpButton = document.getElementById('close-help-button');
+    const helpModal = document.getElementById('help-modal');
     const historyTableContainer = document.getElementById('history-table-container');
     const configTitle = document.getElementById('config-title');
     const loadDataButton = document.getElementById('load-data');
@@ -161,6 +164,8 @@ document.addEventListener('DOMContentLoaded', () => {
     if (closeSettingsButton) closeSettingsButton.addEventListener('click', () => settingsModal.classList.add('hidden'));
     if (historyButton) historyButton.addEventListener('click', renderHistoryTable);
     if (closeHistoryButton) closeHistoryButton.addEventListener('click', () => historyModal.classList.add('hidden'));
+    if (helpButton) helpButton.addEventListener('click', () => helpModal.classList.remove('hidden'));
+    if (closeHelpButton) closeHelpButton.addEventListener('click', () => helpModal.classList.add('hidden'));
     if (loadDataButton) {
         loadDataButton.addEventListener('click', async () => { // make listener async
             await loadData(); // await the async function
@@ -244,7 +249,9 @@ document.addEventListener('DOMContentLoaded', () => {
             .trim();
     }
 
-    function renderDiff(userAnswerLower, correctAnswerLower, isCorrect) {
+    function renderDiff(userAnswer, correctAnswer, isCorrect) {
+        const userAnswerLower = userAnswer.toLowerCase();
+        const correctAnswerLower = correctAnswer.toLowerCase();
         const diff = Diff.diffChars(correctAnswerLower, userAnswerLower);
         const fragment = document.createDocumentFragment();
 
@@ -257,14 +264,31 @@ document.addEventListener('DOMContentLoaded', () => {
         userDiv.innerHTML = '<strong>Your Answer:</strong> ';
         const userContent = document.createElement('div');
 
+        // This implementation of diff visualization will display the user's answer in lowercase.
+        // A more complex implementation would be needed to preserve casing while showing diffs.
+        let userPointer = 0;
         diff.forEach(part => {
-            if (part.removed) return; // Don't show parts that were in the correct answer but not user's
+            if (part.removed) return;
             const span = document.createElement('span');
             span.className = part.added ? 'diff-added' : 'diff-common';
-            span.appendChild(document.createTextNode(part.value));
+            // We use the original user answer for text content to preserve case.
+            let originalText = '';
+            if (part.added || part.common) {
+                const searchStr = userAnswer.substring(userPointer).toLowerCase();
+                const partValue = part.value.toLowerCase();
+                const partIndex = searchStr.indexOf(partValue);
+                if (partIndex !== -1) {
+                    originalText = userAnswer.substring(userPointer + partIndex, userPointer + partIndex + part.value.length);
+                     userPointer += partIndex + part.value.length;
+                } else {
+                    originalText = part.value; // Fallback
+                }
+            }
+            span.appendChild(document.createTextNode(originalText || part.value));
             userContent.appendChild(span);
         });
         userDiv.appendChild(userContent);
+
 
         const correctDiv = document.createElement('div');
         correctDiv.innerHTML = `<strong>Correct Answer:</strong> <div>${correctAnswer}</div>`;
@@ -274,6 +298,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         return fragment;
     }
+
 
     async function checkWritingAnswer() {
         const userAnswer = writingInput.value.trim();
@@ -297,7 +322,7 @@ document.addEventListener('DOMContentLoaded', () => {
         await markCardAsKnown(isCorrect);
 
         comparisonContainer.innerHTML = ''; // Clear previous diff
-        comparisonContainer.appendChild(renderDiff(userAnswer.toLowerCase(), correctAnswer.toLowerCase(), isCorrect));
+        comparisonContainer.appendChild(renderDiff(userAnswer, correctAnswer, isCorrect));
         comparisonContainer.classList.remove('hidden');
         writingInput.disabled = true;
 

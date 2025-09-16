@@ -13,7 +13,53 @@
       <div>
         <button id="history-button">📜</button>
         <button id="settings-button">⚙️</button>
+        <button id="help-button">?</button>
       </div>
+    </div>
+
+    <div id="help-modal" class="hidden">
+        <div id="help-panel">
+            <button id="close-help-button">X</button>
+            <h2>How to Use Flashcards</h2>
+            <p>Follow these steps to get started:</p>
+            <ol>
+                <li><strong>Load Data:</strong>
+                    <ul>
+                        <li>Go to <strong>Settings (⚙️)</strong>.</li>
+                        <li>Find the "Data Source URL" field.</li>
+                        <li>Paste the URL of your TSV or CSV file (e.g., a published Google Sheet).</li>
+                        <li>Click <strong>Load</strong>. The app will fetch and parse your data.</li>
+                    </ul>
+                </li>
+                <li><strong>Configure Columns:</strong>
+                    <ul>
+                        <li>Once data is loaded, the app will show the columns it found.</li>
+                        <li>In the "Column Roles" section, assign roles like 'Target Language' and 'Base Language' to your columns.</li>
+                        <li>Click <strong>Auto-Configure Skill Settings</strong> to automatically set up practice modes based on your roles.</li>
+                    </ul>
+                </li>
+                <li><strong>Select Skills:</strong>
+                    <ul>
+                        <li>Go to the <strong>Skills</strong> tab.</li>
+                        <li>Check the boxes for the skills you want to practice (e.g., Reading, Writing).</li>
+                        <li>You can further customize which columns appear on the front and back of the card for each skill.</li>
+                    </ul>
+                </li>
+                <li><strong>Name and Save:</strong>
+                    <ul>
+                        <li>Give your configuration a name (e.g., "Spanish Chapter 1").</li>
+                        <li>Click <strong>Save Configuration</strong>.</li>
+                    </ul>
+                </li>
+                <li><strong>Start Practicing:</strong>
+                    <ul>
+                        <li>Close the settings panel.</li>
+                        <li>Use the buttons or keyboard shortcuts (displayed on desktop) to navigate, flip cards, and mark them as known or unknown.</li>
+                        <li>The app uses a spaced repetition system to show you cards at optimal intervals for learning.</li>
+                    </ul>
+                </li>
+            </ol>
+        </div>
     </div>
 
     <div id="history-modal" class="hidden">
