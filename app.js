@@ -45,6 +45,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const historyButton = document.getElementById('history-button');
     const closeHistoryButton = document.getElementById('close-history-button');
     const historyModal = document.getElementById('history-modal');
+    const helpButton = document.getElementById('help-button');
+    const closeHelpButton = document.getElementById('close-help-button');
+    const helpModal = document.getElementById('help-modal');
     const historyTableContainer = document.getElementById('history-table-container');
     const configTitle = document.getElementById('config-title');
     const loadDataButton = document.getElementById('load-data');
@@ -161,6 +164,8 @@ document.addEventListener('DOMContentLoaded', () => {
     if (closeSettingsButton) closeSettingsButton.addEventListener('click', () => settingsModal.classList.add('hidden'));
     if (historyButton) historyButton.addEventListener('click', renderHistoryTable);
     if (closeHistoryButton) closeHistoryButton.addEventListener('click', () => historyModal.classList.add('hidden'));
+    if (helpButton) helpButton.addEventListener('click', () => helpModal.classList.remove('hidden'));
+    if (closeHelpButton) closeHelpButton.addEventListener('click', () => helpModal.classList.add('hidden'));
     if (loadDataButton) {
         loadDataButton.addEventListener('click', async () => { // make listener async
             await loadData(); // await the async function
@@ -203,6 +208,20 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     if (createSubsetButton) createSubsetButton.addEventListener('click', createSubset);
 
+    if (skillSelectorCheckboxes) {
+        skillSelectorCheckboxes.addEventListener('change', async (e) => {
+            if (e.target.matches('input[type="checkbox"]')) {
+                const currentConfigName = configSelector.value;
+                if (currentConfigName && configs[currentConfigName]) {
+                    configs[currentConfigName].skills = getSelectedSkills();
+                    isConfigDirty = true;
+                    if (saveConfigButton) saveConfigButton.disabled = false;
+                    await showNextCard();
+                }
+            }
+        });
+    }
+
     if (writingSubmit) writingSubmit.addEventListener('click', checkWritingAnswer);
     if (writingInput) writingInput.addEventListener('keydown', (e) => {
         if (e.key === 'Enter') {
@@ -244,7 +263,9 @@ document.addEventListener('DOMContentLoaded', () => {
             .trim();
     }
 
-    function renderDiff(userAnswerLower, correctAnswerLower, isCorrect) {
+    function renderDiff(userAnswer, correctAnswer, isCorrect) {
+        const userAnswerLower = userAnswer.toLowerCase();
+        const correctAnswerLower = correctAnswer.toLowerCase();
         const diff = Diff.diffChars(correctAnswerLower, userAnswerLower);
         const fragment = document.createDocumentFragment();
 
@@ -257,14 +278,25 @@ document.addEventListener('DOMContentLoaded', () => {
         userDiv.innerHTML = '<strong>Your Answer:</strong> ';
         const userContent = document.createElement('div');
 
+        // Reconstruct the user's answer with original casing while applying diff styles.
+        let userPointer = 0;
         diff.forEach(part => {
-            if (part.removed) return; // Don't show parts that were in the correct answer but not user's
+            // Only process parts that are common or added (present in the user's answer).
+            if (part.removed) return;
+
             const span = document.createElement('span');
             span.className = part.added ? 'diff-added' : 'diff-common';
-            span.appendChild(document.createTextNode(part.value));
+
+            // Slice the original userAnswer to get the text with correct casing.
+            const originalText = userAnswer.substring(userPointer, userPointer + part.value.length);
+            span.appendChild(document.createTextNode(originalText));
             userContent.appendChild(span);
+
+            // Move the pointer forward.
+            userPointer += part.value.length;
         });
         userDiv.appendChild(userContent);
+
 
         const correctDiv = document.createElement('div');
         correctDiv.innerHTML = `<strong>Correct Answer:</strong> <div>${correctAnswer}</div>`;
@@ -274,6 +306,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         return fragment;
     }
+
 
     async function checkWritingAnswer() {
         const userAnswer = writingInput.value.trim();
@@ -297,7 +330,7 @@ document.addEventListener('DOMContentLoaded', () => {
         await markCardAsKnown(isCorrect);
 
         comparisonContainer.innerHTML = ''; // Clear previous diff
-        comparisonContainer.appendChild(renderDiff(userAnswer.toLowerCase(), correctAnswer.toLowerCase(), isCorrect));
+        comparisonContainer.appendChild(renderDiff(userAnswer, correctAnswer, isCorrect));
         comparisonContainer.classList.remove('hidden');
         writingInput.disabled = true;
 
@@ -1745,19 +1778,31 @@ document.addEventListener('DOMContentLoaded', () => {
      * If a "last used" configuration is found, it is loaded automatically.
      * Otherwise, the settings modal is shown.
      */
-    async function loadInitialConfigs() { // Made async
-        const savedConfigs = await get('flashcard-configs');
-        if (savedConfigs) {
-            configs = savedConfigs; // No JSON.parse needed
-            populateConfigSelector();
-        }
+    async function loadInitialConfigs() {
+        try {
+            const savedConfigs = await get('flashcard-configs');
+            if (savedConfigs) {
+                configs = savedConfigs;
+                populateConfigSelector();
+            }
 
-        const lastConfig = await get('flashcard-last-config');
-        if (lastConfig && configs[lastConfig]) {
-            configSelector.value = lastConfig;
-            loadSelectedConfig(lastConfig);
-        } else {
-            if (settingsModal) settingsModal.classList.remove('hidden');
+            const lastConfig = await get('flashcard-last-config');
+            if (lastConfig && configs[lastConfig]) {
+                configSelector.value = lastConfig;
+                await loadSelectedConfig(lastConfig);
+            } else {
+                // This is the path for a new user
+                if (settingsModal) {
+                    settingsModal.classList.remove('hidden');
+                }
+            }
+        } catch (error) {
+            // If anything goes wrong with IndexedDB, show the settings modal as a fallback.
+            console.error("Error loading initial configs from IndexedDB:", error);
+            document.body.style.backgroundColor = 'red'; // Visual indicator of an error
+            if (settingsModal) {
+                 settingsModal.classList.remove('hidden');
+            }
         }
     }
 
