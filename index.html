@@ -9,7 +9,6 @@
   <body>
     <div id="top-bar">
       <h1 id="config-title"></h1>
-      <span id="detected-lang"></span>
       <div>
         <button id="history-button">📜</button>
         <button id="settings-button">⚙️</button>
@@ -129,6 +128,9 @@
                 <label for="tts-back">Text-to-Speech on Back</label>
                 <select id="tts-back-lang"></select>
             </div>
+            <div class="setting">
+                <span id="detected-lang"></span>
+            </div>
         </div>
 
         <div id="skills-settings" class="tab-panel" role="tabpanel" aria-labelledby="skills-tab">
@@ -187,6 +189,7 @@
         <div class="button-container">
             <button id="save-config" disabled>Save Configuration</button>
         </div>
+        <div id="cache-status"></div>
       </div>
     </div>
 
@@ -197,11 +200,14 @@
 
     <div id="card-container">
       <div id="card">
+        <div id="deck-title"></div>
+        <div id="last-seen"></div>
         <div class="card-face card-front"></div>
         <div class="card-face card-back">
             <div id="card-back-content"></div>
             <div id="comparison-container" class="hidden"></div>
         </div>
+        <div id="skill-mastery-dashboard"></div>
       </div>
       <div id="writing-practice-container" class="hidden">
         <button id="slow-replay-button">🔊</button>
@@ -216,15 +222,8 @@
       <button id="flip-card"><span>🔄</span><span class="btn-text"> Flip (Space)</span></button>
       <button id="i-know"><span>✅</span><span class="btn-text"> I know this (k)</span></button>
       <button id="next-card"><span>➡️</span><span class="btn-text"> Next (&rarr;)</span></button>
-      <span class="hotkey-hint">Slow Replay (f)</span>
+      <button id="slow-replay-hotkey" class="hotkey-hint">Slow Replay (f)</button>
     </div>
-
-    <div id="card-stats">
-        <span id="card-specific-stats"></span>
-        <div id="cache-status"></div>
-    </div>
-
-    <div id="skill-mastery-dashboard"></div>
 
     <div id="explanation-message"></div>
     <script src="https://cdn.jsdelivr.net/npm/diff/dist/diff.min.js"></script>

@@ -95,6 +95,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const writingSubmit = document.getElementById('writing-submit');
     const comparisonContainer = document.getElementById('comparison-container');
     const slowReplayButton = document.getElementById('slow-replay-button');
+    const slowReplayHotkey = document.getElementById('slow-replay-hotkey');
+    const deckTitle = document.getElementById('deck-title');
+    const lastSeen = document.getElementById('last-seen');
 
 
     // App state
@@ -233,7 +236,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    if (slowReplayButton) slowReplayButton.addEventListener('click', () => {
+    const handleSlowReplay = () => {
         const currentConfigName = configSelector.value;
         const currentConfig = configs[currentConfigName] || {};
         const skillConfig = (currentConfig.skillColumns || {})[currentSkill] || {};
@@ -241,7 +244,10 @@ document.addEventListener('DOMContentLoaded', () => {
         const ttsSourceColumn = skillConfig.ttsFrontColumn || frontIndices[0];
         const ttsText = getTextForColumns([ttsSourceColumn]);
         speak(ttsText, ttsFrontLangSelect.value, 0.7); // Speak at a fixed slow rate
-    });
+    };
+
+    if (slowReplayButton) slowReplayButton.addEventListener('click', handleSlowReplay);
+    if (slowReplayHotkey) slowReplayHotkey.addEventListener('click', handleSlowReplay);
 
     if (settingsModal) {
         settingsModal.addEventListener('input', handleSettingsChange);
@@ -1095,19 +1101,25 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const isAudioOnly = (audioOnlyFrontCheckbox && audioOnlyFrontCheckbox.checked) || currentSkill === SKILLS.LISTENING.id;
 
+        cardFront.innerHTML = ''; // Clear previous content
+        cardBackContent.innerHTML = ''; // Clear previous content
+
         if (isAudioOnly) {
             cardFront.innerHTML = '<span class="speech-icon">🔊</span>';
         } else {
-            cardFront.textContent = displayText;
+            cardFront.innerHTML = `<span>${displayText.replace(/\n/g, '<br>')}</span>`;
         }
-        cardBackContent.textContent = getTextForColumns(backIndices);
+
+        cardBackContent.innerHTML = `<span>${getTextForColumns(backIndices).replace(/\n/g, '<br>')}</span>`;
 
         cardFront.style.fontSize = '';
         cardBackContent.style.fontSize = '';
 
         setTimeout(() => {
-            adjustFontSize(cardFront);
-            adjustFontSize(cardBackContent);
+            if (!isAudioOnly) {
+                adjustFontSize(cardFront.querySelector('span'));
+            }
+            adjustFontSize(cardBackContent.querySelector('span'));
         }, 50);
 
         card.classList.remove('flipped');
@@ -1120,14 +1132,11 @@ document.addEventListener('DOMContentLoaded', () => {
         renderSkillMastery(stats);
 
         const timeAgo = formatTimeAgo(previousLastViewed);
-        const retentionScore = getRetentionScore(currentSkillStats);
+        if (lastSeen) {
+            lastSeen.textContent = `Last seen: ${timeAgo}`;
+        }
         if (cardSpecificStats) {
-            cardSpecificStats.innerHTML = `
-                <span>Skill: ${SKILLS[currentSkill].label}</span> |
-                <span>Retention Score: ${retentionScore}</span> |
-                <span>View Count: ${currentSkillStats.viewCount}</span> |
-                <span>Last seen: ${timeAgo}</span>
-            `;
+            cardSpecificStats.innerHTML = ``;
         }
 
         if (explanationMessage) {
@@ -1618,7 +1627,8 @@ document.addEventListener('DOMContentLoaded', () => {
         await set('flashcard-last-config', configName);
         populateConfigSelector();
         configSelector.value = configName;
-        configTitle.textContent = configName;
+        if (configTitle) configTitle.textContent = configName;
+        if (deckTitle) deckTitle.textContent = configName;
         alert(`Configuration '${configName}' saved!`);
         isConfigDirty = false;
         if (saveConfigButton) saveConfigButton.disabled = true;
@@ -1663,7 +1673,8 @@ document.addEventListener('DOMContentLoaded', () => {
         ttsFrontCheckbox.checked = config.ttsFront;
         ttsBackCheckbox.checked = config.ttsBack;
         cardContainer.style.fontFamily = config.font;
-        configTitle.textContent = configName;
+        if (configTitle) configTitle.textContent = configName;
+        if (deckTitle) deckTitle.textContent = configName;
         if (keyColumnSelector) keyColumnSelector.value = config.keyColumn || 0;
 
         if (config.subsetData && Array.isArray(config.subsetData)) {

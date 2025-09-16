@@ -200,6 +200,7 @@ body.is-flipping {
   position: relative;
   transform-style: preserve-3d;
   transition: transform 0.6s;
+  position: relative;
 }
 
 #card.no-animation {
@@ -210,27 +211,50 @@ body.is-flipping {
   transform: rotateY(180deg);
 }
 
+#deck-title {
+    position: absolute;
+    top: 10px;
+    left: 15px;
+    font-size: 0.8em;
+    color: #888;
+    font-weight: bold;
+    text-transform: uppercase;
+}
+
+#last-seen {
+    position: absolute;
+    bottom: 10px;
+    left: 15px;
+    font-size: 0.8em;
+    color: #888;
+}
+
 .card-face {
   position: absolute;
   width: 100%;
   height: 100%;
   backface-visibility: hidden;
   display: flex;
+  flex-direction: column; /* Changed to column for better control */
   align-items: center;
   justify-content: center;
   border: 2px solid #ccc;
   border-radius: 10px;
   background-color: white;
-  padding: 20px;
+  padding: 40px 20px; /* Increased top/bottom padding for corner elements */
   box-sizing: border-box;
   word-wrap: break-word;
   text-align: center;
   white-space: pre-wrap;
 }
 
+.card-face > span, #card-back-content > span {
+    display: inline-block;
+    max-width: 100%;
+}
+
 .card-back {
   transform: rotateY(180deg);
-  flex-direction: column;
   justify-content: space-around;
 }
 
@@ -242,8 +266,18 @@ body.is-flipping {
     width: 100%;
 }
 
+#slow-replay-hotkey {
+    padding: 10px 15px;
+    font-size: 1em;
+    margin: 0 5px;
+}
+
 #controls {
   margin-top: 20px;
+}
+
+#card-stats {
+    display: none;
 }
 
 button {
@@ -384,10 +418,13 @@ button.danger:hover {
 }
 
 #skill-mastery-dashboard {
+    position: absolute;
+    bottom: 10px;
+    right: 10px;
     display: flex;
     justify-content: center;
-    gap: 10px;
-    margin-top: 15px;
+    gap: 5px; /* Reduced gap for smaller space */
+    z-index: 5; /* Ensure it's above the card face */
 }
 
 .skill-mastery-item {
