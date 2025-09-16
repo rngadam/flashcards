@@ -797,7 +797,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const frontIndices = skillConfig.front;
 
         if (card.classList.contains('flipped') && ttsBackCheckbox && ttsBackCheckbox.checked) {
-            speak(cardBackContent.textContent, ttsBackLangSelect.value);
+            speak(cardBack.textContent, ttsBackLangSelect.value);
         } else if (!card.classList.contains('flipped') && ttsFrontCheckbox && ttsFrontCheckbox.checked) {
             const ttsSourceColumn = currentConfig.ttsSourceColumn || frontIndices[0];
             const ttsText = getTextForColumns([ttsSourceColumn]);
