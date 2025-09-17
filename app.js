@@ -1067,29 +1067,28 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!card) return;
 
         const isFlippingToFront = card.classList.contains('flipped');
+        const currentConfigName = configSelector.value;
+        const currentConfig = configs[currentConfigName] || {};
+        let skillConfig = (currentConfig.skillColumns || {})[currentSkill] || {};
+        if (!skillConfig) {
+            skillConfig = (currentConfig.skillColumns || {})[SKILLS.READING.id] || { front: ['TARGET_LANGUAGE'], back: ['BASE_LANGUAGE'] };
+        }
 
         card.classList.toggle('flipped');
 
         if (isFlippingToFront) {
-            // A flip from back to front triggers the next rotation.
             baseLanguageRotationIndex++;
-            // Re-render the card front to show the new base language if applicable.
-            const currentConfigName = configSelector.value;
-            const currentConfig = configs[currentConfigName] || {};
-            const skillConfig = (currentConfig.skillColumns || {})[currentSkill] || {};
             const frontRoles = skillConfig.front || [];
             const baseLangIndices = (configs[configSelector.value] || {}).roleToColumnMap['BASE_LANGUAGE'] || [];
             if (baseLangIndices.length > 1) {
                 const rotationIndex = baseLanguageRotationIndex % baseLangIndices.length;
                 currentRandomBaseIndex = baseLangIndices[rotationIndex];
             }
-            // We need to regenerate all text variables that might depend on the new base language index
             textForFrontDisplay = getTextForRoles(frontRoles, currentRandomBaseIndex);
             textForFrontTTS = getTextForRoles(skillConfig.ttsFrontColumn ? [skillConfig.ttsFrontColumn] : [], currentRandomBaseIndex);
             cardFrontContent.innerHTML = `<span>${textForFrontDisplay.replace(/\n/g, '<br>')}</span>`;
             adjustFontSize(cardFrontContent.querySelector('span'), true);
         }
-
 
         document.body.classList.add('is-flipping');
         setTimeout(() => {
@@ -1097,14 +1096,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }, 600);
 
         if (ttsOnHotkeyOnlyCheckbox && ttsOnHotkeyOnlyCheckbox.checked) return;
-
-        // Get the correct column configuration for the current skill to find the text to speak.
-        const currentConfigName = configSelector.value;
-        const currentConfig = configs[currentConfigName] || {};
-        let skillConfig = (currentConfig.skillColumns || {})[currentSkill];
-        if (!skillConfig) {
-            skillConfig = (currentConfig.skillColumns || {})[SKILLS.READING.id] || { front: ['TARGET_LANGUAGE'], back: ['BASE_LANGUAGE'] };
-        }
 
         if (card.classList.contains('flipped')) {
             const ttsRole = skillConfig.ttsBackColumn;
@@ -1116,7 +1107,6 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             speak(textForBackTTS, { ttsRole: ttsRole, lang: lang });
         } else {
-            // This part handles flipping back to the front. The logic is the same.
             const ttsRole = skillConfig.ttsFrontColumn;
             let lang;
             if (ttsRole === 'BASE_LANGUAGE' && currentRandomBaseIndex !== -1) {
