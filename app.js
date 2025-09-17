@@ -349,18 +349,11 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     const handleSlowReplay = () => {
-        const currentConfigName = configSelector.value;
-        const currentConfig = configs[currentConfigName] || {};
-        const skillConfig = (currentConfig.skillColumns || {})[currentSkill] || {};
+        const skillConfig = getCurrentSkillConfig();
         const ttsFrontRole = skillConfig.ttsFrontColumn;
         if (ttsFrontRole) {
             const ttsText = getTextForRoles([ttsFrontRole]);
-            let lang;
-            if (ttsFrontRole === 'BASE_LANGUAGE' && currentRandomBaseIndex !== -1) {
-                lang = columnLanguages[currentRandomBaseIndex];
-            } else {
-                lang = getLanguageForRole(ttsFrontRole);
-            }
+            const lang = getLanguageForTts(ttsFrontRole);
             // Speak at a fixed slow rate, but still pass the role and language
             speak(ttsText, { rate: 0.7, ttsRole: ttsFrontRole, lang: lang });
         }
@@ -473,12 +466,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const userAnswer = writingInput.value.trim();
         if (userAnswer === '') return;
 
-        const currentConfigName = configSelector.value;
-        const currentConfig = configs[currentConfigName] || {};
-        let skillConfig = (currentConfig.skillColumns || {})[currentSkill];
-        if (!skillConfig) {
-            skillConfig = (currentConfig.skillColumns || {})[SKILLS.READING.id] || { front: [0], back: [1], validationColumn: 'none' };
-        }
+        const skillConfig = getCurrentSkillConfig();
         const validationRole = skillConfig.validationColumn;
         if (!validationRole || validationRole === 'none') {
             console.error("checkWritingAnswer called but no validation column is configured for this skill.");
@@ -779,9 +767,8 @@ document.addEventListener('DOMContentLoaded', () => {
             const lang = columnLanguages[index];
             if (lang && lang !== 'N/A') {
                 const langSpan = document.createElement('span');
-                langSpan.textContent = ` (${lang})`;
-                langSpan.style.color = '#888';
-                langSpan.style.fontStyle = 'italic';
+                langSpan.textContent = `(${lang})`;
+                langSpan.className = 'lang-hint';
                 label.appendChild(langSpan);
             }
 
@@ -1063,31 +1050,53 @@ document.addEventListener('DOMContentLoaded', () => {
      * Flips the current card and handles the flip animation.
      * Also triggers TTS for the revealed side if enabled.
      */
+    function getCurrentSkillConfig() {
+        const currentConfigName = configSelector.value;
+        const currentConfig = configs[currentConfigName] || {};
+        let skillConfig = (currentConfig.skillColumns || {})[currentSkill] || {};
+        // Fallback to reading skill defaults if the specific skill is not configured
+        if (Object.keys(skillConfig).length === 0) {
+            skillConfig = (currentConfig.skillColumns || {})[SKILLS.READING.id] || {};
+        }
+        return skillConfig;
+    }
+
+    /**
+     * Flips the current card and handles the flip animation.
+     * Also triggers TTS for the revealed side if enabled.
+     */
     function flipCard() {
         if (!card) return;
 
         const isFlippingToFront = card.classList.contains('flipped');
-        const currentConfigName = configSelector.value;
-        const currentConfig = configs[currentConfigName] || {};
-        let skillConfig = (currentConfig.skillColumns || {})[currentSkill] || {};
-        if (!skillConfig) {
-            skillConfig = (currentConfig.skillColumns || {})[SKILLS.READING.id] || { front: ['TARGET_LANGUAGE'], back: ['BASE_LANGUAGE'] };
-        }
+        const skillConfig = getCurrentSkillConfig();
 
         card.classList.toggle('flipped');
 
         if (isFlippingToFront) {
             baseLanguageRotationIndex++;
             const frontRoles = skillConfig.front || [];
+            const backRoles = skillConfig.back || [];
+            const ttsFrontRole = skillConfig.ttsFrontColumn ? [skillConfig.ttsFrontColumn] : [];
+            const ttsBackRole = skillConfig.ttsBackColumn ? [skillConfig.ttsBackColumn] : [];
             const baseLangIndices = (configs[configSelector.value] || {}).roleToColumnMap['BASE_LANGUAGE'] || [];
+
             if (baseLangIndices.length > 1) {
                 const rotationIndex = baseLanguageRotationIndex % baseLangIndices.length;
                 currentRandomBaseIndex = baseLangIndices[rotationIndex];
             }
+
+            // Regenerate all text variables for both faces
             textForFrontDisplay = getTextForRoles(frontRoles, currentRandomBaseIndex);
-            textForFrontTTS = getTextForRoles(skillConfig.ttsFrontColumn ? [skillConfig.ttsFrontColumn] : [], currentRandomBaseIndex);
+            textForFrontTTS = getTextForRoles(ttsFrontRole, currentRandomBaseIndex);
+            textForBackDisplay = getTextForRoles(backRoles, currentRandomBaseIndex);
+            textForBackTTS = getTextForRoles(ttsBackRole, currentRandomBaseIndex);
+
+            // Update the DOM for both faces
             cardFrontContent.innerHTML = `<span>${textForFrontDisplay.replace(/\n/g, '<br>')}</span>`;
             adjustFontSize(cardFrontContent.querySelector('span'), true);
+            cardBackContent.innerHTML = `<span>${textForBackDisplay.replace(/\n/g, '<br>')}</span>`;
+            adjustFontSize(cardBackContent.querySelector('span'), false);
         }
 
         document.body.classList.add('is-flipping');
@@ -1099,21 +1108,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (card.classList.contains('flipped')) {
             const ttsRole = skillConfig.ttsBackColumn;
-            let lang;
-            if (ttsRole === 'BASE_LANGUAGE' && currentRandomBaseIndex !== -1) {
-                lang = columnLanguages[currentRandomBaseIndex];
-            } else {
-                lang = getLanguageForRole(ttsRole);
-            }
+            const lang = getLanguageForTts(ttsRole);
             speak(textForBackTTS, { ttsRole: ttsRole, lang: lang });
         } else {
             const ttsRole = skillConfig.ttsFrontColumn;
-            let lang;
-            if (ttsRole === 'BASE_LANGUAGE' && currentRandomBaseIndex !== -1) {
-                lang = columnLanguages[currentRandomBaseIndex];
-            } else {
-                lang = getLanguageForRole(ttsRole);
-            }
+            const lang = getLanguageForTts(ttsRole);
             speak(textForFrontTTS, { ttsRole: ttsRole, lang: lang });
         }
     }
@@ -1437,12 +1436,7 @@ document.addEventListener('DOMContentLoaded', () => {
         card.classList.remove('flipped');
         if (ttsOnHotkeyOnlyCheckbox && !ttsOnHotkeyOnlyCheckbox.checked) {
             const ttsRole = skillConfig.ttsFrontColumn;
-            let lang;
-            if (ttsRole === 'BASE_LANGUAGE' && currentRandomBaseIndex !== -1) {
-                lang = columnLanguages[currentRandomBaseIndex];
-            } else {
-                lang = getLanguageForRole(ttsRole);
-            }
+            const lang = getLanguageForTts(ttsRole);
             speak(textForFrontTTS, { ttsRole: ttsRole, lang: lang });
         }
 
@@ -1960,6 +1954,8 @@ document.addEventListener('DOMContentLoaded', () => {
             ttsOnHotkeyOnly: ttsOnHotkeyOnlyCheckbox.checked,
         };
 
+        console.log('Saving skillColumns:', configs[configName].skillColumns); // DEBUG
+        console.log('Saving skillColumns:', JSON.stringify(configs[configName].skillColumns, null, 2)); // DEBUG
         // Remove deprecated properties
         delete configs[configName].frontColumns;
         delete configs[configName].backColumns;
@@ -2009,6 +2005,7 @@ document.addEventListener('DOMContentLoaded', () => {
     async function loadSelectedConfig(configName) {
         if (!configName || !configs[configName]) return;
         const config = configs[configName];
+        console.log('Loading skillColumns:', JSON.stringify(config.skillColumns, null, 2)); // DEBUG
 
         configNameInput.value = configName;
         dataUrlInput.value = config.dataUrl || '';
@@ -2227,7 +2224,14 @@ document.addEventListener('DOMContentLoaded', () => {
         // If multiple columns have the same role, use the language of the first one for TTS.
         const columnIndex = indices[0];
         return columnLanguages[columnIndex] || 'en';
+    }
+
+    function getLanguageForTts(ttsRole) {
+        if (ttsRole === 'BASE_LANGUAGE' && currentRandomBaseIndex !== -1) {
+            return columnLanguages[currentRandomBaseIndex] || 'en';
         }
+        return getLanguageForRole(ttsRole);
+    }
 
     /**
      * Uses the browser's SpeechSynthesis API to speak the given text.
@@ -2330,9 +2334,7 @@ function speak(text, { rate, lang, ttsRole } = {}) {
                         showPrevCard();
                         break;
                     case 'KeyK': {
-                        const currentConfigName = configSelector.value;
-                        const currentConfig = configs[currentConfigName] || {};
-                        const skillConfig = (currentConfig.skillColumns || {})[currentSkill] || {};
+                        const skillConfig = getCurrentSkillConfig();
                         if (!skillConfig.validationColumn || skillConfig.validationColumn === 'none') {
                             markCardAsKnown(true);
                             showNextCard();
@@ -2340,9 +2342,7 @@ function speak(text, { rate, lang, ttsRole } = {}) {
                         break;
                     }
                     case 'KeyJ': {
-                        const currentConfigName = configSelector.value;
-                        const currentConfig = configs[currentConfigName] || {};
-                        const skillConfig = (currentConfig.skillColumns || {})[currentSkill] || {};
+                        const skillConfig = getCurrentSkillConfig();
                         if (!skillConfig.validationColumn || skillConfig.validationColumn === 'none') {
                             markCardAsKnown(false);
                             showNextCard({forceNew: true});
@@ -2350,17 +2350,10 @@ function speak(text, { rate, lang, ttsRole } = {}) {
                         break;
                     }
                     case 'KeyF': {
-                        const currentConfigName = configSelector.value;
-                        const currentConfig = configs[currentConfigName] || {};
-                        const skillConfig = (currentConfig.skillColumns || {})[currentSkill] || {};
+                        const skillConfig = getCurrentSkillConfig();
                         const text = card.classList.contains('flipped') ? textForBackTTS : textForFrontTTS;
                         const role = card.classList.contains('flipped') ? skillConfig.ttsBackColumn : skillConfig.ttsFrontColumn;
-                        let lang;
-                        if (role === 'BASE_LANGUAGE' && currentRandomBaseIndex !== -1) {
-                            lang = columnLanguages[currentRandomBaseIndex];
-                        } else {
-                            lang = getLanguageForRole(role);
-                        }
+                        const lang = getLanguageForTts(role);
                         replayRate = Math.max(0.1, replayRate - 0.2);
                         speak(text, { rate: replayRate, ttsRole: role, lang: lang });
                         break;
