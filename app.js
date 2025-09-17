@@ -8,9 +8,20 @@ import { get, set, del } from 'https://cdn.jsdelivr.net/npm/idb-keyval/+esm';
  * and all user-facing features like TTS, spaced repetition, and settings.
  */
 document.addEventListener('DOMContentLoaded', () => {
-    if (!('ontouchstart' in window)) {
-        document.body.classList.add('desktop');
-    }
+    const updateLayout = () => {
+        // Use a media query to check for desktop-like screen widths (a common breakpoint).
+        if (window.matchMedia('(min-width: 769px)').matches) {
+            document.body.classList.add('desktop');
+        } else {
+            document.body.classList.remove('desktop');
+        }
+    };
+
+    // Set the layout on initial load
+    updateLayout();
+
+    // And update it whenever the window is resized
+    window.addEventListener('resize', updateLayout);
 
     // Tab switching logic
     const tabsContainer = document.querySelector('.tabs');
@@ -66,6 +77,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const skillColumnConfigContainer = document.getElementById('skill-column-config-container');
     const fontSelector = document.getElementById('font-selector');
     const ttsRateSlider = document.getElementById('tts-rate');
+    const ttsRateBaseSlider = document.getElementById('tts-rate-base');
     const alternateUppercaseCheckbox = document.getElementById('alternate-uppercase');
     const disableAnimationCheckbox = document.getElementById('disable-animation');
     const audioOnlyFrontCheckbox = document.getElementById('audio-only-front');
@@ -183,6 +195,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let cardShownTimestamp = null; // Tracks when the card was shown to calculate response delay.
     let isCurrentCardDue = false; // Tracks if the current card was shown because it was due for review.
     let isConfigDirty = false; // Tracks if the current config has unsaved changes.
+    let columnLanguages = []; // Holds the detected language for each column.
 
     // History table sort state
     let historySortColumn = -1;
@@ -341,7 +354,9 @@ document.addEventListener('DOMContentLoaded', () => {
         const ttsFrontRole = skillConfig.ttsFrontColumn;
         if (ttsFrontRole) {
             const ttsText = getTextForRoles([ttsFrontRole]);
-            speak(ttsText, 0.7); // Speak at a fixed slow rate
+            const lang = getLanguageForRole(ttsFrontRole);
+            // Speak at a fixed slow rate, but still pass the role and language
+            speak(ttsText, { rate: 0.7, ttsRole: ttsFrontRole, lang: lang });
         }
     };
 
@@ -643,6 +658,52 @@ document.addEventListener('DOMContentLoaded', () => {
      * It also initializes the statistics for each card.
      * @param {string} text - The raw string data from the fetched file.
      */
+    async function detectColumnLanguages() {
+        if (cardData.length === 0) {
+            columnLanguages = [];
+            return;
+        }
+
+        const languagePromises = headers.map(async (header, colIndex) => {
+            // Concatenate up to 50 random sample cells from the column for detection
+            let sampleText = '';
+            const sampleSize = Math.min(cardData.length, 50);
+            // Create a shallow shuffled copy to not modify the original cardData order
+            const shuffledData = [...cardData].sort(() => 0.5 - Math.random());
+
+            for (let i = 0; i < sampleSize; i++) {
+                const cell = shuffledData[i][colIndex];
+                if (cell) {
+                    // Important: Sanitize here to remove pinyin etc. before detection
+                    sampleText += cell.replace(/\s?\(.*\)\s?/g, ' ').trim() + ' ';
+                }
+            }
+
+            if (sampleText.trim() === '') {
+                return 'N/A'; // Not enough data to detect
+            }
+
+            const result = await eld.detect(sampleText);
+            // Use franc as a fallback for short or ambiguous text
+            const finalLang = result.language || franc(sampleText);
+
+            return finalLang && finalLang !== 'und' ? finalLang : 'en'; // Default to 'en'
+        });
+
+        columnLanguages = await Promise.all(languagePromises);
+        console.log('Detected column languages:', columnLanguages);
+
+        // This function is now responsible for populating the roles UI since the UI needs the language info
+        populateColumnRolesUI();
+    }
+
+
+    /**
+     * Parses raw TSV or CSV text into the application's data structures.
+     * It auto-detects the delimiter (tab or comma).
+     * It also initializes the statistics for each card.
+     * @param {string} text - The raw string data from the fetched file.
+     */
     async function parseData(text) { // Made async
         const cleanCell = (cell) => cell.replace(/[\r\n\s]+/g, ' ').trim();
 
@@ -664,7 +725,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // Stats are no longer loaded in bulk here.
 
         viewHistory = [];
-        populateColumnRolesUI();
+        await detectColumnLanguages(); // This populates columnLanguages and then calls populateColumnRolesUI
         populateColumnSelectors();
         if (repetitionIntervalsTextarea) repetitionIntervalsTextarea.value = repetitionIntervals.join(', ');
     }
@@ -690,6 +751,15 @@ document.addEventListener('DOMContentLoaded', () => {
             const label = document.createElement('label');
             label.textContent = header;
             label.htmlFor = `column-role-${index}`;
+
+            const lang = columnLanguages[index];
+            if (lang && lang !== 'N/A') {
+                const langSpan = document.createElement('span');
+                langSpan.textContent = ` (${lang})`;
+                langSpan.style.color = '#888';
+                langSpan.style.fontStyle = 'italic';
+                label.appendChild(langSpan);
+            }
 
             const select = document.createElement('select');
             select.id = `column-role-${index}`;
@@ -988,10 +1058,12 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
     if (card.classList.contains('flipped')) {
-        speak(textForBackTTS);
-    } else if (!card.classList.contains('flipped')) {
-        speak(textForFrontTTS);
-        }
+        const lang = getLanguageForRole(skillConfig.ttsBackColumn);
+        speak(textForBackTTS, { ttsRole: skillConfig.ttsBackColumn, lang: lang });
+    } else {
+        const lang = getLanguageForRole(skillConfig.ttsFrontColumn);
+        speak(textForFrontTTS, { ttsRole: skillConfig.ttsFrontColumn, lang: lang });
+    }
     }
 
     /**
@@ -1305,7 +1377,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
         card.classList.remove('flipped');
         if (ttsOnHotkeyOnlyCheckbox && !ttsOnHotkeyOnlyCheckbox.checked) {
-            speak(textForFrontTTS);
+            const lang = getLanguageForRole(skillConfig.ttsFrontColumn);
+            speak(textForFrontTTS, { ttsRole: skillConfig.ttsFrontColumn, lang: lang });
         }
 
         renderSkillMastery(stats);
@@ -1815,6 +1888,7 @@ document.addEventListener('DOMContentLoaded', () => {
             roleToColumnMap: roleToColumnMap, // Save the computed map
             font: fontSelector.value,
             ttsRate: ttsRateSlider.value,
+            ttsRateBase: ttsRateBaseSlider.value,
             alternateUppercase: alternateUppercaseCheckbox.checked,
             disableAnimation: disableAnimationCheckbox.checked,
             audioOnlyFront: audioOnlyFrontCheckbox.checked,
@@ -1969,6 +2043,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         if (ttsRateSlider) ttsRateSlider.value = config.ttsRate || 1;
+        if (ttsRateBaseSlider) ttsRateBaseSlider.value = config.ttsRateBase || 1.5;
         if (alternateUppercaseCheckbox) alternateUppercaseCheckbox.checked = config.alternateUppercase || false;
         if (disableAnimationCheckbox) disableAnimationCheckbox.checked = config.disableAnimation || false;
         if (audioOnlyFrontCheckbox) audioOnlyFrontCheckbox.checked = config.audioOnlyFront || false;
@@ -2072,7 +2147,32 @@ document.addEventListener('DOMContentLoaded', () => {
      * @param {string} voiceName - The name of the voice to use (from `speechSynthesis.getVoices()`).
      * @param {number} [rate] - The playback rate (e.g., 1.0 for normal, 0.5 for half-speed). Defaults to the slider value.
      */
-    function speak(text, rate) {
+    function getLanguageForRole(ttsRole) {
+        if (!ttsRole) return 'en'; // Default language
+        const currentConfigName = configSelector.value;
+        const currentConfig = configs[currentConfigName];
+        const roleToColumnMap = currentConfig ? currentConfig.roleToColumnMap : null;
+
+        if (!roleToColumnMap) return 'en';
+
+        const indices = roleToColumnMap[ttsRole];
+        if (!indices || indices.length === 0) {
+            return 'en';
+        }
+        // If multiple columns have the same role, use the language of the first one for TTS.
+        const columnIndex = indices[0];
+        return columnLanguages[columnIndex] || 'en';
+        }
+
+    /**
+     * Uses the browser's SpeechSynthesis API to speak the given text.
+     * @param {string} text - The text to be spoken.
+     * @param {object} options - Options for speech synthesis.
+     * @param {number} [options.rate] - The playback rate.
+     * @param {string} [options.lang] - The BCP 47 language code.
+     * @param {string} [options.ttsRole] - The role of the content being spoken (e.g., 'BASE_LANGUAGE').
+     */
+function speak(text, { rate, lang, ttsRole } = {}) {
         if (!('speechSynthesis' in window) || speechSynthesis.speaking || !text) {
             return;
         }
@@ -2083,28 +2183,23 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const utterance = new SpeechSynthesisUtterance(sanitizedText);
 
-        // Auto-detect language using eld
-        const result = eld.detect(text);
-        let lang = 'en'; // Default to English
-        // Prioritize the most likely language from eld
-        if (result.language) {
-            lang = result.language;
-        }
-        console.log(`Detected language: ${lang} for text: "${text.substring(0, 30)}..."`);
+    // The language is now passed in directly.
+    const finalLang = lang || 'en'; // Default to English if not provided
+    console.log(`Using language: ${finalLang} for text: "${sanitizedText.substring(0, 30)}..."`);
+
 
         // Display detected language on the card
         const displayer = card.classList.contains('flipped') ? ttsLangDisplayBack : ttsLangDisplayFront;
         if (displayer) {
-            // Clear previous language display before showing the new one
             if(ttsLangDisplayFront) ttsLangDisplayFront.textContent = '';
             if(ttsLangDisplayBack) ttsLangDisplayBack.textContent = '';
-            displayer.textContent = lang;
+        displayer.textContent = finalLang;
         }
 
-        // Find a suitable voice. Prioritize exact match, then language prefix, then default.
-        let voice = voices.find(v => v.lang === lang);
+    // Find a suitable voice.
+    let voice = voices.find(v => v.lang === finalLang);
         if (!voice) {
-            voice = voices.find(v => v.lang.startsWith(lang));
+        voice = voices.find(v => v.lang.startsWith(finalLang));
         }
         if (!voice) {
             voice = voices.find(v => v.default);
@@ -2112,10 +2207,22 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (voice) {
             utterance.voice = voice;
-            utterance.lang = voice.lang; // Set lang property on utterance
+        utterance.lang = voice.lang;
         }
 
-        utterance.rate = rate || (ttsRateSlider ? ttsRateSlider.value : 1);
+    // Determine the rate
+    let finalRate;
+    if (rate) {
+        finalRate = rate;
+    } else if (ttsRole === 'BASE_LANGUAGE' && ttsRateBaseSlider) {
+        finalRate = ttsRateBaseSlider.value;
+    } else if (ttsRateSlider) {
+        finalRate = ttsRateSlider.value;
+    } else {
+        finalRate = 1;
+    }
+
+    utterance.rate = finalRate;
         window.speechSynthesis.speak(utterance);
     }
 
@@ -2178,9 +2285,14 @@ document.addEventListener('DOMContentLoaded', () => {
                         break;
                     }
                     case 'KeyF': {
+                        const currentConfigName = configSelector.value;
+                        const currentConfig = configs[currentConfigName] || {};
+                        const skillConfig = (currentConfig.skillColumns || {})[currentSkill] || {};
                         const text = card.classList.contains('flipped') ? textForBackTTS : textForFrontTTS;
+                        const role = card.classList.contains('flipped') ? skillConfig.ttsBackColumn : skillConfig.ttsFrontColumn;
+                        const lang = getLanguageForRole(role);
                         replayRate = Math.max(0.1, replayRate - 0.2);
-                        speak(text, replayRate);
+                        speak(text, { rate: replayRate, ttsRole: role, lang: lang });
                         break;
                     }
                 }
