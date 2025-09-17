@@ -733,7 +733,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
         viewHistory = [];
         await detectColumnLanguages(); // This populates columnLanguages and then calls populateColumnRolesUI
-        populateColumnSelectors();
         if (repetitionIntervalsTextarea) repetitionIntervalsTextarea.value = repetitionIntervals.join(', ');
     }
 
@@ -931,9 +930,11 @@ document.addEventListener('DOMContentLoaded', () => {
             skillItem.className = 'skill-item';
             skillItem.dataset.skillId = skill.id;
 
+            const frontDetails = Array.isArray(skill.front) ? skill.front.join(', ') : 'None';
+            const backDetails = Array.isArray(skill.back) ? skill.back.join(', ') : 'None';
             const details = `
-                Front: ${skill.front.join(', ') || 'None'} |
-                Back: ${skill.back.join(', ') || 'None'} |
+                Front: ${frontDetails || 'None'} |
+                Back: ${backDetails || 'None'} |
                 Validation: ${skill.verificationMethod}
             `;
 
@@ -2083,10 +2084,17 @@ document.addEventListener('DOMContentLoaded', () => {
             await loadData();
         }
 
-        // Ensure skills array exists
-        if (!config.skills) {
+        // Ensure skills array exists and hydrate them
+        if (config.skills && Array.isArray(config.skills)) {
+            config.skills = config.skills.map(plainSkill => {
+                const skill = new Skill(plainSkill.name, plainSkill.id);
+                // Object.assign to merge loaded properties, preserving defaults from constructor
+                return Object.assign(skill, plainSkill);
+            });
+        } else {
             config.skills = [];
         }
+
         // Ensure activeSkills array exists
         if (!config.activeSkills) {
             config.activeSkills = config.skills.length > 0 ? [config.skills[0].id] : [];
