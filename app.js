@@ -634,7 +634,6 @@ document.addEventListener('DOMContentLoaded', () => {
         populateColumnRolesUI();
         populateColumnSelectors();
         if (repetitionIntervalsTextarea) repetitionIntervalsTextarea.value = repetitionIntervals.join(', ');
-        detectAndFilterLanguage();
     }
 
     function populateColumnRolesUI() {
