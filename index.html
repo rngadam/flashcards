@@ -8,6 +8,7 @@
   </head>
   <body>
     <div id="top-bar">
+      <div id="top-notification" class="hidden"></div>
       <h1 id="config-title"></h1>
       <div class="desktop-only-buttons">
         <button id="history-button">📜</button>
@@ -104,11 +105,6 @@
           </div>
         </div>
 
-        <div class="setting">
-          <label for="key-column-selector">Unique Key Column:</label>
-          <select id="key-column-selector"></select>
-        </div>
-
         <div class="tabs" role="tablist">
           <button class="tab-button active" id="basic-tab" data-tab="basic-settings" role="tab" aria-controls="basic-settings" aria-selected="true">Basic</button>
           <button class="tab-button" id="skills-tab" data-tab="skills-settings" role="tab" aria-controls="skills-settings" aria-selected="false">Skills</button>
@@ -129,19 +125,6 @@
                     <option value="Times New Roman">Times New Roman</option>
                     <option value="Courier New">Courier New</option>
                 </select>
-            </div>
-            <div class="setting">
-                <input type="checkbox" id="tts-front">
-                <label for="tts-front">Text-to-Speech on Front</label>
-                <select id="tts-front-lang"></select>
-            </div>
-            <div class="setting">
-                <input type="checkbox" id="tts-back">
-                <label for="tts-back">Text-to-Speech on Back</label>
-                <select id="tts-back-lang"></select>
-            </div>
-            <div class="setting">
-                <span id="detected-lang"></span>
             </div>
         </div>
 
@@ -212,8 +195,12 @@
 
     <div id="card-container">
       <div id="card">
-        <div class="card-face card-front"></div>
+        <div class="card-face card-front" id="card-front">
+            <div class="tts-lang-display" id="tts-lang-display-front"></div>
+            <div id="card-front-content"></div>
+        </div>
         <div class="card-face card-back">
+            <div class="tts-lang-display" id="tts-lang-display-back"></div>
             <div id="card-back-content"></div>
             <div id="comparison-container" class="hidden"></div>
         </div>
