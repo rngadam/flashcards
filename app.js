@@ -102,6 +102,28 @@ document.addEventListener('DOMContentLoaded', () => {
     const slowReplayHotkey = document.getElementById('slow-replay-hotkey');
     const deckTitle = document.getElementById('deck-title');
     const lastSeen = document.getElementById('last-seen');
+    const topNotification = document.getElementById('top-notification');
+
+
+    // --- Top Notification Function ---
+    let notificationTimeout;
+    function showTopNotification(message, type = 'error', duration = 3000) {
+        if (!topNotification) return;
+
+        // Clear any existing timeout to prevent the notification from disappearing early
+        if (notificationTimeout) {
+            clearTimeout(notificationTimeout);
+        }
+
+        topNotification.textContent = message;
+        // The 'hidden' class is removed and 'visible' is added to trigger the transition
+        topNotification.className = `visible ${type}`;
+
+        // Set a timeout to hide the notification after the specified duration
+        notificationTimeout = setTimeout(() => {
+            topNotification.className = `hidden ${type}`;
+        }, duration);
+    }
 
 
     // App state
@@ -422,8 +444,9 @@ document.addEventListener('DOMContentLoaded', () => {
         const validationColumnIndices = roleToColumnMap[validationRole] || [];
 
         if (validationColumnIndices.length === 0) {
-             console.error(`No column found for validation role: ${validationRole}`);
-             // Maybe show a gentle error to the user in the UI? For now, just log and exit.
+             const message = `Cannot validate: No column is assigned the "${COLUMN_ROLES[validationRole]}" role.`;
+             console.error(message);
+             showTopNotification(message);
              return;
         }
 
@@ -451,22 +474,22 @@ document.addEventListener('DOMContentLoaded', () => {
         const newConfigName = subsetConfigNameInput.value.trim();
         const text = subsetTextarea.value;
         if (!newConfigName) {
-            alert('Please enter a name for the subset.');
+            showTopNotification('Please enter a name for the new subset.');
             return;
         }
         if (!text) {
-            alert('Please paste the source text for the subset.');
+            showTopNotification('Please paste the source text for the subset.');
             return;
         }
         if (cardData.length === 0) {
-            alert('No deck is loaded. Please load a deck first.');
+            showTopNotification('No deck is loaded. Please load a deck first.');
             return;
         }
 
         // 1. Get current config name and settings
         const currentConfigName = configSelector.value;
         if (!currentConfigName || !configs[currentConfigName]) {
-            alert('Please save the current configuration before creating a subset.');
+            showTopNotification('Please save the current configuration before creating a subset.');
             return;
         }
         const currentConfig = { ...configs[currentConfigName] };
@@ -479,7 +502,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const roleToColumnMap = currentConfig.roleToColumnMap || {};
         const keyIndices = roleToColumnMap['TARGET_LANGUAGE'] || [];
         if (keyIndices.length !== 1) {
-            alert("Cannot create subset: The source configuration must have exactly one 'Target Language' column.");
+            showTopNotification("Cannot create subset: Source config must have one 'Target Language' column.");
             return;
         }
         const keyIndex = keyIndices[0];
@@ -489,7 +512,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         if (subsetData.length === 0) {
-            alert('No matching cards found in the current deck for the provided text.');
+            showTopNotification('No matching cards found in the current deck for the provided text.');
             return;
         }
 
@@ -510,7 +533,7 @@ document.addEventListener('DOMContentLoaded', () => {
         configSelector.value = newConfigName;
         await loadSelectedConfig(newConfigName);
 
-        alert(`Subset "${newConfigName}" created with ${subsetData.length} cards.`);
+        showTopNotification(`Subset "${newConfigName}" created with ${subsetData.length} cards.`, 'success');
         subsetConfigNameInput.value = '';
         subsetTextarea.value = '';
     }
@@ -589,10 +612,14 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (settingsModal) settingsModal.classList.add('hidden');
                     document.body.classList.add('debug-data-loaded');
                 } else {
-                     alert(`Failed to load data: ${error.message}. No cached data available.`);
+                     const message = `Failed to load data: ${error.message}. No cached data available.`;
+                     console.error(message);
+                     showTopNotification(message);
                 }
             } catch (cacheError) {
-                 alert(`Failed to load data from both network and cache: ${cacheError.message}`);
+                 const message = `Failed to load data from both network and cache: ${cacheError.message}`;
+                 console.error(message);
+                 showTopNotification(message);
             }
         }
     }
@@ -764,7 +791,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
 
-        alert('Skill settings have been auto-configured based on column roles.');
+        showTopNotification('Skill settings have been auto-configured based on column roles.', 'success');
         handleSettingsChange(); // Mark config as dirty
     }
 
@@ -1717,7 +1744,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!configNameInput) return;
         const configName = configNameInput.value.trim();
         if (!configName) {
-            alert('Please enter a configuration name.');
+            showTopNotification('Please enter a configuration name.');
             return;
         }
 
@@ -1742,7 +1769,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Validate that exactly one column has the Target Language role
         if (roleToColumnMap['TARGET_LANGUAGE'].length !== 1) {
-            alert('Configuration not saved. Please assign exactly one column to the "Target Language" role, as it is used as the unique identifier for cards.');
+            showTopNotification('Configuration not saved: Please assign exactly one column the "Target Language" role.');
             return;
         }
 
@@ -1776,14 +1803,14 @@ document.addEventListener('DOMContentLoaded', () => {
         configSelector.value = configName;
         if (configTitle) configTitle.textContent = configName;
         if (deckTitle) deckTitle.textContent = configName;
-        alert(`Configuration '${configName}' saved!`);
+        showTopNotification(`Configuration '${configName}' saved!`, 'success');
         isConfigDirty = false;
         if (saveConfigButton) saveConfigButton.disabled = true;
     }
 
     async function resetDeckStats() {
         if (cardData.length === 0) {
-            alert("No deck is loaded. Please load a deck first.");
+            showTopNotification("No deck is loaded. Please load a deck first.");
             return;
         }
 
@@ -1795,14 +1822,14 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             const promises = cardData.map(card => del(getCardKey(card)));
             await Promise.all(promises);
-            alert("Statistics for the current deck have been reset.");
+            showTopNotification("Statistics for the current deck have been reset.", 'success');
             // Optionally, reload the current card to show its stats are reset
             if (currentCardIndex >= 0) {
                 await displayCard(currentCardIndex);
             }
         } catch (error) {
             console.error("Failed to reset deck statistics:", error);
-            alert("An error occurred while trying to reset the deck statistics. Please check the console for details.");
+            showTopNotification("An error occurred while trying to reset the deck statistics.");
         }
     }
 

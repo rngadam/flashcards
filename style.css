@@ -724,3 +724,41 @@ button.danger:hover {
 #comparison-container .diff-common {
     color: #6c757d;
 }
+
+/* --- Top Notification Bar --- */
+#top-notification {
+    position: absolute;
+    top: 65px; /* Position below the title and buttons */
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 12px 25px;
+    border-radius: 25px;
+    color: white;
+    font-size: 1.1em;
+    font-weight: bold;
+    z-index: 200;
+    opacity: 0;
+    transition: opacity 0.4s ease, top 0.4s ease;
+    pointer-events: none;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.15);
+}
+
+#top-notification.visible {
+    opacity: 1;
+    top: 75px; /* Animate it down slightly */
+    pointer-events: auto;
+}
+
+#top-notification.error {
+    background-color: #e74c3c; /* Red */
+}
+
+#top-notification.success {
+    background-color: #2ecc71; /* Green */
+}
+
+#top-notification.hidden {
+    /* This class is used to ensure it's not visible initially,
+       but we control visibility with opacity for transitions */
+    opacity: 0;
+}
