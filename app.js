@@ -81,6 +81,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const skillMasteryDashboard = document.getElementById('skill-mastery-dashboard');
     const cardSpecificStats = document.getElementById('card-specific-stats');
     const cardFront = document.querySelector('.card-front');
+    const cardFrontContent = document.getElementById('card-front-content');
     const cardBack = document.querySelector('.card-back');
     const cardBackContent = document.getElementById('card-back-content');
     const flipCardButton = document.getElementById('flip-card');
@@ -174,6 +175,8 @@ document.addEventListener('DOMContentLoaded', () => {
     let configs = {}; // Stores all saved deck configurations.
     let voices = []; // Holds the list of available TTS voices from the browser.
     let viewHistory = []; // A stack to keep track of the sequence of viewed cards for the "previous" button.
+    let currentFrontText = ''; // The text currently prepared for the front of the card.
+    let currentBackText = ''; // The text currently prepared for the back of the card.
     let useUppercase = false; // A flag for the "Alternate Uppercase" feature.
     let replayRate = 1.0; // Tracks the current playback rate for the 'f' key replay feature.
     let cardShownTimestamp = null; // Tracks when the card was shown to calculate response delay.
@@ -965,17 +968,11 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         if (card.classList.contains('flipped') && ttsBackCheckbox && ttsBackCheckbox.checked) {
-            const ttsBackRole = skillConfig.ttsBackColumn;
-            if (ttsBackRole && ttsBackRole !== 'none') {
-                 const ttsText = getTextForRoles([ttsBackRole]);
-                 speak(ttsText);
-            }
+            // The text for the back is already determined and stored in currentBackText
+            speak(currentBackText);
         } else if (!card.classList.contains('flipped') && ttsFrontCheckbox && ttsFrontCheckbox.checked) {
-            const ttsFrontRole = skillConfig.ttsFrontColumn;
-            if (ttsFrontRole) {
-                const ttsText = getTextForRoles([ttsFrontRole]);
-                speak(ttsText);
-            }
+            // The text for the front is already determined and stored in currentFrontText
+            speak(currentFrontText);
         }
     }
 
@@ -1237,45 +1234,43 @@ document.addEventListener('DOMContentLoaded', () => {
         const backRoles = skillConfig.back;
 
         // This replaces the old hard-coded logic
-        const originalFrontText = getTextForRoles(frontRoles);
-        let displayText = originalFrontText;
+        currentFrontText = getTextForRoles(frontRoles);
+        currentBackText = getTextForRoles(backRoles);
+
+        let displayText = currentFrontText;
         if (alternateUppercaseCheckbox && alternateUppercaseCheckbox.checked) {
             if (useUppercase) {
-                displayText = originalFrontText.toUpperCase();
+                displayText = currentFrontText.toUpperCase();
             }
             useUppercase = !useUppercase;
         }
 
         const isAudioOnly = (audioOnlyFrontCheckbox && audioOnlyFrontCheckbox.checked) || currentSkill === SKILLS.LISTENING.id;
 
-        cardFront.innerHTML = ''; // Clear previous content
+        cardFrontContent.innerHTML = ''; // Clear previous content
         cardBackContent.innerHTML = ''; // Clear previous content
 
         if (isAudioOnly) {
-            cardFront.innerHTML = '<span class="speech-icon">🔊</span>';
+            cardFrontContent.innerHTML = '<span class="speech-icon">🔊</span>';
         } else {
-            cardFront.innerHTML = `<span>${displayText.replace(/\n/g, '<br>')}</span>`;
+            cardFrontContent.innerHTML = `<span>${displayText.replace(/\n/g, '<br>')}</span>`;
         }
 
-        cardBackContent.innerHTML = `<span>${getTextForRoles(backRoles).replace(/\n/g, '<br>')}</span>`;
+        cardBackContent.innerHTML = `<span>${currentBackText.replace(/\n/g, '<br>')}</span>`;
 
         cardFront.style.fontSize = '';
         cardBackContent.style.fontSize = '';
 
         setTimeout(() => {
             if (!isAudioOnly) {
-                adjustFontSize(cardFront.querySelector('span'), true);
+                adjustFontSize(cardFrontContent.querySelector('span'), true);
             }
             adjustFontSize(cardBackContent.querySelector('span'), false);
         }, 50);
 
         card.classList.remove('flipped');
         if (ttsFrontCheckbox && ttsFrontCheckbox.checked && ttsOnHotkeyOnlyCheckbox && !ttsOnHotkeyOnlyCheckbox.checked) {
-            const ttsFrontRole = skillConfig.ttsFrontColumn;
-            if (ttsFrontRole) {
-                const ttsText = getTextForRoles([ttsFrontRole]);
-                speak(ttsText);
-            }
+            speak(currentFrontText);
         }
 
         renderSkillMastery(stats);
@@ -2147,22 +2142,9 @@ document.addEventListener('DOMContentLoaded', () => {
                         break;
                     }
                     case 'KeyF': {
-                        let text, role;
-                        const currentConfigName = configSelector.value;
-                        const currentConfig = configs[currentConfigName] || {};
-                        const skillConfig = (currentConfig.skillColumns || {})[currentSkill] || {};
-
-                        if (card.classList.contains('flipped')) {
-                            role = skillConfig.ttsBackColumn;
-                        } else {
-                            role = skillConfig.ttsFrontColumn;
-                        }
-
-                        if (role && role !== 'none') {
-                            text = getTextForRoles([role]);
-                            replayRate = Math.max(0.1, replayRate - 0.2);
-                            speak(text, replayRate);
-                        }
+                        const text = card.classList.contains('flipped') ? currentBackText : currentFrontText;
+                        replayRate = Math.max(0.1, replayRate - 0.2);
+                        speak(text, replayRate);
                         break;
                     }
                 }
