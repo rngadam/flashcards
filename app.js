@@ -103,6 +103,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const deckTitle = document.getElementById('deck-title');
     const lastSeen = document.getElementById('last-seen');
     const topNotification = document.getElementById('top-notification');
+    const ttsLangDisplayFront = document.getElementById('tts-lang-display-front');
+    const ttsLangDisplayBack = document.getElementById('tts-lang-display-back');
 
 
     // --- Top Notification Function ---
@@ -2050,11 +2052,22 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         const utterance = new SpeechSynthesisUtterance(text);
 
-        // Auto-detect language using franc
-        const langGuess = franc(text);
+        // Auto-detect language using eld
+        const result = eld.detect(text);
         let lang = 'en'; // Default to English
-        if (langGuess && langGuess !== 'und') {
-            lang = langGuess.substring(0, 2);
+        // Prioritize the most likely language from eld
+        if (result.language) {
+            lang = result.language;
+        }
+        console.log(`Detected language: ${lang} for text: "${text.substring(0, 30)}..."`);
+
+        // Display detected language on the card
+        const displayer = card.classList.contains('flipped') ? ttsLangDisplayBack : ttsLangDisplayFront;
+        if (displayer) {
+            // Clear previous language display before showing the new one
+            if(ttsLangDisplayFront) ttsLangDisplayFront.textContent = '';
+            if(ttsLangDisplayBack) ttsLangDisplayBack.textContent = '';
+            displayer.textContent = lang;
         }
 
         // Find a suitable voice. Prioritize exact match, then language prefix, then default.

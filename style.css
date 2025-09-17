@@ -725,6 +725,19 @@ button.danger:hover {
     color: #6c757d;
 }
 
+.tts-lang-display {
+    position: absolute;
+    top: 10px;
+    right: 15px;
+    font-size: 0.8em;
+    color: #aaa;
+    font-family: 'Courier New', Courier, monospace;
+    background-color: #f0f0f0;
+    padding: 2px 5px;
+    border-radius: 3px;
+    z-index: 10;
+}
+
 /* --- Top Notification Bar --- */
 #top-notification {
     position: absolute;
