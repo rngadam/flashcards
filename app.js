@@ -696,11 +696,28 @@ document.addEventListener('DOMContentLoaded', () => {
                 const option = new Option(COLUMN_ROLES[roleKey], roleKey);
                 select.add(option);
             }
-            // Auto-detect basic roles
-            if (header.toLowerCase().includes('target') || header.toLowerCase().includes('greek')) select.value = 'TARGET_LANGUAGE';
-            if (header.toLowerCase().includes('base') || header.toLowerCase().includes('english')) select.value = 'BASE_LANGUAGE';
-            if (header.toLowerCase().includes('pronunciation')) select.value = 'PRONUNCIATION';
+            // Auto-detect roles
+            const headerLower = header.toLowerCase();
+            for (const roleKey in COLUMN_ROLES) {
+                if (roleKey === 'NONE') continue;
 
+                // Convert role key to a more matchable string, e.g., "EXAMPLE_SENTENCE" -> "example sentence"
+                const roleName = COLUMN_ROLES[roleKey].toLowerCase();
+                const roleNameAsKeyword = roleKey.replace(/_/g, ' ').toLowerCase();
+
+                if (headerLower.includes(roleName) || headerLower.includes(roleNameAsKeyword)) {
+                    select.value = roleKey;
+                    // Break after the first match to avoid assigning a less specific role
+                    // (e.g., "Related Word" matching before "Related Word Type")
+                    break;
+                }
+            }
+
+            // Fallback for common alternative names if no role was matched by the generic logic
+            if (select.value === 'NONE') {
+                if (headerLower.includes('greek')) select.value = 'TARGET_LANGUAGE';
+                if (headerLower.includes('english')) select.value = 'BASE_LANGUAGE';
+            }
 
             rolesGrid.appendChild(label);
             rolesGrid.appendChild(select);
