@@ -387,6 +387,24 @@ document.addEventListener('DOMContentLoaded', () => {
             .trim();
     }
 
+    function transformSlashText(text) {
+        if (!text || !text.includes('/')) {
+            return text;
+        }
+        // Split the string by the parenthetical part, keeping the delimiter.
+        // This allows us to process the main text and the pronunciation part separately.
+        const parts = text.split(/(\s?\(.*\))/);
+        // e.g., "他/她微笑 (tā/tā wéixiào)" becomes ['他/她微笑', ' (tā/tā wéixiào)', '']
+        const mainPart = parts[0];
+        const rest = parts.slice(1).join('');
+
+        // This regex finds a word, a slash, and another word, replacing the match with the second word.
+        // It's applied only to the main part of the text.
+        const transformedMain = mainPart.replace(/[^/\s]+\/([^/\s]+)/g, '$1');
+
+        return transformedMain + rest;
+    }
+
     function renderDiff(userAnswer, correctAnswer, isCorrect) {
         const userAnswerLower = userAnswer.toLowerCase();
         const correctAnswerLower = correctAnswer.toLowerCase();
@@ -1194,7 +1212,11 @@ document.addEventListener('DOMContentLoaded', () => {
         indices = [...new Set(indices)];
 
         if (!indices.length || !cardData[currentCardIndex]) return '';
-        return indices.map(colIndex => cardData[currentCardIndex][colIndex]).filter(Boolean).join('\n');
+        return indices.map(colIndex => {
+            const cellText = cardData[currentCardIndex][colIndex];
+            // Apply the slash transformation at the source.
+            return cellText ? transformSlashText(cellText) : cellText;
+        }).filter(Boolean).join('\n');
     }
 
     function getRetentionScore(skillStats) {
