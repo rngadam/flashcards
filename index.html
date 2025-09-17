@@ -129,9 +129,14 @@
         </div>
 
         <div id="skills-settings" class="tab-panel" role="tabpanel" aria-labelledby="skills-tab">
-            <div class="setting" id="skill-column-config-container">
-                <label>Column Configuration per Skill:</label>
-                <!-- Skill-specific column tabs will be generated here by JS -->
+            <div id="skills-list-container">
+                <div class="skills-toolbar">
+                    <button id="add-skill-button">Add New Skill</button>
+                    <button id="preset-skills-button">Load Preset Skills</button>
+                </div>
+                <div id="skills-list">
+                    <!-- User-defined skills will be dynamically added here -->
+                </div>
             </div>
         </div>
 
@@ -190,6 +195,60 @@
         </div>
         <div id="cache-status"></div>
       </div>
+    </div>
+
+    <div id="skill-config-modal" class="modal-overlay hidden">
+        <div id="skill-config-panel">
+            <button id="close-skill-config-button">X</button>
+            <h3 id="skill-config-title">Configure Skill</h3>
+            <input type="hidden" id="editing-skill-id">
+
+            <div class="setting">
+                <label for="skill-name-input">Skill Name:</label>
+                <input type="text" id="skill-name-input" placeholder="e.g., French Reading">
+            </div>
+
+            <div class="setting">
+                <label for="skill-verification-method">Verification Method:</label>
+                <select id="skill-verification-method">
+                    <option value="none">None (Self-Assessed)</option>
+                    <option value="text">Text Input</option>
+                    <option value="multiple-choice">Multiple Choice</option>
+                </select>
+            </div>
+
+            <div class="setting-grid">
+                <div><label>Front Column(s):</label></div>
+                <div><label>Back Column(s):</label></div>
+                <div id="skill-front-columns" class="column-checkbox-group"></div>
+                <div id="skill-back-columns" class="column-checkbox-group"></div>
+            </div>
+
+            <div class="setting">
+                <label for="skill-validation-column">Validation Column:</label>
+                <select id="skill-validation-column" disabled>
+                    <!-- Options will be populated by JS -->
+                </select>
+            </div>
+
+            <div class="setting">
+                <label for="skill-tts-front-column">TTS (Front) Column:</label>
+                <select id="skill-tts-front-column">
+                    <!-- Options will be populated by JS -->
+                </select>
+            </div>
+
+            <div class="setting">
+                <label for="skill-tts-back-column">TTS (Back) Column:</label>
+                <select id="skill-tts-back-column">
+                    <!-- Options will be populated by JS -->
+                </select>
+            </div>
+
+            <div class="button-container">
+                <button id="save-skill-button">Save Skill</button>
+            </div>
+        </div>
     </div>
 
     <div id="skill-selector-bar">
