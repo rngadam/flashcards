@@ -67,18 +67,14 @@ document.addEventListener('DOMContentLoaded', () => {
     const fontSelector = document.getElementById('font-selector');
     const ttsFrontCheckbox = document.getElementById('tts-front');
     const ttsBackCheckbox = document.getElementById('tts-back');
-    const ttsFrontLangSelect = document.getElementById('tts-front-lang');
-    const ttsBackLangSelect = document.getElementById('tts-back-lang');
     const ttsRateSlider = document.getElementById('tts-rate');
     const alternateUppercaseCheckbox = document.getElementById('alternate-uppercase');
     const disableAnimationCheckbox = document.getElementById('disable-animation');
     const audioOnlyFrontCheckbox = document.getElementById('audio-only-front');
     const ttsOnHotkeyOnlyCheckbox = document.getElementById('tts-on-hotkey-only');
     const configNameInput = document.getElementById('config-name');
-    const keyColumnSelector = document.getElementById('key-column-selector');
     const skillSelectorCheckboxes = document.getElementById('skill-selector-checkboxes');
     const repetitionIntervalsTextarea = document.getElementById('repetition-intervals');
-    const detectedLangSpan = document.getElementById('detected-lang');
     const configSelector = document.getElementById('config-selector');
     const cardContainer = document.getElementById('card-container');
     const cardStatsDisplay = document.getElementById('card-stats');
@@ -314,10 +310,11 @@ document.addEventListener('DOMContentLoaded', () => {
         const currentConfigName = configSelector.value;
         const currentConfig = configs[currentConfigName] || {};
         const skillConfig = (currentConfig.skillColumns || {})[currentSkill] || {};
-        const frontIndices = skillConfig.front || [0];
-        const ttsSourceColumn = skillConfig.ttsFrontColumn || frontIndices[0];
-        const ttsText = getTextForColumns([ttsSourceColumn]);
-        speak(ttsText, ttsFrontLangSelect.value, 0.7); // Speak at a fixed slow rate
+        const ttsFrontRole = skillConfig.ttsFrontColumn;
+        if (ttsFrontRole) {
+            const ttsText = getTextForRoles([ttsFrontRole]);
+            speak(ttsText, 0.7); // Speak at a fixed slow rate
+        }
     };
 
     if (slowReplayButton) slowReplayButton.addEventListener('click', handleSlowReplay);
@@ -415,19 +412,29 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!skillConfig) {
             skillConfig = (currentConfig.skillColumns || {})[SKILLS.READING.id] || { front: [0], back: [1], validationColumn: 'none' };
         }
-        const validationColumnIndex = skillConfig.validationColumn;
-        if (!validationColumnIndex || validationColumnIndex === 'none') {
+        const validationRole = skillConfig.validationColumn;
+        if (!validationRole || validationRole === 'none') {
             console.error("checkWritingAnswer called but no validation column is configured for this skill.");
             return;
         }
-        const correctAnswer = cardData[currentCardIndex][validationColumnIndex];
 
-        const isCorrect = getLenientString(userAnswer) === getLenientString(correctAnswer);
+        const roleToColumnMap = (configs[configSelector.value] || {}).roleToColumnMap || {};
+        const validationColumnIndices = roleToColumnMap[validationRole] || [];
+
+        if (validationColumnIndices.length === 0) {
+             console.error(`No column found for validation role: ${validationRole}`);
+             // Maybe show a gentle error to the user in the UI? For now, just log and exit.
+             return;
+        }
+
+        const correctAnswers = validationColumnIndices.map(index => cardData[currentCardIndex][index]);
+        const isCorrect = correctAnswers.some(correctAnswer => getLenientString(userAnswer) === getLenientString(correctAnswer));
+        const firstCorrectAnswer = correctAnswers[0]; // For diff rendering
 
         await markCardAsKnown(isCorrect);
 
         comparisonContainer.innerHTML = ''; // Clear previous diff
-        comparisonContainer.appendChild(renderDiff(userAnswer, correctAnswer, isCorrect));
+        comparisonContainer.appendChild(renderDiff(userAnswer, firstCorrectAnswer, isCorrect));
         comparisonContainer.classList.remove('hidden');
         writingInput.disabled = true;
 
@@ -469,7 +476,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
         // 3. Filter cardData
-        const keyIndex = parseInt(currentConfig.keyColumn || '0');
+        const roleToColumnMap = currentConfig.roleToColumnMap || {};
+        const keyIndices = roleToColumnMap['TARGET_LANGUAGE'] || [];
+        if (keyIndices.length !== 1) {
+            alert("Cannot create subset: The source configuration must have exactly one 'Target Language' column.");
+            return;
+        }
+        const keyIndex = keyIndices[0];
         const subsetData = cardData.filter(card => {
             const key = card[keyIndex]?.toLowerCase();
             return key && words.has(key);
@@ -620,7 +633,6 @@ document.addEventListener('DOMContentLoaded', () => {
         viewHistory = [];
         populateColumnRolesUI();
         populateColumnSelectors();
-        populateKeyColumnSelector();
         if (repetitionIntervalsTextarea) repetitionIntervalsTextarea.value = repetitionIntervals.join(', ');
         detectAndFilterLanguage();
     }
@@ -665,17 +677,6 @@ document.addEventListener('DOMContentLoaded', () => {
             rolesGrid.appendChild(select);
         });
 
-        // Add TTS source selector
-        const ttsLabel = document.createElement('label');
-        ttsLabel.textContent = 'TTS Source Column:';
-        ttsLabel.htmlFor = 'tts-source-column-selector';
-        const ttsSelect = document.createElement('select');
-        ttsSelect.id = 'tts-source-column-selector';
-        headers.forEach((header, index) => {
-            const option = new Option(header, index);
-            ttsSelect.add(option);
-        });
-
         // Add Auto-configure button
         const autoConfigButton = document.createElement('button');
         autoConfigButton.id = 'auto-configure-button';
@@ -685,8 +686,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
         columnRolesContainer.appendChild(rolesGrid);
-        rolesGrid.appendChild(ttsLabel);
-        rolesGrid.appendChild(ttsSelect);
         rolesGrid.appendChild(autoConfigButton);
 
         autoConfigButton.addEventListener('click', autoConfigureSkills);
@@ -713,28 +712,27 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // 3. Define preset rules
         const presets = {
-            READING: { front: roleToIndexMap.TARGET_LANGUAGE, back: roleToIndexMap.BASE_LANGUAGE.concat(roleToIndexMap.PRONUNCIATION) },
-            LISTENING: { front: roleToIndexMap.TARGET_LANGUAGE, back: roleToIndexMap.BASE_LANGUAGE.concat(roleToIndexMap.PRONUNCIATION, roleToIndexMap.TARGET_LANGUAGE) },
-            WRITING: { front: roleToIndexMap.BASE_LANGUAGE, back: roleToIndexMap.TARGET_LANGUAGE },
-            SPOKEN: { front: roleToIndexMap.BASE_LANGUAGE, back: roleToIndexMap.TARGET_LANGUAGE },
-            PRONUNCIATION: { front: roleToIndexMap.TARGET_LANGUAGE.concat(roleToIndexMap.PRONUNCIATION), back: roleToIndexMap.BASE_LANGUAGE }
+            READING: { front: ['TARGET_LANGUAGE'], back: ['BASE_LANGUAGE', 'PRONUNCIATION'] },
+            LISTENING: { front: ['TARGET_LANGUAGE'], back: ['BASE_LANGUAGE', 'PRONUNCIATION', 'TARGET_LANGUAGE'] },
+            WRITING: { front: ['BASE_LANGUAGE'], back: ['TARGET_LANGUAGE'] },
+            SPOKEN: { front: ['BASE_LANGUAGE'], back: ['TARGET_LANGUAGE'] },
+            PRONUNCIATION: { front: ['TARGET_LANGUAGE', 'PRONUNCIATION'], back: ['BASE_LANGUAGE'] }
         };
 
         // 4. Apply the rules
-        const allColumnIndices = headers.map((_, i) => i);
         for (const skillId in presets) {
             const preset = presets[skillId];
-            const frontContainer = document.getElementById(`front-column-checkboxes-${skillId}`);
-            const backContainer = document.getElementById(`back-column-checkboxes-${skillId}`);
+            const frontContainer = document.getElementById(`front-role-checkboxes-${skillId}`);
+            const backContainer = document.getElementById(`back-role-checkboxes-${skillId}`);
 
             if (frontContainer) {
                 frontContainer.querySelectorAll('input[type="checkbox"]').forEach(cb => {
-                    cb.checked = preset.front.includes(parseInt(cb.value));
+                    cb.checked = preset.front.includes(cb.value);
                 });
             }
             if (backContainer) {
                 backContainer.querySelectorAll('input[type="checkbox"]').forEach(cb => {
-                    cb.checked = allColumnIndices.includes(parseInt(cb.value));
+                    cb.checked = preset.back.includes(cb.value);
                 });
             }
         }
@@ -743,32 +741,27 @@ document.addEventListener('DOMContentLoaded', () => {
         for (const skillId in presets) {
             const validationSelector = document.getElementById(`validation-column-selector-${skillId}`);
             const ttsFrontSelector = document.getElementById(`tts-front-column-selector-${skillId}`);
-            if (!validationSelector || !ttsFrontSelector) continue;
+            const ttsBackSelector = document.getElementById(`tts-back-column-selector-${skillId}`);
+            if (!validationSelector || !ttsFrontSelector || !ttsBackSelector) continue;
 
-            // Default TTS is always the target language if available
-            if (roleToIndexMap.TARGET_LANGUAGE.length > 0) {
-                ttsFrontSelector.value = roleToIndexMap.TARGET_LANGUAGE[0];
+            // Default TTS is always the target language
+            ttsFrontSelector.value = 'TARGET_LANGUAGE';
+            if (roleToIndexMap.BASE_LANGUAGE && roleToIndexMap.BASE_LANGUAGE.length > 0) {
+                ttsBackSelector.value = 'BASE_LANGUAGE';
+            } else {
+                ttsBackSelector.value = 'TARGET_LANGUAGE'; // Fallback if no base language is set
             }
 
             // Default validation settings
             switch (skillId) {
                 case 'LISTENING':
                 case 'WRITING':
-                    if (roleToIndexMap.TARGET_LANGUAGE.length > 0) {
-                        validationSelector.value = roleToIndexMap.TARGET_LANGUAGE[0];
-                    }
+                    validationSelector.value = 'TARGET_LANGUAGE';
                     break;
                 default:
                     validationSelector.value = 'none';
                     break;
             }
-        }
-
-
-        // Auto-set the main TTS source as a fallback
-        const ttsSelect = document.getElementById('tts-source-column-selector');
-        if (ttsSelect && roleToIndexMap.TARGET_LANGUAGE.length > 0) {
-            ttsSelect.value = roleToIndexMap.TARGET_LANGUAGE[0];
         }
 
 
@@ -811,35 +804,45 @@ document.addEventListener('DOMContentLoaded', () => {
             // Create Front and Back Checkbox groups for this skill
             const frontContainer = document.createElement('div');
             frontContainer.className = 'column-checkbox-group';
-            frontContainer.id = `front-column-checkboxes-${skillId}`;
+            frontContainer.id = `front-role-checkboxes-${skillId}`;
 
             const backContainer = document.createElement('div');
             backContainer.className = 'column-checkbox-group';
-            backContainer.id = `back-column-checkboxes-${skillId}`;
+            backContainer.id = `back-role-checkboxes-${skillId}`;
 
-            headers.forEach((header, index) => {
-                const idFront = `front-col-${skillId}-${index}`;
-                const checkboxFront = `<div><input type="checkbox" id="${idFront}" value="${index}"><label for="${idFront}">${header}</label></div>`;
+            for (const roleKey in COLUMN_ROLES) {
+                if (COLUMN_ROLES[roleKey] === COLUMN_ROLES.NONE) continue;
+                const roleName = COLUMN_ROLES[roleKey];
+
+                const idFront = `front-role-${skillId}-${roleKey}`;
+                const checkboxFront = `<div><input type="checkbox" id="${idFront}" value="${roleKey}"><label for="${idFront}">${roleName}</label></div>`;
                 frontContainer.insertAdjacentHTML('beforeend', checkboxFront);
 
-                const idBack = `back-col-${skillId}-${index}`;
-                const checkboxBack = `<div><input type="checkbox" id="${idBack}" value="${index}"><label for="${idBack}">${header}</label></div>`;
+                const idBack = `back-role-${skillId}-${roleKey}`;
+                const checkboxBack = `<div><input type="checkbox" id="${idBack}" value="${roleKey}"><label for="${idBack}">${roleName}</label></div>`;
                 backContainer.insertAdjacentHTML('beforeend', checkboxBack);
-            });
+            }
 
-            // Set default selections for the first skill (Reading)
+            // Set default selections
             if (skillId === SKILLS.READING.id) {
-                 if (headers.length > 0) {
-                    const firstCheckbox = frontContainer.querySelector('input');
-                    if (firstCheckbox) firstCheckbox.checked = true;
-                }
-                backContainer.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = true);
-            } else { // Default for other skills (e.g., Writing) might be swapped
-                 if (headers.length > 0) {
-                    const firstCheckbox = backContainer.querySelector('input');
-                    if (firstCheckbox) firstCheckbox.checked = true;
-                }
-                frontContainer.querySelectorAll('input[type="checkbox"]').forEach(cb => cb.checked = true);
+                const targetLangCb = frontContainer.querySelector('input[value="TARGET_LANGUAGE"]');
+                if (targetLangCb) targetLangCb.checked = true;
+                const baseLangCb = backContainer.querySelector('input[value="BASE_LANGUAGE"]');
+                if (baseLangCb) baseLangCb.checked = true;
+            } else if (skillId === SKILLS.WRITING.id || skillId === SKILLS.SPOKEN.id) {
+                const baseLangCb = frontContainer.querySelector('input[value="BASE_LANGUAGE"]');
+                if (baseLangCb) baseLangCb.checked = true;
+                const targetLangCb = backContainer.querySelector('input[value="TARGET_LANGUAGE"]');
+                if (targetLangCb) targetLangCb.checked = true;
+            } else { // Default for all other skills
+                const targetLangCb = frontContainer.querySelector('input[value="TARGET_LANGUAGE"]');
+                if (targetLangCb) targetLangCb.checked = true;
+                backContainer.querySelectorAll('input[type="checkbox"]').forEach(cb => {
+                    // Check all roles except the target language for the back
+                    if (cb.value !== 'TARGET_LANGUAGE') {
+                        cb.checked = true;
+                    }
+                });
             }
 
 
@@ -857,22 +860,38 @@ document.addEventListener('DOMContentLoaded', () => {
                         <label for="tts-front-column-selector-${skillId}">TTS (Front) Column:</label>
                         <select id="tts-front-column-selector-${skillId}"></select>
                     </div>
+                    <div>
+                        <label for="tts-back-column-selector-${skillId}">TTS (Back) Column:</label>
+                        <select id="tts-back-column-selector-${skillId}"></select>
+                    </div>
                 </div>
             `;
 
             // Populate the new dropdowns
             const validationSelector = panel.querySelector(`#validation-column-selector-${skillId}`);
             const ttsFrontSelector = panel.querySelector(`#tts-front-column-selector-${skillId}`);
+            const ttsBackSelector = panel.querySelector(`#tts-back-column-selector-${skillId}`);
 
-            const noneOption = new Option('None', 'none');
-            validationSelector.add(noneOption);
+            const noneOptionValidation = new Option('None', 'none');
+            validationSelector.add(noneOptionValidation);
 
-            headers.forEach((header, index) => {
-                const optionValidation = new Option(header, index);
-                const optionTts = new Option(header, index);
+            const noneOptionTtsBack = new Option('None', 'none');
+            ttsBackSelector.add(noneOptionTtsBack);
+
+
+            // Populate with roles
+            for (const roleKey in COLUMN_ROLES) {
+                if (COLUMN_ROLES[roleKey] === COLUMN_ROLES.NONE) continue;
+
+                const roleName = COLUMN_ROLES[roleKey];
+                const optionValidation = new Option(roleName, roleKey);
+                const optionTtsFront = new Option(roleName, roleKey);
+                const optionTtsBack = new Option(roleName, roleKey);
+
                 validationSelector.add(optionValidation);
-                ttsFrontSelector.add(optionTts);
-            });
+                ttsFrontSelector.add(optionTtsFront);
+                ttsBackSelector.add(optionTtsBack.cloneNode(true));
+            }
 
             panelContainer.appendChild(panel);
         });
@@ -894,14 +913,6 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    function populateKeyColumnSelector() {
-        if (!keyColumnSelector) return;
-        keyColumnSelector.innerHTML = '';
-        headers.forEach((header, index) => {
-            const option = new Option(header, index);
-            keyColumnSelector.add(option);
-        });
-    }
 
     /**
      * Flips the current card and handles the flip animation.
@@ -922,16 +933,21 @@ document.addEventListener('DOMContentLoaded', () => {
         const currentConfig = configs[currentConfigName] || {};
         let skillConfig = (currentConfig.skillColumns || {})[currentSkill];
         if (!skillConfig) {
-            skillConfig = (currentConfig.skillColumns || {})[SKILLS.READING.id] || { front: [0], back: [1] };
+            skillConfig = (currentConfig.skillColumns || {})[SKILLS.READING.id] || { front: ['TARGET_LANGUAGE'], back: ['BASE_LANGUAGE'] };
         }
-        const frontIndices = skillConfig.front;
 
         if (card.classList.contains('flipped') && ttsBackCheckbox && ttsBackCheckbox.checked) {
-            speak(cardBack.textContent, ttsBackLangSelect.value);
+            const ttsBackRole = skillConfig.ttsBackColumn;
+            if (ttsBackRole && ttsBackRole !== 'none') {
+                 const ttsText = getTextForRoles([ttsBackRole]);
+                 speak(ttsText);
+            }
         } else if (!card.classList.contains('flipped') && ttsFrontCheckbox && ttsFrontCheckbox.checked) {
-            const ttsSourceColumn = currentConfig.ttsSourceColumn || frontIndices[0];
-            const ttsText = getTextForColumns([ttsSourceColumn]);
-            speak(ttsText, ttsFrontLangSelect.value);
+            const ttsFrontRole = skillConfig.ttsFrontColumn;
+            if (ttsFrontRole) {
+                const ttsText = getTextForRoles([ttsFrontRole]);
+                speak(ttsText);
+            }
         }
     }
 
@@ -1031,9 +1047,9 @@ document.addEventListener('DOMContentLoaded', () => {
      * @param {HTMLElement} checkboxContainer - The container with the column checkboxes.
      * @returns {number[]} An array of selected column indices, e.g., [0, 2].
      */
-    function getSelectedColumnIndices(checkboxContainer) {
+    function getSelectedRoles(checkboxContainer) {
         if (!checkboxContainer) return [];
-        return Array.from(checkboxContainer.querySelectorAll('input:checked')).map(cb => parseInt(cb.value));
+        return Array.from(checkboxContainer.querySelectorAll('input:checked')).map(cb => cb.value);
     }
 
     /**
@@ -1041,9 +1057,28 @@ document.addEventListener('DOMContentLoaded', () => {
      * @param {number[]} indices - An array of column indices.
      * @returns {string} The combined text, with each column's content on a new line.
      */
-    function getTextForColumns(indices) {
-        if (!indices || !cardData[currentCardIndex]) return '';
-        return indices.map(colIndex => cardData[currentCardIndex][colIndex]).join('\n');
+    function getTextForRoles(roles) {
+        const currentConfigName = configSelector.value;
+        if (!currentConfigName || !configs[currentConfigName] || !configs[currentConfigName].roleToColumnMap) return '';
+        const roleToColumnMap = configs[currentConfigName].roleToColumnMap;
+
+        let indices = [];
+        roles.forEach(roleKey => {
+            const mappedIndices = roleToColumnMap[roleKey] || [];
+            if (roleKey === 'BASE_LANGUAGE' && mappedIndices.length > 1) {
+                // Pick one random base language
+                const randomIndex = mappedIndices[Math.floor(Math.random() * mappedIndices.length)];
+                indices.push(randomIndex);
+            } else {
+                indices.push(...mappedIndices);
+            }
+        });
+
+        // Remove duplicates that might arise from multiple roles pointing to the same column
+        indices = [...new Set(indices)];
+
+        if (!indices.length || !cardData[currentCardIndex]) return '';
+        return indices.map(colIndex => cardData[currentCardIndex][colIndex]).filter(Boolean).join('\n');
     }
 
     function getRetentionScore(skillStats) {
@@ -1170,11 +1205,11 @@ document.addEventListener('DOMContentLoaded', () => {
             skillConfig = (currentConfig.skillColumns || {})[SKILLS.READING.id] || { front: [0], back: [1] };
         }
 
-        const frontIndices = skillConfig.front;
-        const backIndices = skillConfig.back;
+        const frontRoles = skillConfig.front;
+        const backRoles = skillConfig.back;
 
         // This replaces the old hard-coded logic
-        const originalFrontText = getTextForColumns(frontIndices);
+        const originalFrontText = getTextForRoles(frontRoles);
         let displayText = originalFrontText;
         if (alternateUppercaseCheckbox && alternateUppercaseCheckbox.checked) {
             if (useUppercase) {
@@ -1194,7 +1229,7 @@ document.addEventListener('DOMContentLoaded', () => {
             cardFront.innerHTML = `<span>${displayText.replace(/\n/g, '<br>')}</span>`;
         }
 
-        cardBackContent.innerHTML = `<span>${getTextForColumns(backIndices).replace(/\n/g, '<br>')}</span>`;
+        cardBackContent.innerHTML = `<span>${getTextForRoles(backRoles).replace(/\n/g, '<br>')}</span>`;
 
         cardFront.style.fontSize = '';
         cardBackContent.style.fontSize = '';
@@ -1208,9 +1243,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
         card.classList.remove('flipped');
         if (ttsFrontCheckbox && ttsFrontCheckbox.checked && ttsOnHotkeyOnlyCheckbox && !ttsOnHotkeyOnlyCheckbox.checked) {
-            const ttsSourceColumn = skillConfig.ttsFrontColumn || frontIndices[0];
-            const ttsText = getTextForColumns([ttsSourceColumn]);
-            speak(ttsText, ttsFrontLangSelect.value);
+            const ttsFrontRole = skillConfig.ttsFrontColumn;
+            if (ttsFrontRole) {
+                const ttsText = getTextForRoles([ttsFrontRole]);
+                speak(ttsText);
+            }
         }
 
         renderSkillMastery(stats);
@@ -1569,8 +1606,18 @@ document.addEventListener('DOMContentLoaded', () => {
      * @returns {string} The unique key for the card.
      */
     function getCardKey(card) {
-        const keyIndex = keyColumnSelector ? parseInt(keyColumnSelector.value) : 0;
-        // The robust parsing in parseData should prevent these errors, but this is a final safeguard.
+        const currentConfigName = configSelector.value;
+        const currentConfig = configs[currentConfigName] || {};
+        const roleToColumnMap = currentConfig.roleToColumnMap || {};
+        const keyIndices = roleToColumnMap['TARGET_LANGUAGE'] || [];
+
+        if (keyIndices.length === 0) {
+            // This should be prevented by validation in saveConfig, but as a fallback:
+            console.error("No Target Language column set for getCardKey!");
+            return `invalid-card-${Math.random()}`;
+        }
+        const keyIndex = keyIndices[0]; // Use the first one
+
         if (!card || keyIndex >= card.length || typeof card[keyIndex] !== 'string') {
             return `invalid-card-${Math.random()}`;
         }
@@ -1648,17 +1695,19 @@ document.addEventListener('DOMContentLoaded', () => {
     function getSkillColumnSettings() {
         const skillColumns = {};
         for (const skillId in SKILLS) {
-            const frontContainer = document.getElementById(`front-column-checkboxes-${skillId}`);
-            const backContainer = document.getElementById(`back-column-checkboxes-${skillId}`);
+            const frontContainer = document.getElementById(`front-role-checkboxes-${skillId}`);
+            const backContainer = document.getElementById(`back-role-checkboxes-${skillId}`);
             const validationSelector = document.getElementById(`validation-column-selector-${skillId}`);
             const ttsFrontSelector = document.getElementById(`tts-front-column-selector-${skillId}`);
+            const ttsBackSelector = document.getElementById(`tts-back-column-selector-${skillId}`);
 
-            if (frontContainer && backContainer && validationSelector && ttsFrontSelector) {
+            if (frontContainer && backContainer && validationSelector && ttsFrontSelector && ttsBackSelector) {
                 skillColumns[skillId] = {
-                    front: getSelectedColumnIndices(frontContainer),
-                    back: getSelectedColumnIndices(backContainer),
+                    front: getSelectedRoles(frontContainer),
+                    back: getSelectedRoles(backContainer),
                     validationColumn: validationSelector.value,
-                    ttsFrontColumn: ttsFrontSelector.value
+                    ttsFrontColumn: ttsFrontSelector.value,
+                    ttsBackColumn: ttsBackSelector.value
                 };
             }
         }
@@ -1675,27 +1724,40 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const currentConfig = configs[configName] || {};
 
-        const columnRoles = {};
+        const columnRoleAssignments = {};
         document.querySelectorAll('[id^="column-role-"]').forEach(select => {
-            columnRoles[select.dataset.columnIndex] = select.value;
+            columnRoleAssignments[select.dataset.columnIndex] = select.value;
         });
 
-        const ttsSourceSelector = document.getElementById('tts-source-column-selector');
+        // Create the role-to-column map
+        const roleToColumnMap = {};
+        for (const roleKey in COLUMN_ROLES) {
+            roleToColumnMap[roleKey] = [];
+        }
+        for (const colIndex in columnRoleAssignments) {
+            const role = columnRoleAssignments[colIndex];
+            if (role !== 'NONE') {
+                roleToColumnMap[role].push(parseInt(colIndex));
+            }
+        }
+
+        // Validate that exactly one column has the Target Language role
+        if (roleToColumnMap['TARGET_LANGUAGE'].length !== 1) {
+            alert('Configuration not saved. Please assign exactly one column to the "Target Language" role, as it is used as the unique identifier for cards.');
+            return;
+        }
 
         configs[configName] = {
             ...currentConfig, // Preserve subsetData if it exists
             dataUrl: currentConfig.subsetData ? null : dataUrlInput.value,
-            keyColumn: keyColumnSelector.value,
             repetitionIntervals: repetitionIntervalsTextarea.value,
-            skillColumns: getSkillColumnSettings(), // New per-skill column settings
+            skillColumns: getSkillColumnSettings(),
             skills: getSelectedSkills(),
-            columnRoles: columnRoles,
-            ttsSourceColumn: ttsSourceSelector ? ttsSourceSelector.value : 0,
+            columnRoleAssignments: columnRoleAssignments, // Save the direct mapping
+            roleToColumnMap: roleToColumnMap, // Save the computed map
             font: fontSelector.value,
             ttsFront: ttsFrontCheckbox.checked,
             ttsBack: ttsBackCheckbox.checked,
-            ttsFrontLang: ttsFrontLangSelect.value,
-            ttsBackLang: ttsBackLangSelect.value,
             ttsRate: ttsRateSlider.value,
             alternateUppercase: alternateUppercaseCheckbox.checked,
             disableAnimation: disableAnimationCheckbox.checked,
@@ -1706,6 +1768,8 @@ document.addEventListener('DOMContentLoaded', () => {
         // Remove deprecated properties
         delete configs[configName].frontColumns;
         delete configs[configName].backColumns;
+        delete configs[configName].columnRoles; // old property
+        delete configs[configName].ttsSourceColumn; // old property
 
         await set('flashcard-configs', configs);
         await set('flashcard-last-config', configName);
@@ -1759,7 +1823,6 @@ document.addEventListener('DOMContentLoaded', () => {
         cardContainer.style.fontFamily = config.font;
         if (configTitle) configTitle.textContent = configName;
         if (deckTitle) deckTitle.textContent = configName;
-        if (keyColumnSelector) keyColumnSelector.value = config.keyColumn || 0;
 
         if (config.subsetData && Array.isArray(config.subsetData)) {
             const tsvString = [
@@ -1786,15 +1849,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 if (frontContainer) {
                     frontContainer.querySelectorAll('input').forEach(cb => cb.checked = false);
-                    front.forEach(colIndex => {
-                        const cb = frontContainer.querySelector(`input[value="${colIndex}"]`);
+                    front.forEach(roleKey => {
+                        const cb = frontContainer.querySelector(`input[value="${roleKey}"]`);
                         if (cb) cb.checked = true;
                     });
                 }
                 if (backContainer) {
                     backContainer.querySelectorAll('input').forEach(cb => cb.checked = false);
-                    back.forEach(colIndex => {
-                        const cb = backContainer.querySelector(`input[value="${colIndex}"]`);
+                    back.forEach(roleKey => {
+                        const cb = backContainer.querySelector(`input[value="${roleKey}"]`);
                         if (cb) cb.checked = true;
                     });
                 }
@@ -1806,7 +1869,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 const ttsFrontSelector = document.getElementById(`tts-front-column-selector-${skillId}`);
                 if (ttsFrontSelector) {
-                    ttsFrontSelector.value = config.skillColumns[skillId].ttsFrontColumn || 0;
+                    ttsFrontSelector.value = config.skillColumns[skillId].ttsFrontColumn || 'TARGET_LANGUAGE';
+                }
+
+                const ttsBackSelector = document.getElementById(`tts-back-column-selector-${skillId}`);
+                if (ttsBackSelector) {
+                    ttsBackSelector.value = config.skillColumns[skillId].ttsBackColumn || 'none';
                 }
             }
         } else if (config.frontColumns) {
@@ -1837,23 +1905,15 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         // Load Column Roles and TTS Source
-        if (config.columnRoles) {
-            for (const colIndex in config.columnRoles) {
+        if (config.columnRoleAssignments) {
+            for (const colIndex in config.columnRoleAssignments) {
                 const select = document.getElementById(`column-role-${colIndex}`);
                 if (select) {
-                    select.value = config.columnRoles[colIndex];
+                    select.value = config.columnRoleAssignments[colIndex];
                 }
             }
         }
-        if (config.ttsSourceColumn) {
-            const ttsSelect = document.getElementById('tts-source-column-selector');
-            if (ttsSelect) {
-                ttsSelect.value = config.ttsSourceColumn;
-            }
-        }
 
-        if (ttsFrontLangSelect) ttsFrontLangSelect.value = config.ttsFrontLang;
-        if (ttsBackLangSelect) ttsBackLangSelect.value = config.ttsBackLang;
         if (ttsRateSlider) ttsRateSlider.value = config.ttsRate || 1;
         if (alternateUppercaseCheckbox) alternateUppercaseCheckbox.checked = config.alternateUppercase || false;
         if (disableAnimationCheckbox) disableAnimationCheckbox.checked = config.disableAnimation || false;
@@ -1937,106 +1997,19 @@ document.addEventListener('DOMContentLoaded', () => {
      * Populates the TTS voice selection dropdowns with the list of voices
      * available in the user's browser.
      */
-    async function detectAndFilterLanguage() {
-        if (cardData.length === 0) return;
-
-        const langCodeSet = new Set();
-        const fullText = cardData.map(row => row.join(' ')).join(' ');
-
-        // 1. Native Chrome API
-        if ('LanguageDetector' in window) {
-            try {
-                const detector = await LanguageDetector.create();
-                const detectionResult = await detector.detect(fullText);
-                detectionResult
-                    .filter(lang => lang.detectedLanguage !== 'und')
-                    .forEach(lang => langCodeSet.add(lang.detectedLanguage));
-            } catch (error) {
-                console.error('Language Detector API failed:', error);
-            }
+    function loadVoices() {
+        if (!('speechSynthesis' in window)) {
+            return;
         }
-
-        // 2. ELD Library
-        try {
-            const result = eld.detect(fullText);
-            if (result.language) {
-                langCodeSet.add(result.language);
-            }
-        } catch (error) {
-            console.error('ELD detection failed:', error);
+        const setVoices = () => {
+            voices = speechSynthesis.getVoices();
+        };
+        // Voices may load asynchronously. Call once to get what's available now.
+        setVoices();
+        // And set the event handler to repopulate the list when it changes.
+        if (speechSynthesis.onvoiceschanged !== undefined) {
+            speechSynthesis.onvoiceschanged = setVoices;
         }
-
-        // 3. Franc as a fallback if others fail
-        if (langCodeSet.size === 0 && typeof francAll !== 'undefined') {
-            const langGuesses = francAll(fullText);
-            langGuesses
-                .filter(guess => guess[0] !== 'und')
-                .map(guess => guess[0].substring(0, 2)) // franc gives 3-letter, convert to 2
-                .forEach(code => langCodeSet.add(code));
-        }
-
-        const finalLangCodes = Array.from(langCodeSet);
-
-        if (finalLangCodes.length > 0) {
-            if (detectedLangSpan) {
-                detectedLangSpan.textContent = `Detected: ${finalLangCodes.join(', ')}`;
-                detectedLangSpan.style.display = 'inline';
-            }
-            populateVoices(finalLangCodes);
-        } else {
-            if (detectedLangSpan) detectedLangSpan.style.display = 'none';
-            populateVoices([]);
-        }
-    }
-
-    function populateVoices(detectedLangCodes = []) {
-        if (!('speechSynthesis' in window)) return;
-        voices = speechSynthesis.getVoices();
-        if (!ttsFrontLangSelect || !ttsBackLangSelect) return;
-
-        const currentFront = ttsFrontLangSelect.value;
-        const currentBack = ttsBackLangSelect.value;
-
-        // Create a set of language prefixes to show
-        // Start with the 2-letter codes from the detected languages
-        const langPrefixesToShow = new Set(detectedLangCodes.map(code => code.substring(0, 2)));
-
-        // Add the currently configured languages to the set so they are not removed
-        const frontVoice = voices.find(v => v.name === currentFront);
-        const backVoice = voices.find(v => v.name === currentBack);
-        if (frontVoice) {
-            langPrefixesToShow.add(frontVoice.lang.substring(0, 2));
-        }
-        if (backVoice) {
-            langPrefixesToShow.add(backVoice.lang.substring(0, 2));
-        }
-
-        ttsFrontLangSelect.innerHTML = '';
-        ttsBackLangSelect.innerHTML = '';
-
-        let voicesToDisplay = voices;
-        if (langPrefixesToShow.size > 0) {
-            voicesToDisplay = voices.filter(voice => {
-                const voiceLangPrefix = voice.lang.substring(0, 2);
-                return langPrefixesToShow.has(voiceLangPrefix);
-            });
-        }
-
-        // If filtering results in no voices, fall back to showing all
-        if (voicesToDisplay.length === 0) {
-            voicesToDisplay = voices;
-        }
-
-        voicesToDisplay.forEach(voice => {
-            const option1 = new Option(`${voice.name} (${voice.lang})`, voice.name);
-            const option2 = new Option(`${voice.name} (${voice.lang})`, voice.name);
-            ttsFrontLangSelect.add(option1);
-            ttsBackLangSelect.add(option2);
-        });
-
-        // Try to restore previous selection
-        ttsFrontLangSelect.value = currentFront;
-        ttsBackLangSelect.value = currentBack;
     }
 
     /**
@@ -2045,17 +2018,33 @@ document.addEventListener('DOMContentLoaded', () => {
      * @param {string} voiceName - The name of the voice to use (from `speechSynthesis.getVoices()`).
      * @param {number} [rate] - The playback rate (e.g., 1.0 for normal, 0.5 for half-speed). Defaults to the slider value.
      */
-    function speak(text, voiceName, rate) {
-        if (!('speechSynthesis' in window) || speechSynthesis.speaking) {
+    function speak(text, rate) {
+        if (!('speechSynthesis' in window) || speechSynthesis.speaking || !text) {
             return;
         }
         const utterance = new SpeechSynthesisUtterance(text);
-        if (voiceName) {
-            const voice = voices.find(v => v.name === voiceName);
-            if (voice) {
-                utterance.voice = voice;
-            }
+
+        // Auto-detect language using franc
+        const langGuess = franc(text);
+        let lang = 'en'; // Default to English
+        if (langGuess && langGuess !== 'und') {
+            lang = langGuess.substring(0, 2);
         }
+
+        // Find a suitable voice. Prioritize exact match, then language prefix, then default.
+        let voice = voices.find(v => v.lang === lang);
+        if (!voice) {
+            voice = voices.find(v => v.lang.startsWith(lang));
+        }
+        if (!voice) {
+            voice = voices.find(v => v.default);
+        }
+
+        if (voice) {
+            utterance.voice = voice;
+            utterance.lang = voice.lang; // Set lang property on utterance
+        }
+
         utterance.rate = rate || (ttsRateSlider ? ttsRateSlider.value : 1);
         window.speechSynthesis.speak(utterance);
     }
@@ -2119,20 +2108,22 @@ document.addEventListener('DOMContentLoaded', () => {
                         break;
                     }
                     case 'KeyF': {
-                        let text, voiceName;
+                        let text, role;
+                        const currentConfigName = configSelector.value;
+                        const currentConfig = configs[currentConfigName] || {};
+                        const skillConfig = (currentConfig.skillColumns || {})[currentSkill] || {};
+
                         if (card.classList.contains('flipped')) {
-                            text = cardBack.textContent;
-                            voiceName = ttsBackLangSelect.value;
+                            role = skillConfig.ttsBackColumn;
                         } else {
-                            // For the front, always get text from the configured TTS source column
-                            const currentConfigName = configSelector.value;
-                            const currentConfig = configs[currentConfigName] || {};
-                            const ttsSourceColumn = currentConfig.ttsSourceColumn || 0; // Default to 0
-                            text = getTextForColumns([ttsSourceColumn]);
-                            voiceName = ttsFrontLangSelect.value;
+                            role = skillConfig.ttsFrontColumn;
                         }
-                        replayRate = Math.max(0.1, replayRate - 0.2);
-                        speak(text, voiceName, replayRate);
+
+                        if (role && role !== 'none') {
+                            text = getTextForRoles([role]);
+                            replayRate = Math.max(0.1, replayRate - 0.2);
+                            speak(text, replayRate);
+                        }
                         break;
                     }
                 }
@@ -2231,11 +2222,8 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // Initial load
-    populateVoices();
+    loadVoices();
     populateSkillSelector();
-    if ('speechSynthesis'in window && speechSynthesis.onvoiceschanged !== undefined) {
-        speechSynthesis.onvoiceschanged = () => populateVoices();
-    }
     loadInitialConfigs();
 
     // --- Service Worker Registration ---
