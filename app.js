@@ -65,8 +65,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const columnRolesContainer = document.getElementById('column-roles-container');
     const skillColumnConfigContainer = document.getElementById('skill-column-config-container');
     const fontSelector = document.getElementById('font-selector');
-    const ttsFrontCheckbox = document.getElementById('tts-front');
-    const ttsBackCheckbox = document.getElementById('tts-back');
     const ttsRateSlider = document.getElementById('tts-rate');
     const alternateUppercaseCheckbox = document.getElementById('alternate-uppercase');
     const disableAnimationCheckbox = document.getElementById('disable-animation');
@@ -906,6 +904,8 @@ document.addEventListener('DOMContentLoaded', () => {
             const noneOptionValidation = new Option('None', 'none');
             validationSelector.add(noneOptionValidation);
 
+            const noneOptionTtsFront = new Option('None', 'none');
+            ttsFrontSelector.add(noneOptionTtsFront);
             const noneOptionTtsBack = new Option('None', 'none');
             ttsBackSelector.add(noneOptionTtsBack);
 
@@ -967,12 +967,16 @@ document.addEventListener('DOMContentLoaded', () => {
             skillConfig = (currentConfig.skillColumns || {})[SKILLS.READING.id] || { front: ['TARGET_LANGUAGE'], back: ['BASE_LANGUAGE'] };
         }
 
-        if (card.classList.contains('flipped') && ttsBackCheckbox && ttsBackCheckbox.checked) {
-            // The text for the back is already determined and stored in currentBackText
+    if (card.classList.contains('flipped')) {
+        const ttsBackRole = skillConfig.ttsBackColumn;
+        if (ttsBackRole && ttsBackRole !== 'none') {
             speak(currentBackText);
-        } else if (!card.classList.contains('flipped') && ttsFrontCheckbox && ttsFrontCheckbox.checked) {
-            // The text for the front is already determined and stored in currentFrontText
+        }
+    } else if (!card.classList.contains('flipped')) {
+        const ttsFrontRole = skillConfig.ttsFrontColumn;
+        if (ttsFrontRole && ttsFrontRole !== 'none') {
             speak(currentFrontText);
+        }
         }
     }
 
@@ -1269,8 +1273,11 @@ document.addEventListener('DOMContentLoaded', () => {
         }, 50);
 
         card.classList.remove('flipped');
-        if (ttsFrontCheckbox && ttsFrontCheckbox.checked && ttsOnHotkeyOnlyCheckbox && !ttsOnHotkeyOnlyCheckbox.checked) {
-            speak(currentFrontText);
+        if (ttsOnHotkeyOnlyCheckbox && !ttsOnHotkeyOnlyCheckbox.checked) {
+            const ttsFrontRole = skillConfig.ttsFrontColumn;
+            if (ttsFrontRole && ttsFrontRole !== 'none') {
+                speak(currentFrontText);
+            }
         }
 
         renderSkillMastery(stats);
@@ -1779,8 +1786,6 @@ document.addEventListener('DOMContentLoaded', () => {
             columnRoleAssignments: columnRoleAssignments, // Save the direct mapping
             roleToColumnMap: roleToColumnMap, // Save the computed map
             font: fontSelector.value,
-            ttsFront: ttsFrontCheckbox.checked,
-            ttsBack: ttsBackCheckbox.checked,
             ttsRate: ttsRateSlider.value,
             alternateUppercase: alternateUppercaseCheckbox.checked,
             disableAnimation: disableAnimationCheckbox.checked,
@@ -1841,8 +1846,6 @@ document.addEventListener('DOMContentLoaded', () => {
         configNameInput.value = configName;
         dataUrlInput.value = config.dataUrl || '';
         fontSelector.value = config.font;
-        ttsFrontCheckbox.checked = config.ttsFront;
-        ttsBackCheckbox.checked = config.ttsBack;
         cardContainer.style.fontFamily = config.font;
         if (configTitle) configTitle.textContent = configName;
         if (deckTitle) deckTitle.textContent = configName;
