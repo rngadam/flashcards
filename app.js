@@ -284,10 +284,15 @@ document.addEventListener('DOMContentLoaded', () => {
         skillSelectorCheckboxes.addEventListener('change', async (e) => {
             if (e.target.matches('input[type="checkbox"]')) {
                 const currentConfigName = configSelector.value;
-                if (currentConfigName && configs[currentConfigName]) {
-                    configs[currentConfigName].activeSkills = getSelectedSkills();
-                    handleSettingsChange(); // Mark as dirty
-                    await showNextCard(); // Show a new card with the new skill selection
+                const currentConfig = configs[currentConfigName];
+                if (currentConfig) {
+                    // This correctly reads all checked boxes and updates the array
+                    currentConfig.activeSkills = getSelectedSkills();
+                    handleSettingsChange();
+                    // Re-render the mastery dashboard to update the active skill highlighting
+                    const cardKey = getCardKey(cardData[currentCardIndex]);
+                    const stats = await getSanitizedStats(cardKey);
+                    renderSkillMastery(stats);
                 }
             }
         });
@@ -360,12 +365,10 @@ document.addEventListener('DOMContentLoaded', () => {
     if (saveSkillButton) saveSkillButton.addEventListener('click', saveSkill);
 
     function handleSettingsChange(e) {
-        const target = e.target;
-        // Check if the change happened on a relevant form element
-        if (target.matches('input, select, textarea')) {
-            isConfigDirty = true;
-            if (saveConfigButton) saveConfigButton.disabled = false;
-        }
+        // This function can be called with or without an event object.
+        // If called without an event, it's a programmatic way to mark the config as dirty.
+        isConfigDirty = true;
+        if (saveConfigButton) saveConfigButton.disabled = false;
     }
 
     function getLenientString(str) {
@@ -1142,6 +1145,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
         renderSkillsList();
         populateSkillSelector();
+
+        // If no skills are defined, prompt the user to create some.
+        if (config.skills.length === 0) {
+            settingsModal.classList.remove('hidden');
+            const skillsTabButton = document.getElementById('skills-tab');
+            if (skillsTabButton) {
+                skillsTabButton.click();
+            }
+            showTopNotification("This deck has no skills. Let's create one!", "success");
+        }
         handleSettingsChange();
         showTopNotification('Preset skills added.', 'success');
     }
@@ -1506,7 +1519,7 @@ document.addEventListener('DOMContentLoaded', () => {
             useUppercase = !useUppercase;
         }
 
-        const isAudioOnly = (audioOnlyFrontCheckbox && audioOnlyFrontCheckbox.checked) || skillConfig.name.toLowerCase().includes('listening');
+        const isAudioOnly = (audioOnlyFrontCheckbox && audioOnlyFrontCheckbox.checked) || (skillConfig.name && skillConfig.name.toLowerCase().includes('listening'));
 
         cardFrontContent.innerHTML = isAudioOnly ? '<span class="speech-icon">🔊</span>' : `<span>${displayText.replace(/\n/g, '<br>')}</span>`;
         cardBackContent.innerHTML = `<span>${textForBackDisplay.replace(/\n/g, '<br>')}</span>`;
@@ -1947,14 +1960,8 @@ document.addEventListener('DOMContentLoaded', () => {
     function getActiveSkills() {
         const currentConfigName = configSelector.value;
         const currentConfig = configs[currentConfigName];
-        if (currentConfig && currentConfig.activeSkills) {
-            return currentConfig.activeSkills;
-        }
-        // If no active skills are set, default to all defined skills
-        if (currentConfig && currentConfig.skills) {
-            return currentConfig.skills.map(s => s.id);
-        }
-        return [];
+        // The source of truth is the activeSkills array. If it's missing or empty, no skills are active.
+        return (currentConfig && currentConfig.activeSkills) ? currentConfig.activeSkills : [];
     }
 
     async function saveConfig() {
