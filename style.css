@@ -782,6 +782,11 @@ button.danger:hover {
     opacity: 0;
 }
 
+/* --- Advanced Settings Cleanup --- */
+#advanced-settings .setting input[type="range"] {
+    width: 250px; /* Or any other consistent width */
+}
+
 /* --- User-Defined Skills --- */
 #skills-list-container {
     padding: 10px;

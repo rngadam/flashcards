@@ -886,9 +886,10 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     class Skill {
-        constructor(name, id = `${Date.now()}-${Math.random()}`) {
+        constructor(name, id = crypto.randomUUID()) {
             this.id = id;
             this.name = name;
+            this.isAudioOnly = false;
             this.verificationMethod = 'none'; // 'none', 'text', 'multiple-choice'
             this.front = []; // Array of role keys
             this.back = [];  // Array of role keys
@@ -922,24 +923,41 @@ document.addEventListener('DOMContentLoaded', () => {
             skillItem.className = 'skill-item';
             skillItem.dataset.skillId = skill.id;
 
+            // Left side content
+            const leftDiv = document.createElement('div');
+
+            const nameDiv = document.createElement('div');
+            nameDiv.className = 'skill-item-name';
+            nameDiv.textContent = skill.name; // SAFE
+
+            const detailsDiv = document.createElement('div');
+            detailsDiv.className = 'skill-item-details';
             const frontDetails = Array.isArray(skill.front) ? skill.front.join(', ') : 'None';
             const backDetails = Array.isArray(skill.back) ? skill.back.join(', ') : 'None';
-            const details = `
-                Front: ${frontDetails || 'None'} |
-                Back: ${backDetails || 'None'} |
-                Validation: ${skill.verificationMethod}
-            `;
+            detailsDiv.textContent = `Front: ${frontDetails || 'None'} | Back: ${backDetails || 'None'} | Validation: ${skill.verificationMethod}`; // SAFE
 
-            skillItem.innerHTML = `
-                <div>
-                    <div class="skill-item-name">${skill.name}</div>
-                    <div class="skill-item-details">${details}</div>
-                </div>
-                <div class="skill-item-actions">
-                    <button class="edit-skill-button">Edit</button>
-                    <button class="delete-skill-button danger">Delete</button>
-                </div>
-            `;
+            leftDiv.appendChild(nameDiv);
+            leftDiv.appendChild(detailsDiv);
+
+            // Right side actions
+            const rightDiv = document.createElement('div');
+            rightDiv.className = 'skill-item-actions';
+
+            const editButton = document.createElement('button');
+            editButton.className = 'edit-skill-button';
+            editButton.textContent = 'Edit'; // SAFE
+
+            const deleteButton = document.createElement('button');
+            deleteButton.className = 'delete-skill-button danger';
+            deleteButton.textContent = 'Delete'; // SAFE
+
+            rightDiv.appendChild(editButton);
+            rightDiv.appendChild(deleteButton);
+
+            // Append to main item
+            skillItem.appendChild(leftDiv);
+            skillItem.appendChild(rightDiv);
+
             skillsList.appendChild(skillItem);
         });
     }
@@ -999,6 +1017,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 title.textContent = 'Edit Skill';
                 editingSkillIdInput.value = skill.id;
                 nameInput.value = skill.name;
+                document.getElementById('skill-audio-only-checkbox').checked = skill.isAudioOnly || false;
                 verificationSelect.value = skill.verificationMethod;
                 validationSelect.value = skill.validationColumn;
                 ttsFrontSelect.value = skill.ttsFrontColumn;
@@ -1059,6 +1078,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // --- Update skill properties from the form ---
         skill.name = skillName;
+        skill.isAudioOnly = document.getElementById('skill-audio-only-checkbox').checked;
         skill.verificationMethod = document.getElementById('skill-verification-method').value;
         skill.validationColumn = document.getElementById('skill-validation-column').value;
         skill.ttsFrontColumn = document.getElementById('skill-tts-front-column').value;
@@ -1115,9 +1135,9 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         const presets = [
-            { name: 'Reading Comprehension', front: ['TARGET_LANGUAGE'], back: ['BASE_LANGUAGE', 'PRONUNCIATION'], verification: 'none' },
-            { name: 'Listening Comprehension', front: ['TARGET_LANGUAGE'], back: ['BASE_LANGUAGE', 'PRONUNCIATION', 'TARGET_LANGUAGE'], verification: 'none', ttsFront: 'TARGET_LANGUAGE' },
-            { name: 'Validated Writing Practice', front: ['BASE_LANGUAGE'], back: ['TARGET_LANGUAGE'], verification: 'text', validation: 'TARGET_LANGUAGE' },
+            { name: 'Reading Comprehension', front: ['TARGET_LANGUAGE'], back: ['BASE_LANGUAGE', 'PRONUNCIATION'], verification: 'none', isAudioOnly: false },
+            { name: 'Listening Comprehension', front: ['TARGET_LANGUAGE'], back: ['BASE_LANGUAGE', 'PRONUNCIATION', 'TARGET_LANGUAGE'], verification: 'none', ttsFront: 'TARGET_LANGUAGE', isAudioOnly: true },
+            { name: 'Validated Writing Practice', front: ['BASE_LANGUAGE'], back: ['TARGET_LANGUAGE'], verification: 'text', validation: 'TARGET_LANGUAGE', isAudioOnly: false },
             { name: 'Spoken Production', front: ['BASE_LANGUAGE'], back: ['TARGET_LANGUAGE'], verification: 'none' },
             { name: 'Pronunciation Practice', front: ['TARGET_LANGUAGE', 'PRONUNCIATION'], back: ['BASE_LANGUAGE'], verification: 'none' }
         ];
@@ -1127,6 +1147,7 @@ document.addEventListener('DOMContentLoaded', () => {
             skill.front = p.front;
             skill.back = p.back;
             skill.verificationMethod = p.verification;
+            skill.isAudioOnly = p.isAudioOnly || false;
             if (p.validation) skill.validationColumn = p.validation;
             if (p.ttsFront) skill.ttsFrontColumn = p.ttsFront;
             currentConfig.skills.push(skill);
@@ -1136,7 +1157,7 @@ document.addEventListener('DOMContentLoaded', () => {
         populateSkillSelector();
 
         // If no skills are defined, prompt the user to create some.
-        if (config.skills.length === 0) {
+        if (currentConfig.skills.length === 0) {
             settingsModal.classList.remove('hidden');
             const skillsTabButton = document.getElementById('skills-tab');
             if (skillsTabButton) {
@@ -1508,7 +1529,7 @@ document.addEventListener('DOMContentLoaded', () => {
             useUppercase = !useUppercase;
         }
 
-        const isAudioOnly = (audioOnlyFrontCheckbox && audioOnlyFrontCheckbox.checked) || (skillConfig.name && skillConfig.name.toLowerCase().includes('listening'));
+        const isAudioOnly = (audioOnlyFrontCheckbox && audioOnlyFrontCheckbox.checked) || skillConfig.isAudioOnly;
 
         cardFrontContent.innerHTML = isAudioOnly ? '<span class="speech-icon">🔊</span>' : `<span>${displayText.replace(/\n/g, '<br>')}</span>`;
         cardBackContent.innerHTML = `<span>${textForBackDisplay.replace(/\n/g, '<br>')}</span>`;
@@ -2102,13 +2123,6 @@ document.addEventListener('DOMContentLoaded', () => {
         renderSkillsList();
         populateSkillSelector();
 
-        // Load active skills
-        if (skillSelectorCheckboxes) {
-            skillSelectorCheckboxes.querySelectorAll('input').forEach(cb => {
-                cb.checked = config.activeSkills.includes(cb.value);
-            });
-        }
-
         // Load Column Roles
         if (config.columnRoleAssignments) {
             for (const colIndex in config.columnRoleAssignments) {
@@ -2462,13 +2476,21 @@ function speak(text, { rate, lang, ttsRole } = {}) {
         if (!currentConfig || !currentConfig.skills) return;
 
         currentConfig.skills.forEach(skill => {
-            const id = `skill-checkbox-${skill.id}`;
-            const checkboxHtml = `
-                <div>
-                    <input type="checkbox" id="${id}" value="${skill.id}">
-                    <label for="${id}" title="${skill.name}">${skill.name}</label>
-                </div>`;
-            skillSelectorCheckboxes.insertAdjacentHTML('beforeend', checkboxHtml);
+            const container = document.createElement('div');
+
+            const input = document.createElement('input');
+            input.type = 'checkbox';
+            input.id = `skill-checkbox-${skill.id}`;
+            input.value = skill.id;
+
+            const label = document.createElement('label');
+            label.htmlFor = input.id;
+            label.title = skill.name; // SAFE: title attribute is not vulnerable to XSS in this context
+            label.textContent = skill.name; // SAFE
+
+            container.appendChild(input);
+            container.appendChild(label);
+            skillSelectorCheckboxes.appendChild(container);
         });
 
         // After populating, re-apply the checked status from the config
