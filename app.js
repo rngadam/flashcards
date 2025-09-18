@@ -2,7 +2,7 @@ import { franc, francAll } from 'https://cdn.jsdelivr.net/npm/franc@6.2.0/+esm';
 import { eld } from 'https://cdn.jsdelivr.net/npm/efficient-language-detector-no-dynamic-import@1.0.3/+esm';
 import { get, set, del } from 'https://cdn.jsdelivr.net/npm/idb-keyval/+esm';
 import { getLenientString, transformSlashText } from './lib/string-utils.js';
-import { Skill, createSkillId } from './lib/skill-utils.js';
+import { Skill, createSkill, generateSkillId } from './lib/skill-utils.js';
 
 /**
  * @file Main application logic for the Flashcards web app.
@@ -856,7 +856,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             const nameDiv = document.createElement('div');
             nameDiv.className = 'skill-item-name';
-            nameDiv.textContent = skill.name; // SAFE
+            nameDiv.textContent = `${skill.name} (${skill.id.substring(0, 8)})`;
 
             const detailsDiv = document.createElement('div');
             detailsDiv.className = 'skill-item-details';
@@ -993,7 +993,6 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        // Create a temporary object with all the new properties to generate the ID
         const skillData = {
             name: skillName,
             verificationMethod: document.getElementById('skill-verification-method').value,
@@ -1003,35 +1002,34 @@ document.addEventListener('DOMContentLoaded', () => {
             alternateUppercase: document.getElementById('skill-alternate-uppercase').checked,
             ttsOnHotkeyOnly: document.getElementById('skill-tts-on-hotkey-only').checked,
             front: getSelectedRoles(document.getElementById('skill-front-columns')),
-            back: getSelectedRoles(document.getElementById('skill-back-columns'))
+            back: getSelectedRoles(document.getElementById('skill-back-columns')),
         };
 
-        const newSkillId = await createSkillId(skillData);
+        const newSkillId = await generateSkillId(skillData);
 
-        // Check for duplicates
+        // Check if a skill with this ID already exists, excluding the one being edited.
         const duplicateSkill = currentConfig.skills.find(s => s.id === newSkillId && s.id !== editingSkillId);
         if (duplicateSkill) {
-            showTopNotification(`This skill already exists as '${duplicateSkill.name}'.`, 'error');
+            showTopNotification(`A skill with these core settings already exists: '${duplicateSkill.name}'.`, 'error');
             return;
         }
 
-        let skill;
         if (editingSkillId) {
-            // Find the existing skill to update
-            skill = currentConfig.skills.find(s => s.id === editingSkillId);
-            if (!skill) {
-                showTopNotification('Error: Skill not found for editing.');
+            // Find and update the existing skill.
+            const skillIndex = currentConfig.skills.findIndex(s => s.id === editingSkillId);
+            if (skillIndex > -1) {
+                // Preserve the original name if the user didn't change it.
+                const updatedSkill = await createSkill({ ...skillData, name: skillName });
+                currentConfig.skills[skillIndex] = updatedSkill;
+            } else {
+                showTopNotification('Error: Skill to edit not found.');
                 return;
             }
         } else {
-            // Create a new skill instance
-            skill = new Skill(skillName); // Starts with a random UUID
-            currentConfig.skills.push(skill);
+            // Create a new skill and add it.
+            const newSkill = await createSkill(skillData);
+            currentConfig.skills.push(newSkill);
         }
-
-        // Update all properties from the form data and set the new stable ID
-        Object.assign(skill, skillData);
-        skill.id = newSkillId;
 
         // Refresh UI and mark config as dirty
         renderSkillsList();
@@ -1079,19 +1077,24 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    function addDefaultSkill(currentConfig) {
+    async function addDefaultSkill(currentConfig) {
         if (!currentConfig || !currentConfig.skills) {
             return;
         }
 
-        const defaultSkill = new Skill('Reading & Listening');
-        defaultSkill.front = ['TARGET_LANGUAGE'];
-        defaultSkill.back = ['BASE_LANGUAGE', 'PRONUNCIATION', 'GRAMMATICAL_TYPE'];
-        defaultSkill.ttsFrontColumn = 'TARGET_LANGUAGE';
-        defaultSkill.ttsBackColumn = 'BASE_LANGUAGE';
-        defaultSkill.alternateUppercase = true;
-        defaultSkill.ttsOnHotkeyOnly = true;
+        const skillData = {
+            name: 'Reading & Listening',
+            front: ['TARGET_LANGUAGE'],
+            back: ['BASE_LANGUAGE', 'PRONUNCIATION', 'GRAMMATICAL_TYPE'],
+            ttsFrontColumn: 'TARGET_LANGUAGE',
+            ttsBackColumn: 'BASE_LANGUAGE',
+            alternateUppercase: true,
+            ttsOnHotkeyOnly: true,
+            verificationMethod: 'none',
+            validationColumn: 'none',
+        };
 
+        const defaultSkill = await createSkill(skillData);
         currentConfig.skills.push(defaultSkill);
 
         if (!currentConfig.activeSkills) {
@@ -1122,18 +1125,18 @@ document.addEventListener('DOMContentLoaded', () => {
                 currentConfig.skills = [];
             }
 
-            presets.forEach(p => {
-                const skill = new Skill(p.name);
-                skill.front = p.front || [];
-                skill.back = p.back || [];
-                skill.verificationMethod = p.verificationMethod || 'none';
-                skill.validationColumn = p.validationColumn || 'none';
-                skill.ttsFrontColumn = p.ttsFrontColumn || 'none';
-                skill.ttsBackColumn = p.ttsBackColumn || 'none';
-                skill.alternateUppercase = p.alternateUppercase || false;
-                skill.ttsOnHotkeyOnly = p.ttsOnHotkeyOnly || false;
-                currentConfig.skills.push(skill);
-            });
+            const existingSkillIds = new Set(currentConfig.skills.map(s => s.id));
+            let skillsAdded = 0;
+
+            for (const presetData of presets) {
+                const tempSkillId = await generateSkillId(presetData);
+                if (!existingSkillIds.has(tempSkillId)) {
+                    const newSkill = await createSkill(presetData);
+                    currentConfig.skills.push(newSkill);
+                    existingSkillIds.add(newSkill.id); // Add to set to prevent duplicates from the preset file itself
+                    skillsAdded++;
+                }
+            }
 
             renderSkillsList();
             populateSkillSelector();
@@ -2199,7 +2202,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         if (config.skills.length === 0) {
-            addDefaultSkill(config);
+            await addDefaultSkill(config);
             handleSettingsChange();
         }
 
