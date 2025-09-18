@@ -93,11 +93,6 @@
         </div>
 
         <div class="setting">
-            <input type="checkbox" id="skill-audio-only-checkbox">
-            <label for="skill-audio-only-checkbox">Audio-Only Front (Listening Practice)</label>
-        </div>
-
-        <div class="setting">
           <label for="config-selector">Load Configuration:</label>
           <select id="config-selector"></select>
         </div>
@@ -114,7 +109,7 @@
           <button class="tab-button active" id="basic-tab" data-tab="basic-settings" role="tab" aria-controls="basic-settings" aria-selected="true">Basic</button>
           <button class="tab-button" id="skills-tab" data-tab="skills-settings" role="tab" aria-controls="skills-settings" aria-selected="false">Skills</button>
           <button class="tab-button" id="advanced-tab" data-tab="advanced-settings" role="tab" aria-controls="advanced-settings" aria-selected="false">Advanced</button>
-          <button class="tab-button" id="subset-tab" data-tab="subset-settings" role="tab" aria-controls="subset-settings" aria-selected="false">Subset</button>
+          <button class="tab-button" id="filter-tab" data-tab="filter-settings" role="tab" aria-controls="filter-settings" aria-selected="false">Filter</button>
           <button class="tab-button" id="dangerous-tab" data-tab="dangerous-settings" role="tab" aria-controls="dangerous-settings" aria-selected="false">Dangerous</button>
         </div>
 
@@ -138,6 +133,7 @@
                 <div class="skills-toolbar">
                     <button id="add-skill-button">Add New Skill</button>
                     <button id="preset-skills-button">Load Preset Skills</button>
+                    <button id="delete-all-skills-button" class="danger">Delete All Skills</button>
                 </div>
                 <div id="skills-list">
                     <!-- User-defined skills will be dynamically added here -->
@@ -155,20 +151,8 @@
                 <input type="range" id="tts-rate-base" min="0.1" max="3" value="1.5" step="0.1">
             </div>
             <div class="setting">
-                <input type="checkbox" id="alternate-uppercase">
-                <label for="alternate-uppercase">Alternate Uppercase on Front</label>
-            </div>
-            <div class="setting">
                 <input type="checkbox" id="disable-animation">
                 <label for="disable-animation">Disable Flip Animation</label>
-            </div>
-            <div class="setting">
-                <input type="checkbox" id="audio-only-front">
-                <label for="audio-only-front">Audio-Only Front</label>
-            </div>
-            <div class="setting">
-                <input type="checkbox" id="tts-on-hotkey-only">
-                <label for="tts-on-hotkey-only">Only read on hotkey (f)</label>
             </div>
             <div class="setting">
                 <label for="repetition-intervals">Repetition Intervals (seconds, comma-separated):</label>
@@ -176,16 +160,20 @@
             </div>
         </div>
 
-        <div id="subset-settings" class="tab-panel" role="tabpanel" aria-labelledby="subset-tab">
+        <div id="filter-settings" class="tab-panel" role="tabpanel" aria-labelledby="filter-tab">
             <div class="setting">
-                <label for="subset-config-name">New Subset Name:</label>
-                <input type="text" id="subset-config-name" placeholder="e.g., Chapter 1 Words">
+                <label for="filter-text">Text to Filter by:</label>
+                <textarea id="filter-text" rows="5" placeholder="Paste text here..."></textarea>
+                <small>The deck will only show cards where the 'Target Language' column matches a word from this text.</small>
             </div>
             <div class="setting">
-                <label for="subset-text">Source Text:</label>
-                <textarea id="subset-text" rows="5" placeholder="Paste text here..."></textarea>
+                <input type="checkbox" id="filter-allow-overflow">
+                <label for="filter-allow-overflow">Allow other cards after filtered set is learned</label>
             </div>
-            <button id="create-subset-config">Create and Load Subset</button>
+            <div class="button-container">
+                <button id="apply-filter-button">Apply Filter</button>
+                <button id="clear-filter-button" class="danger">Clear Filter</button>
+            </div>
         </div>
 
         <div id="dangerous-settings" class="tab-panel" role="tabpanel" aria-labelledby="dangerous-tab">
@@ -211,11 +199,6 @@
             <div class="setting">
                 <label for="skill-name-input">Skill Name:</label>
                 <input type="text" id="skill-name-input" placeholder="e.g., French Reading">
-            </div>
-
-            <div class="setting">
-                <input type="checkbox" id="skill-audio-only-checkbox">
-                <label for="skill-audio-only-checkbox">Audio-Only Front (Listening Practice)</label>
             </div>
 
             <div class="setting">
@@ -255,6 +238,15 @@
                 </select>
             </div>
 
+            <div class="setting">
+                <input type="checkbox" id="skill-alternate-uppercase">
+                <label for="skill-alternate-uppercase">Alternate Uppercase on Front</label>
+            </div>
+            <div class="setting">
+                <input type="checkbox" id="skill-tts-on-hotkey-only">
+                <label for="skill-tts-on-hotkey-only">Only read on hotkey (f)</label>
+            </div>
+
             <div class="button-container">
                 <button id="save-skill-button">Save Skill</button>
             </div>
@@ -286,6 +278,7 @@
         <input type="text" id="writing-input" placeholder="Type the answer...">
         <button id="writing-submit">Submit</button>
       </div>
+      <div id="explanation-message"></div>
     </div>
 
     <div id="controls">
@@ -296,8 +289,6 @@
       <button id="next-card"><span>➡️</span><span class="btn-text"> Next (&rarr;)</span></button>
       <button id="slow-replay-hotkey"><span>🔁</span><span class="btn-text"> Replay (f)</span></button>
     </div>
-
-    <div id="explanation-message"></div>
     <script src="https://cdn.jsdelivr.net/npm/diff/dist/diff.min.js"></script>
     <script type="module" src="app.js"></script>
   </body>

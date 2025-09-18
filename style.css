@@ -410,30 +410,22 @@ th.sortable.desc::after {
 }
 
 #explanation-message {
-    position: fixed;
-    bottom: 10px;
-    left: 10px;
-    right: 10px;
-    transform: translateX(0);
+    position: absolute; /* Changed from fixed */
+    top: 10px; /* Adjust as needed */
+    left: 50%;
+    transform: translateX(-50%);
     background: rgba(0,0,0,0.8);
     color: white;
     padding: 12px 18px;
     border-radius: 10px;
     font-size: 1em;
     opacity: 0;
-    transition: opacity 0.5s;
-    z-index: 10;
+    transition: opacity 0.5s, top 0.5s;
+    z-index: 20; /* Higher than the card faces */
     text-align: center;
-}
-
-@media (min-width: 600px) {
-    #explanation-message {
-        left: 50%;
-        right: auto;
-        transform: translateX(-50%);
-        width: auto;
-        max-width: 80%;
-    }
+    width: auto;
+    max-width: 80%;
+    pointer-events: none; /* So it doesn't interfere with card clicks/drags */
 }
 
 #explanation-message.visible {
@@ -869,4 +861,9 @@ button.danger:hover {
 
 #skill-validation-column:disabled {
     background-color: #eee;
+}
+
+.speech-icon {
+    font-size: 10em; /* Make the icon large */
+    color: #888;
 }
