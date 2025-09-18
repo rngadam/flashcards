@@ -1,0 +1,8 @@
+[
+  {"name": "Reading & Listening", "front": ["TARGET_LANGUAGE"], "back": ["BASE_LANGUAGE", "PRONUNCIATION", "GRAMMATICAL_TYPE"], "verificationMethod": "none", "ttsFrontColumn": "TARGET_LANGUAGE", "ttsBackColumn": "BASE_LANGUAGE", "alternateUppercase": true, "ttsOnHotkeyOnly": true},
+  {"name": "Reading Comprehension", "front": ["TARGET_LANGUAGE"], "back": ["BASE_LANGUAGE", "PRONUNCIATION"], "verificationMethod": "none", "ttsFrontColumn": "TARGET_LANGUAGE", "ttsBackColumn": "BASE_LANGUAGE", "alternateUppercase": false, "ttsOnHotkeyOnly": false},
+  {"name": "Listening Comprehension", "front": [], "back": ["BASE_LANGUAGE", "PRONUNCIATION", "TARGET_LANGUAGE"], "verificationMethod": "none", "ttsFrontColumn": "TARGET_LANGUAGE", "ttsBackColumn": "BASE_LANGUAGE", "alternateUppercase": false, "ttsOnHotkeyOnly": true},
+  {"name": "Validated Writing Practice", "front": ["BASE_LANGUAGE"], "back": ["TARGET_LANGUAGE"], "verificationMethod": "text", "validationColumn": "TARGET_LANGUAGE", "ttsFrontColumn": "BASE_LANGUAGE", "ttsBackColumn": "TARGET_LANGUAGE", "alternateUppercase": false, "ttsOnHotkeyOnly": false},
+  {"name": "Spoken Production", "front": ["BASE_LANGUAGE"], "back": ["TARGET_LANGUAGE"], "verificationMethod": "none", "ttsFrontColumn": "BASE_LANGUAGE", "ttsBackColumn": "TARGET_LANGUAGE", "alternateUppercase": false, "ttsOnHotkeyOnly": false},
+  {"name": "Pronunciation Practice", "front": ["TARGET_LANGUAGE", "PRONUNCIATION"], "back": ["BASE_LANGUAGE"], "verificationMethod": "none", "ttsFrontColumn": "TARGET_LANGUAGE", "ttsBackColumn": "BASE_LANGUAGE", "alternateUppercase": false, "ttsOnHotkeyOnly": false}
+]

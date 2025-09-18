@@ -1,6 +1,8 @@
 import { franc, francAll } from 'https://cdn.jsdelivr.net/npm/franc@6.2.0/+esm';
 import { eld } from 'https://cdn.jsdelivr.net/npm/efficient-language-detector-no-dynamic-import@1.0.3/+esm';
 import { get, set, del } from 'https://cdn.jsdelivr.net/npm/idb-keyval/+esm';
+import { getLenientString, transformSlashText } from './lib/string-utils.js';
+import { Skill, createSkillId } from './lib/skill-utils.js';
 
 /**
  * @file Main application logic for the Flashcards web app.
@@ -335,6 +337,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const presetSkillsButton = document.getElementById('preset-skills-button');
     if (presetSkillsButton) presetSkillsButton.addEventListener('click', createPresetSkills);
 
+    const exportSkillsButton = document.getElementById('export-skills-button');
+    if (exportSkillsButton) exportSkillsButton.addEventListener('click', exportSkills);
+
     const deleteAllSkillsButton = document.getElementById('delete-all-skills-button');
     if (deleteAllSkillsButton) deleteAllSkillsButton.addEventListener('click', deleteAllSkills);
 
@@ -378,33 +383,6 @@ document.addEventListener('DOMContentLoaded', () => {
         if (saveConfigButton) saveConfigButton.disabled = false;
     }
 
-    function getLenientString(str) {
-        if (typeof str !== 'string') return '';
-        return str
-            .toLowerCase()
-            .normalize('NFD')
-            .replace(/[\u0300-\u036f]/g, '')
-            .replace(/[.,/#!$%^&*;:{}=\-_`~()?]/g, '')
-            .trim();
-    }
-
-    function transformSlashText(text) {
-        if (!text || !text.includes('/')) {
-            return text;
-        }
-        // Split the string by the parenthetical part, keeping the delimiter.
-        // This allows us to process the main text and the pronunciation part separately.
-        const parts = text.split(/(\s?\(.*\))/);
-        // e.g., "他/她微笑 (tā/tā wéixiào)" becomes ['他/她微笑', ' (tā/tā wéixiào)', '']
-        const mainPart = parts[0];
-        const rest = parts.slice(1).join('');
-
-        // This regex finds a word, a slash, and another word, replacing the match with the second word.
-        // It's applied only to the main part of the text.
-        const transformedMain = mainPart.replace(/[^/\s]+\/([^/\s]+)/g, '$1');
-
-        return transformedMain + rest;
-    }
 
     function renderDiff(userAnswer, correctAnswer, isCorrect) {
         const userAnswerLower = userAnswer.toLowerCase();
@@ -848,20 +826,6 @@ document.addEventListener('DOMContentLoaded', () => {
         handleSettingsChange(); // Mark config as dirty
     }
 
-    class Skill {
-        constructor(name, id = crypto.randomUUID()) {
-            this.id = id;
-            this.name = name;
-            this.verificationMethod = 'none'; // 'none', 'text', 'multiple-choice'
-            this.front = []; // Array of role keys
-            this.back = [];  // Array of role keys
-            this.validationColumn = 'none'; // Role key
-            this.ttsFrontColumn = 'none';   // Role key
-            this.ttsBackColumn = 'none';    // Role key
-            this.alternateUppercase = false;
-            this.ttsOnHotkeyOnly = false;
-        }
-    }
 
     // --- User-Defined Skill Management ---
 
@@ -1011,7 +975,7 @@ document.addEventListener('DOMContentLoaded', () => {
         modal.classList.remove('hidden');
     }
 
-    function saveSkill() {
+    async function saveSkill() {
         const modal = document.getElementById('skill-config-modal');
         const nameInput = document.getElementById('skill-name-input');
         const editingSkillId = document.getElementById('editing-skill-id').value;
@@ -1029,38 +993,50 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
+        // Create a temporary object with all the new properties to generate the ID
+        const skillData = {
+            name: skillName,
+            verificationMethod: document.getElementById('skill-verification-method').value,
+            validationColumn: document.getElementById('skill-validation-column').value,
+            ttsFrontColumn: document.getElementById('skill-tts-front-column').value,
+            ttsBackColumn: document.getElementById('skill-tts-back-column').value,
+            alternateUppercase: document.getElementById('skill-alternate-uppercase').checked,
+            ttsOnHotkeyOnly: document.getElementById('skill-tts-on-hotkey-only').checked,
+            front: getSelectedRoles(document.getElementById('skill-front-columns')),
+            back: getSelectedRoles(document.getElementById('skill-back-columns'))
+        };
+
+        const newSkillId = await createSkillId(skillData);
+
+        // Check for duplicates
+        const duplicateSkill = currentConfig.skills.find(s => s.id === newSkillId && s.id !== editingSkillId);
+        if (duplicateSkill) {
+            showTopNotification(`This skill already exists as '${duplicateSkill.name}'.`, 'error');
+            return;
+        }
+
         let skill;
         if (editingSkillId) {
-            // Update existing skill
+            // Find the existing skill to update
             skill = currentConfig.skills.find(s => s.id === editingSkillId);
             if (!skill) {
                 showTopNotification('Error: Skill not found for editing.');
                 return;
             }
         } else {
-            // Create new skill
-            skill = new Skill(skillName);
+            // Create a new skill instance
+            skill = new Skill(skillName); // Starts with a random UUID
             currentConfig.skills.push(skill);
         }
 
-        // --- Update skill properties from the form ---
-        skill.name = skillName;
-        skill.verificationMethod = document.getElementById('skill-verification-method').value;
-        skill.validationColumn = document.getElementById('skill-validation-column').value;
-        skill.ttsFrontColumn = document.getElementById('skill-tts-front-column').value;
-        skill.ttsBackColumn = document.getElementById('skill-tts-back-column').value;
-        skill.alternateUppercase = document.getElementById('skill-alternate-uppercase').checked;
-        skill.ttsOnHotkeyOnly = document.getElementById('skill-tts-on-hotkey-only').checked;
+        // Update all properties from the form data and set the new stable ID
+        Object.assign(skill, skillData);
+        skill.id = newSkillId;
 
-        const frontColumnsContainer = document.getElementById('skill-front-columns');
-        skill.front = getSelectedRoles(frontColumnsContainer);
-        const backColumnsContainer = document.getElementById('skill-back-columns');
-        skill.back = getSelectedRoles(backColumnsContainer);
-
-        // --- Refresh UI and mark config as dirty ---
+        // Refresh UI and mark config as dirty
         renderSkillsList();
-        populateSkillSelector(); // Update the main UI checkboxes
-        handleSettingsChange(); // Mark config for saving
+        populateSkillSelector();
+        handleSettingsChange();
         modal.classList.add('hidden');
         showTopNotification(`Skill '${skill.name}' saved.`, 'success');
     }
@@ -1124,57 +1100,74 @@ document.addEventListener('DOMContentLoaded', () => {
         currentConfig.activeSkills.push(defaultSkill.id);
     }
 
-    function createPresetSkills() {
+    async function createPresetSkills() {
         const currentConfigName = configSelector.value;
         const currentConfig = configs[currentConfigName];
         if (!currentConfig) {
             showTopNotification('Please select or save a configuration first.');
             return;
         }
-        if (!confirm('This will add 6 preset skills to your configuration. Any existing skills will be kept. Continue?')) {
+        if (!confirm('This will add preset skills to your configuration. Any existing skills will be kept. Continue?')) {
             return;
         }
 
-        if (!currentConfig.skills) {
-            currentConfig.skills = [];
-        }
-
-        const presets = [
-            { name: 'Reading & Listening', front: ['TARGET_LANGUAGE'], back: ['BASE_LANGUAGE', 'PRONUNCIATION', 'GRAMMATICAL_TYPE'], verification: 'none', ttsFront: 'TARGET_LANGUAGE', ttsBack: 'BASE_LANGUAGE', alternateUppercase: true, ttsOnHotkeyOnly: true },
-            { name: 'Reading Comprehension', front: ['TARGET_LANGUAGE'], back: ['BASE_LANGUAGE', 'PRONUNCIATION'], verification: 'none' },
-            { name: 'Listening Comprehension', front: [], back: ['BASE_LANGUAGE', 'PRONUNCIATION', 'TARGET_LANGUAGE'], verification: 'none', ttsFront: 'TARGET_LANGUAGE' },
-            { name: 'Validated Writing Practice', front: ['BASE_LANGUAGE'], back: ['TARGET_LANGUAGE'], verification: 'text', validation: 'TARGET_LANGUAGE' },
-            { name: 'Spoken Production', front: ['BASE_LANGUAGE'], back: ['TARGET_LANGUAGE'], verification: 'none' },
-            { name: 'Pronunciation Practice', front: ['TARGET_LANGUAGE', 'PRONUNCIATION'], back: ['BASE_LANGUAGE'], verification: 'none' }
-        ];
-
-        presets.forEach(p => {
-            const skill = new Skill(p.name);
-            skill.front = p.front;
-            skill.back = p.back;
-            skill.verificationMethod = p.verification;
-            if (p.validation) skill.validationColumn = p.validation;
-            if (p.ttsFront) skill.ttsFrontColumn = p.ttsFront;
-            if (p.ttsBack) skill.ttsBackColumn = p.ttsBack;
-            skill.alternateUppercase = p.alternateUppercase || false;
-            skill.ttsOnHotkeyOnly = p.ttsOnHotkeyOnly || false;
-            currentConfig.skills.push(skill);
-        });
-
-        renderSkillsList();
-        populateSkillSelector();
-
-        // If no skills are defined, prompt the user to create some.
-        if (currentConfig.skills.length === 0) {
-            settingsModal.classList.remove('hidden');
-            const skillsTabButton = document.getElementById('skills-tab');
-            if (skillsTabButton) {
-                skillsTabButton.click();
+        try {
+            const response = await fetch('lib/default-skills.json');
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
             }
-            showTopNotification("This deck has no skills. Let's create one!", "success");
+            const presets = await response.json();
+
+            if (!currentConfig.skills) {
+                currentConfig.skills = [];
+            }
+
+            presets.forEach(p => {
+                const skill = new Skill(p.name);
+                skill.front = p.front || [];
+                skill.back = p.back || [];
+                skill.verificationMethod = p.verificationMethod || 'none';
+                skill.validationColumn = p.validationColumn || 'none';
+                skill.ttsFrontColumn = p.ttsFrontColumn || 'none';
+                skill.ttsBackColumn = p.ttsBackColumn || 'none';
+                skill.alternateUppercase = p.alternateUppercase || false;
+                skill.ttsOnHotkeyOnly = p.ttsOnHotkeyOnly || false;
+                currentConfig.skills.push(skill);
+            });
+
+            renderSkillsList();
+            populateSkillSelector();
+            handleSettingsChange();
+            showTopNotification('Preset skills added.', 'success');
+
+        } catch (error) {
+            console.error('Failed to load preset skills:', error);
+            showTopNotification('Error: Could not load preset skills.', 'error');
         }
-        handleSettingsChange();
-        showTopNotification('Preset skills added.', 'success');
+    }
+
+    function exportSkills() {
+        const currentConfigName = configSelector.value;
+        const currentConfig = configs[currentConfigName];
+
+        if (!currentConfig || !currentConfig.skills || currentConfig.skills.length === 0) {
+            showTopNotification('No skills to export in the current configuration.', 'error');
+            return;
+        }
+
+        const skillsJson = JSON.stringify(currentConfig.skills, null, 2);
+        const blob = new Blob([skillsJson], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${currentConfigName || 'flashcards'}-skills.json`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+
+        showTopNotification('Skills exported successfully.', 'success');
     }
 
 
