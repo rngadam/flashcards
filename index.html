@@ -166,6 +166,10 @@
                 <textarea id="filter-text" rows="5" placeholder="Paste text here..."></textarea>
                 <small>The deck will only show cards where the 'Target Language' column matches a word from this text.</small>
             </div>
+            <div class="setting">
+                <input type="checkbox" id="filter-allow-overflow">
+                <label for="filter-allow-overflow">Allow other cards after filtered set is learned</label>
+            </div>
             <div class="button-container">
                 <button id="apply-filter-button">Apply Filter</button>
                 <button id="clear-filter-button" class="danger">Clear Filter</button>
@@ -274,6 +278,7 @@
         <input type="text" id="writing-input" placeholder="Type the answer...">
         <button id="writing-submit">Submit</button>
       </div>
+      <div id="explanation-message"></div>
     </div>
 
     <div id="controls">
@@ -284,8 +289,6 @@
       <button id="next-card"><span>➡️</span><span class="btn-text"> Next (&rarr;)</span></button>
       <button id="slow-replay-hotkey"><span>🔁</span><span class="btn-text"> Replay (f)</span></button>
     </div>
-
-    <div id="explanation-message"></div>
     <script src="https://cdn.jsdelivr.net/npm/diff/dist/diff.min.js"></script>
     <script type="module" src="app.js"></script>
   </body>

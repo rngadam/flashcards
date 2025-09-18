@@ -410,8 +410,8 @@ th.sortable.desc::after {
 }
 
 #explanation-message {
-    position: fixed;
-    top: 70px; /* Moved from bottom */
+    position: absolute; /* Changed from fixed */
+    top: 10px; /* Adjust as needed */
     left: 50%;
     transform: translateX(-50%);
     background: rgba(0,0,0,0.8);
@@ -420,11 +420,12 @@ th.sortable.desc::after {
     border-radius: 10px;
     font-size: 1em;
     opacity: 0;
-    transition: opacity 0.5s, top 0.5s; /* Added top to transition */
-    z-index: 10;
+    transition: opacity 0.5s, top 0.5s;
+    z-index: 20; /* Higher than the card faces */
     text-align: center;
     width: auto;
     max-width: 80%;
+    pointer-events: none; /* So it doesn't interfere with card clicks/drags */
 }
 
 #explanation-message.visible {

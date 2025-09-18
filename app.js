@@ -105,6 +105,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const applyFilterButton = document.getElementById('apply-filter-button');
     const clearFilterButton = document.getElementById('clear-filter-button');
     const filterTextarea = document.getElementById('filter-text');
+    const filterAllowOverflowCheckbox = document.getElementById('filter-allow-overflow');
     const writingPracticeContainer = document.getElementById('writing-practice-container');
     const writingInput = document.getElementById('writing-input');
     const writingSubmit = document.getElementById('writing-submit');
@@ -1130,7 +1131,7 @@ document.addEventListener('DOMContentLoaded', () => {
             showTopNotification('Please select or save a configuration first.');
             return;
         }
-        if (!confirm('This will add 5 preset skills to your configuration. Any existing skills will be kept. Continue?')) {
+        if (!confirm('This will add 6 preset skills to your configuration. Any existing skills will be kept. Continue?')) {
             return;
         }
 
@@ -1139,6 +1140,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         const presets = [
+            { name: 'Reading & Listening', front: ['TARGET_LANGUAGE'], back: ['BASE_LANGUAGE', 'PRONUNCIATION', 'GRAMMATICAL_TYPE'], verification: 'none', ttsFront: 'TARGET_LANGUAGE', ttsBack: 'BASE_LANGUAGE', alternateUppercase: true, ttsOnHotkeyOnly: true },
             { name: 'Reading Comprehension', front: ['TARGET_LANGUAGE'], back: ['BASE_LANGUAGE', 'PRONUNCIATION'], verification: 'none' },
             { name: 'Listening Comprehension', front: [], back: ['BASE_LANGUAGE', 'PRONUNCIATION', 'TARGET_LANGUAGE'], verification: 'none', ttsFront: 'TARGET_LANGUAGE' },
             { name: 'Validated Writing Practice', front: ['BASE_LANGUAGE'], back: ['TARGET_LANGUAGE'], verification: 'text', validation: 'TARGET_LANGUAGE' },
@@ -1153,6 +1155,9 @@ document.addEventListener('DOMContentLoaded', () => {
             skill.verificationMethod = p.verification;
             if (p.validation) skill.validationColumn = p.validation;
             if (p.ttsFront) skill.ttsFrontColumn = p.ttsFront;
+            if (p.ttsBack) skill.ttsBackColumn = p.ttsBack;
+            skill.alternateUppercase = p.alternateUppercase || false;
+            skill.ttsOnHotkeyOnly = p.ttsOnHotkeyOnly || false;
             currentConfig.skills.push(skill);
         });
 
@@ -1612,52 +1617,11 @@ document.addEventListener('DOMContentLoaded', () => {
         return Promise.all(promises);
     }
 
-    async function showNextCard({ forceNew = false, now = Date.now() } = {}) {
-        if (cardData.length === 0) return;
-
-        const currentConfigName = configSelector.value;
-        const currentConfig = configs[currentConfigName];
-        const activeSkills = getActiveSkills();
-        const userSkills = currentConfig ? currentConfig.skills : []; // The ordered list of all skills
-
-        if (activeSkills.length === 0) {
-            showTopNotification("No active skills. Please select skills to practice in Settings.", "error");
-            return;
-        }
-
-        const allCardStats = await getAllCardStats();
-
-        let reviewableItems = [];
-        allCardStats.forEach((cardStats, cardIndex) => {
-            activeSkills.forEach(skillId => {
-                reviewableItems.push({
-                    cardIndex,
-                    skillId,
-                    skillStats: cardStats.skills[skillId] || createDefaultSkillStats()
-                });
-            });
-        });
-
-        if (activeFilterWords.size > 0) {
-            const roleToColumnMap = (configs[configSelector.value] || {}).roleToColumnMap || {};
-            const keyIndices = roleToColumnMap['TARGET_LANGUAGE'] || [];
-            if (keyIndices.length === 1) {
-                const keyIndex = keyIndices[0];
-                reviewableItems = reviewableItems.filter(item => {
-                    const key = cardData[item.cardIndex][keyIndex]?.toLowerCase();
-                    return key && activeFilterWords.has(key);
-                });
-            }
-        }
-
-        if (reviewableItems.length === 0) {
-            const message = activeFilterWords.size > 0 ? "No matching cards for the current filter." : "No cards to display.";
-            showTopNotification(message, "error");
-            return;
-        }
+    function findNextCardFromList(items, { forceNew = false, now = Date.now(), allCardStats = [], userSkills = [] } = {}) {
+        if (items.length === 0) return null;
 
         // --- Due Items (Priority 1) ---
-        const dueItems = reviewableItems.filter(item => {
+        const dueItems = items.filter(item => {
             if (!item.skillStats.lastViewed) return false;
             const intervalSeconds = repetitionIntervals[item.skillStats.intervalIndex];
             return intervalSeconds !== undefined && (now - item.skillStats.lastViewed > intervalSeconds * 1000);
@@ -1670,26 +1634,20 @@ document.addEventListener('DOMContentLoaded', () => {
             if (forceNew && nextItem.cardIndex === currentCardIndex && nextItem.skillId === currentSkillId && dueItems.length > 1) {
                 nextItem = dueItems[1];
             }
-            currentCardIndex = nextItem.cardIndex;
-            currentSkillId = nextItem.skillId;
             const reason = { type: 'due_review', expiredInterval: formatDuration(repetitionIntervals[nextItem.skillStats.intervalIndex]), nextInterval: formatDuration(repetitionIntervals[nextItem.skillStats.intervalIndex + 1] || 0) };
-            await displayCard(currentCardIndex, { reason });
-            return;
+            return { nextItem, reason };
         }
 
         // --- New Items (Prioritized) ---
-        const unseenItems = reviewableItems.filter(item => item.skillStats.viewCount === 0);
-
+        const unseenItems = items.filter(item => item.skillStats.viewCount === 0);
         if (unseenItems.length > 0) {
             const skillOrderMap = new Map(userSkills.map((skill, index) => [skill.id, index]));
-
             const bridgingItems = [];
             const trulyNewItems = [];
 
             unseenItems.forEach(item => {
                 const cardStats = allCardStats[item.cardIndex];
                 const currentSkillOrder = skillOrderMap.get(item.skillId);
-
                 let seenInPreviousSkill = false;
                 if (currentSkillOrder > 0) {
                     for (const [skillId, stats] of Object.entries(cardStats.skills)) {
@@ -1700,7 +1658,6 @@ document.addEventListener('DOMContentLoaded', () => {
                         }
                     }
                 }
-
                 if (seenInPreviousSkill) {
                     bridgingItems.push(item);
                 } else {
@@ -1708,32 +1665,22 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             });
 
-            // --- Bridging Items (Priority 2) ---
             if (bridgingItems.length > 0) {
                 const nextItem = bridgingItems[Math.floor(Math.random() * bridgingItems.length)];
-                currentCardIndex = nextItem.cardIndex;
-                currentSkillId = nextItem.skillId;
-                await displayCard(currentCardIndex, { reason: { type: 'bridging_card' } }); // new reason
-                return;
+                return { nextItem, reason: { type: 'bridging_card' } };
             }
-
-            // --- Truly New Items (Priority 3) ---
             if (trulyNewItems.length > 0) {
                 const nextItem = trulyNewItems[Math.floor(Math.random() * trulyNewItems.length)];
-                currentCardIndex = nextItem.cardIndex;
-                currentSkillId = nextItem.skillId;
-                await displayCard(currentCardIndex, { reason: { type: 'new_card' } });
-                return;
+                return { nextItem, reason: { type: 'new_card' } };
             }
         }
 
-
         // --- Least Learned (Priority 4) ---
         let reasonForDisplay;
-        const allSkillsLearned = reviewableItems.every(item => getRetentionScore(item.skillStats) > 0);
+        const allSkillsLearned = items.every(item => getRetentionScore(item.skillStats) > 0);
         if (allSkillsLearned) {
             let minTimeToDue = Infinity, maxTimeToDue = 0;
-            reviewableItems.forEach(item => {
+            items.forEach(item => {
                 const timeToDue = getTimeToDue(item.skillStats, now).ms;
                 if (timeToDue > 0 && timeToDue < minTimeToDue) minTimeToDue = timeToDue;
                 if (timeToDue > maxTimeToDue) maxTimeToDue = timeToDue;
@@ -1743,11 +1690,11 @@ document.addEventListener('DOMContentLoaded', () => {
             reasonForDisplay = { type: 'least_learned' };
         }
 
-        let candidateItems = [...reviewableItems];
+        let candidateItems = [...items];
         if (forceNew && candidateItems.length > 1) {
             candidateItems = candidateItems.filter(item => item.cardIndex !== currentCardIndex || item.skillId !== currentSkillId);
         }
-        if (candidateItems.length === 0) candidateItems = [...reviewableItems];
+        if (candidateItems.length === 0) candidateItems = [...items];
 
         shuffleArray(candidateItems);
         candidateItems.sort((a, b) => {
@@ -1758,9 +1705,85 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         const nextItem = candidateItems[0];
-        currentCardIndex = nextItem.cardIndex;
-        currentSkillId = nextItem.skillId;
-        await displayCard(currentCardIndex, { reason: reasonForDisplay });
+        return { nextItem, reason: reasonForDisplay };
+    }
+
+    async function showNextCard({ forceNew = false, now = Date.now() } = {}) {
+        if (cardData.length === 0) return;
+
+        const currentConfigName = configSelector.value;
+        const currentConfig = configs[currentConfigName];
+        const activeSkills = getActiveSkills();
+        const userSkills = currentConfig ? currentConfig.skills : [];
+
+        if (activeSkills.length === 0) {
+            showTopNotification("No active skills. Please select skills to practice in Settings.", "error");
+            return;
+        }
+
+        const allCardStats = await getAllCardStats();
+
+        // 1. Get all possible reviewable items
+        let allReviewableItems = [];
+        allCardStats.forEach((cardStats, cardIndex) => {
+            activeSkills.forEach(skillId => {
+                allReviewableItems.push({
+                    cardIndex,
+                    skillId,
+                    skillStats: cardStats.skills[skillId] || createDefaultSkillStats()
+                });
+            });
+        });
+
+        if (allReviewableItems.length === 0) {
+            showTopNotification("No cards to display.", "error");
+            return;
+        }
+
+        // 2. Determine the list of items to select from (filtered or all)
+        let itemsToSelectFrom = allReviewableItems;
+        let isFiltered = false;
+
+        if (activeFilterWords.size > 0) {
+            const roleToColumnMap = (configs[configSelector.value] || {}).roleToColumnMap || {};
+            const keyIndices = roleToColumnMap['TARGET_LANGUAGE'] || [];
+            if (keyIndices.length === 1) {
+                const keyIndex = keyIndices[0];
+                const filteredItems = allReviewableItems.filter(item => {
+                    const key = cardData[item.cardIndex][keyIndex]?.toLowerCase();
+                    return key && activeFilterWords.has(key);
+                });
+
+                if (filteredItems.length > 0) {
+                    itemsToSelectFrom = filteredItems;
+                    isFiltered = true;
+                } else {
+                    showTopNotification("No matching cards for the current filter.", "error");
+                    return;
+                }
+            }
+        }
+
+        // 3. Find the next card from the determined list
+        const findNextCardOptions = { forceNew, now, allCardStats, userSkills };
+        let result = findNextCardFromList(itemsToSelectFrom, findNextCardOptions);
+
+        // 4. Handle overflow if the filtered set is learned
+        if (!result && isFiltered && filterAllowOverflowCheckbox.checked) {
+            showTopNotification("Filtered set learned! Showing other cards.", "success");
+            result = findNextCardFromList(allReviewableItems, findNextCardOptions);
+        }
+
+        // 5. Display the card or a message
+        if (result) {
+            const { nextItem, reason } = result;
+            currentCardIndex = nextItem.cardIndex;
+            currentSkillId = nextItem.skillId;
+            await displayCard(currentCardIndex, { reason });
+        } else {
+            const message = isFiltered ? "You have learned all cards in the filtered set!" : "You have learned all cards in the deck!";
+            showTopNotification(message, "success");
+        }
     }
 
     /**
@@ -2356,11 +2379,23 @@ function speak(text, { rate, lang, ttsRole } = {}) {
 
 
         // Display detected language on the card
-        const displayer = card.classList.contains('flipped') ? ttsLangDisplayBack : ttsLangDisplayFront;
+        const isFlipped = card.classList.contains('flipped');
+        const displayer = isFlipped ? ttsLangDisplayBack : ttsLangDisplayFront;
         if (displayer) {
+            // Clear both displays immediately when speaking starts
             if(ttsLangDisplayFront) ttsLangDisplayFront.textContent = '';
             if(ttsLangDisplayBack) ttsLangDisplayBack.textContent = '';
-        displayer.textContent = finalLang;
+
+            const updateLanguageDisplay = () => {
+                displayer.textContent = finalLang;
+            };
+
+            // If we are showing the back, delay the update to sync with the animation
+            if (isFlipped && document.body.classList.contains('is-flipping')) {
+                setTimeout(updateLanguageDisplay, 300); // 300ms is half the animation time
+            } else {
+                updateLanguageDisplay();
+            }
         }
 
     // Find a suitable voice.
