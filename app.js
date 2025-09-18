@@ -1006,10 +1006,10 @@ document.addEventListener('DOMContentLoaded', () => {
             back: getSelectedRoles(document.getElementById('skill-back-columns'))
         };
 
-        const newSkillId = await createSkillId(skillData);
+        const newSkill = await createSkill(skillData);
 
         // Check for duplicates
-        const duplicateSkill = currentConfig.skills.find(s => s.id === newSkillId && s.id !== editingSkillId);
+        const duplicateSkill = currentConfig.skills.find(s => s.id === newSkill.id && s.id !== editingSkillId);
         if (duplicateSkill) {
             showTopNotification(`This skill already exists as '${duplicateSkill.name}'.`, 'error');
             return;
