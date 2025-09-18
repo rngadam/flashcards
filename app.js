@@ -2,7 +2,7 @@ import { franc, francAll } from 'https://cdn.jsdelivr.net/npm/franc@6.2.0/+esm';
 import { eld } from 'https://cdn.jsdelivr.net/npm/efficient-language-detector-no-dynamic-import@1.0.3/+esm';
 import { get, set, del } from 'https://cdn.jsdelivr.net/npm/idb-keyval/+esm';
 import { getLenientString, transformSlashText } from './lib/string-utils.js';
-import { Skill, createSkillId } from './lib/skill-utils.js';
+import { Skill, createSkillId, createSkill } from './lib/skill-utils.js';
 
 /**
  * @file Main application logic for the Flashcards web app.
@@ -856,7 +856,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
             const nameDiv = document.createElement('div');
             nameDiv.className = 'skill-item-name';
-            nameDiv.textContent = skill.name; // SAFE
+            // Show the skill name followed by the first 8 chars of the stable id for verification
+            const shortId = skill.id ? ` (${skill.id.substring(0, 8)})` : '';
+            nameDiv.textContent = `${skill.name}${shortId}`; // SAFE
 
             const detailsDiv = document.createElement('div');
             detailsDiv.className = 'skill-item-details';
@@ -1023,15 +1025,16 @@ document.addEventListener('DOMContentLoaded', () => {
                 showTopNotification('Error: Skill not found for editing.');
                 return;
             }
-        } else {
-            // Create a new skill instance
-            skill = new Skill(skillName); // Starts with a random UUID
-            currentConfig.skills.push(skill);
-        }
 
-        // Update all properties from the form data and set the new stable ID
-        Object.assign(skill, skillData);
-        skill.id = newSkillId;
+            // Update all properties from the form data and set the new stable ID
+            Object.assign(skill, skillData);
+            skill.id = newSkillId;
+        } else {
+            // Create a new skill instance via factory (computes stable id and returns Skill)
+            const created = await createSkill(skillData);
+            currentConfig.skills.push(created);
+            skill = created;
+        }
 
         // Refresh UI and mark config as dirty
         renderSkillsList();
@@ -1079,25 +1082,28 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    function addDefaultSkill(currentConfig) {
+    async function addDefaultSkill(currentConfig) {
         if (!currentConfig || !currentConfig.skills) {
             return;
         }
-
-        const defaultSkill = new Skill('Reading & Listening');
-        defaultSkill.front = ['TARGET_LANGUAGE'];
-        defaultSkill.back = ['BASE_LANGUAGE', 'PRONUNCIATION', 'GRAMMATICAL_TYPE'];
-        defaultSkill.ttsFrontColumn = 'TARGET_LANGUAGE';
-        defaultSkill.ttsBackColumn = 'BASE_LANGUAGE';
-        defaultSkill.alternateUppercase = true;
-        defaultSkill.ttsOnHotkeyOnly = true;
-
-        currentConfig.skills.push(defaultSkill);
-
-        if (!currentConfig.activeSkills) {
-            currentConfig.activeSkills = [];
-        }
-        currentConfig.activeSkills.push(defaultSkill.id);
+        // Build the default skill data and create it via factory to get stable id
+        const defaultSkillData = {
+            name: 'Reading & Listening',
+            front: ['TARGET_LANGUAGE'],
+            back: ['BASE_LANGUAGE', 'PRONUNCIATION', 'GRAMMATICAL_TYPE'],
+            verificationMethod: 'none',
+            ttsFrontColumn: 'TARGET_LANGUAGE',
+            ttsBackColumn: 'BASE_LANGUAGE',
+            alternateUppercase: true,
+            ttsOnHotkeyOnly: true
+        };
+        // Precompute id so we don't double-hash inside createSkill
+        const id = await createSkillId(defaultSkillData);
+        defaultSkillData.id = id;
+        const created = await createSkill(defaultSkillData);
+        currentConfig.skills.push(created);
+        if (!currentConfig.activeSkills) currentConfig.activeSkills = [];
+        currentConfig.activeSkills.push(created.id);
     }
 
     async function createPresetSkills() {
@@ -1122,18 +1128,26 @@ document.addEventListener('DOMContentLoaded', () => {
                 currentConfig.skills = [];
             }
 
-            presets.forEach(p => {
-                const skill = new Skill(p.name);
-                skill.front = p.front || [];
-                skill.back = p.back || [];
-                skill.verificationMethod = p.verificationMethod || 'none';
-                skill.validationColumn = p.validationColumn || 'none';
-                skill.ttsFrontColumn = p.ttsFrontColumn || 'none';
-                skill.ttsBackColumn = p.ttsBackColumn || 'none';
-                skill.alternateUppercase = p.alternateUppercase || false;
-                skill.ttsOnHotkeyOnly = p.ttsOnHotkeyOnly || false;
-                currentConfig.skills.push(skill);
-            });
+            for (const p of presets) {
+                const skillData = {
+                    name: p.name,
+                    front: p.front || [],
+                    back: p.back || [],
+                    verificationMethod: p.verificationMethod || 'none',
+                    validationColumn: p.validationColumn || 'none',
+                    ttsFrontColumn: p.ttsFrontColumn || 'none',
+                    ttsBackColumn: p.ttsBackColumn || 'none',
+                    alternateUppercase: p.alternateUppercase || false,
+                    ttsOnHotkeyOnly: p.ttsOnHotkeyOnly || false
+                };
+                const id = await createSkillId(skillData);
+                // Skip if a skill with same stable id already exists
+                if (currentConfig.skills.find(s => s.id === id)) continue;
+                // Pass the precomputed id to createSkill to avoid re-hashing
+                skillData.id = id;
+                const created = await createSkill(skillData);
+                currentConfig.skills.push(created);
+            }
 
             renderSkillsList();
             populateSkillSelector();
@@ -2199,7 +2213,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         if (config.skills.length === 0) {
-            addDefaultSkill(config);
+            await addDefaultSkill(config);
             handleSettingsChange();
         }
 
