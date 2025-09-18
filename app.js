@@ -102,9 +102,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const iDontKnowButton = document.getElementById('i-dont-know');
     const explanationMessage = document.getElementById('explanation-message');
     const cacheStatus = document.getElementById('cache-status');
-    const createSubsetButton = document.getElementById('create-subset-config');
-    const subsetConfigNameInput = document.getElementById('subset-config-name');
-    const subsetTextarea = document.getElementById('subset-text');
+    const applyFilterButton = document.getElementById('apply-filter-button');
+    const clearFilterButton = document.getElementById('clear-filter-button');
+    const filterTextarea = document.getElementById('filter-text');
     const writingPracticeContainer = document.getElementById('writing-practice-container');
     const writingInput = document.getElementById('writing-input');
     const writingSubmit = document.getElementById('writing-submit');
@@ -170,6 +170,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let isCurrentCardDue = false; // Tracks if the current card was shown because it was due for review.
     let isConfigDirty = false; // Tracks if the current config has unsaved changes.
     let columnLanguages = []; // Holds the detected language for each column.
+    let activeFilterWords = new Set(); // Holds the words for the current filter.
 
     // History table sort state
     let historySortColumn = -1;
@@ -267,7 +268,6 @@ document.addEventListener('DOMContentLoaded', () => {
         card.addEventListener('touchend', dragEnd);
         card.addEventListener('mouseleave', dragEnd);
     }
-    if (createSubsetButton) createSubsetButton.addEventListener('click', createSubset);
 
     if (skillMasteryDashboard) {
         skillMasteryDashboard.addEventListener('click', () => {
@@ -305,6 +305,9 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
+    if (applyFilterButton) applyFilterButton.addEventListener('click', applyFilter);
+    if (clearFilterButton) clearFilterButton.addEventListener('click', clearFilter);
+
     const handleSlowReplay = () => {
         const skillConfig = getCurrentSkillConfig();
         const ttsFrontRole = skillConfig.ttsFrontColumn;
@@ -330,6 +333,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const presetSkillsButton = document.getElementById('preset-skills-button');
     if (presetSkillsButton) presetSkillsButton.addEventListener('click', createPresetSkills);
+
+    const deleteAllSkillsButton = document.getElementById('delete-all-skills-button');
+    if (deleteAllSkillsButton) deleteAllSkillsButton.addEventListener('click', deleteAllSkills);
 
     const skillsList = document.getElementById('skills-list');
     if (skillsList) {
@@ -500,75 +506,31 @@ document.addEventListener('DOMContentLoaded', () => {
         nextCardButton.classList.remove('hidden');
     }
 
-    // --- Functions ---
-    async function createSubset() {
-        const newConfigName = subsetConfigNameInput.value.trim();
-        const text = subsetTextarea.value;
-        if (!newConfigName) {
-            showTopNotification('Please enter a name for the new subset.');
-            return;
-        }
+    function applyFilter() {
+        const text = filterTextarea.value;
         if (!text) {
-            showTopNotification('Please paste the source text for the subset.');
+            clearFilter(); // If text is empty, just clear the filter.
             return;
         }
         if (cardData.length === 0) {
-            showTopNotification('No deck is loaded. Please load a deck first.');
+            showTopNotification('No deck is loaded. Please load a deck first.', 'error');
             return;
         }
 
-        // 1. Get current config name and settings
-        const currentConfigName = configSelector.value;
-        if (!currentConfigName || !configs[currentConfigName]) {
-            showTopNotification('Please save the current configuration before creating a subset.');
-            return;
-        }
-        const currentConfig = { ...configs[currentConfigName] };
-
-        // 2. Parse text to get unique words
         const words = new Set(text.match(/[\p{L}\p{N}]+/gu).map(w => w.toLowerCase()));
-
-
-        // 3. Filter cardData
-        const roleToColumnMap = currentConfig.roleToColumnMap || {};
-        const keyIndices = roleToColumnMap['TARGET_LANGUAGE'] || [];
-        if (keyIndices.length !== 1) {
-            showTopNotification("Cannot create subset: Source config must have one 'Target Language' column.");
-            return;
-        }
-        const keyIndex = keyIndices[0];
-        const subsetData = cardData.filter(card => {
-            const key = card[keyIndex]?.toLowerCase();
-            return key && words.has(key);
-        });
-
-        if (subsetData.length === 0) {
-            showTopNotification('No matching cards found in the current deck for the provided text.');
-            return;
-        }
-
-        // 4. Create and save new config
-        const newConfig = {
-            ...currentConfig,
-            dataUrl: null, // Subsets don't have a URL
-            subsetData: subsetData,
-            headers: headers, // Also save the headers
-            sourceConfig: currentConfigName, // Keep track of the origin
-        };
-        configs[newConfigName] = newConfig;
-        await set('flashcard-configs', configs);
-        await set('flashcard-last-config', newConfigName);
-
-        // 5. Reload UI
-        populateConfigSelector();
-        configSelector.value = newConfigName;
-        await loadSelectedConfig(newConfigName);
-
-        showTopNotification(`Subset "${newConfigName}" created with ${subsetData.length} cards.`, 'success');
-        subsetConfigNameInput.value = '';
-        subsetTextarea.value = '';
+        activeFilterWords = words;
+        showTopNotification(`Filter applied. Found ${words.size} unique words.`, 'success');
+        showNextCard();
     }
 
+    function clearFilter() {
+        activeFilterWords.clear();
+        if (filterTextarea) filterTextarea.value = '';
+        showTopNotification('Filter cleared.', 'success');
+        showNextCard();
+    }
+
+    // --- Functions ---
     function updateCacheStatus(response) {
         if (!cacheStatus) return;
         const date = response.headers.get('date');
@@ -889,13 +851,14 @@ document.addEventListener('DOMContentLoaded', () => {
         constructor(name, id = crypto.randomUUID()) {
             this.id = id;
             this.name = name;
-            this.isAudioOnly = false;
             this.verificationMethod = 'none'; // 'none', 'text', 'multiple-choice'
             this.front = []; // Array of role keys
             this.back = [];  // Array of role keys
             this.validationColumn = 'none'; // Role key
             this.ttsFrontColumn = 'none';   // Role key
             this.ttsBackColumn = 'none';    // Role key
+            this.alternateUppercase = false;
+            this.ttsOnHotkeyOnly = false;
         }
     }
 
@@ -1017,11 +980,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 title.textContent = 'Edit Skill';
                 editingSkillIdInput.value = skill.id;
                 nameInput.value = skill.name;
-                document.getElementById('skill-audio-only-checkbox').checked = skill.isAudioOnly || false;
                 verificationSelect.value = skill.verificationMethod;
                 validationSelect.value = skill.validationColumn;
                 ttsFrontSelect.value = skill.ttsFrontColumn;
                 ttsBackSelect.value = skill.ttsBackColumn;
+                document.getElementById('skill-alternate-uppercase').checked = skill.alternateUppercase || false;
+                document.getElementById('skill-tts-on-hotkey-only').checked = skill.ttsOnHotkeyOnly || false;
 
                 frontColumnsContainer.querySelectorAll('input').forEach(cb => cb.checked = skill.front.includes(cb.value));
                 backColumnsContainer.querySelectorAll('input').forEach(cb => cb.checked = skill.back.includes(cb.value));
@@ -1035,6 +999,8 @@ document.addEventListener('DOMContentLoaded', () => {
             validationSelect.value = 'none';
             ttsFrontSelect.value = 'TARGET_LANGUAGE';
             ttsBackSelect.value = 'BASE_LANGUAGE';
+            document.getElementById('skill-alternate-uppercase').checked = false;
+            document.getElementById('skill-tts-on-hotkey-only').checked = false;
             frontColumnsContainer.querySelectorAll('input').forEach(cb => cb.checked = false);
             backColumnsContainer.querySelectorAll('input').forEach(cb => cb.checked = false);
         }
@@ -1078,11 +1044,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // --- Update skill properties from the form ---
         skill.name = skillName;
-        skill.isAudioOnly = document.getElementById('skill-audio-only-checkbox').checked;
         skill.verificationMethod = document.getElementById('skill-verification-method').value;
         skill.validationColumn = document.getElementById('skill-validation-column').value;
         skill.ttsFrontColumn = document.getElementById('skill-tts-front-column').value;
         skill.ttsBackColumn = document.getElementById('skill-tts-back-column').value;
+        skill.alternateUppercase = document.getElementById('skill-alternate-uppercase').checked;
+        skill.ttsOnHotkeyOnly = document.getElementById('skill-tts-on-hotkey-only').checked;
 
         const frontColumnsContainer = document.getElementById('skill-front-columns');
         skill.front = getSelectedRoles(frontColumnsContainer);
@@ -1119,6 +1086,43 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    function deleteAllSkills() {
+        const currentConfigName = configSelector.value;
+        const currentConfig = configs[currentConfigName];
+        if (!currentConfig || !currentConfig.skills) return;
+
+        if (confirm(`Are you sure you want to delete all ${currentConfig.skills.length} skills? This action cannot be undone.`)) {
+            currentConfig.skills = [];
+            currentConfig.activeSkills = [];
+
+            renderSkillsList();
+            populateSkillSelector();
+            handleSettingsChange();
+            showTopNotification(`All skills have been deleted.`, 'success');
+        }
+    }
+
+    function addDefaultSkill(currentConfig) {
+        if (!currentConfig || !currentConfig.skills) {
+            return;
+        }
+
+        const defaultSkill = new Skill('Reading & Listening');
+        defaultSkill.front = ['TARGET_LANGUAGE'];
+        defaultSkill.back = ['BASE_LANGUAGE', 'PRONUNCIATION', 'GRAMMATICAL_TYPE'];
+        defaultSkill.ttsFrontColumn = 'TARGET_LANGUAGE';
+        defaultSkill.ttsBackColumn = 'BASE_LANGUAGE';
+        defaultSkill.alternateUppercase = true;
+        defaultSkill.ttsOnHotkeyOnly = true;
+
+        currentConfig.skills.push(defaultSkill);
+
+        if (!currentConfig.activeSkills) {
+            currentConfig.activeSkills = [];
+        }
+        currentConfig.activeSkills.push(defaultSkill.id);
+    }
+
     function createPresetSkills() {
         const currentConfigName = configSelector.value;
         const currentConfig = configs[currentConfigName];
@@ -1135,9 +1139,9 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         const presets = [
-            { name: 'Reading Comprehension', front: ['TARGET_LANGUAGE'], back: ['BASE_LANGUAGE', 'PRONUNCIATION'], verification: 'none', isAudioOnly: false },
-            { name: 'Listening Comprehension', front: ['TARGET_LANGUAGE'], back: ['BASE_LANGUAGE', 'PRONUNCIATION', 'TARGET_LANGUAGE'], verification: 'none', ttsFront: 'TARGET_LANGUAGE', isAudioOnly: true },
-            { name: 'Validated Writing Practice', front: ['BASE_LANGUAGE'], back: ['TARGET_LANGUAGE'], verification: 'text', validation: 'TARGET_LANGUAGE', isAudioOnly: false },
+            { name: 'Reading Comprehension', front: ['TARGET_LANGUAGE'], back: ['BASE_LANGUAGE', 'PRONUNCIATION'], verification: 'none' },
+            { name: 'Listening Comprehension', front: [], back: ['BASE_LANGUAGE', 'PRONUNCIATION', 'TARGET_LANGUAGE'], verification: 'none', ttsFront: 'TARGET_LANGUAGE' },
+            { name: 'Validated Writing Practice', front: ['BASE_LANGUAGE'], back: ['TARGET_LANGUAGE'], verification: 'text', validation: 'TARGET_LANGUAGE' },
             { name: 'Spoken Production', front: ['BASE_LANGUAGE'], back: ['TARGET_LANGUAGE'], verification: 'none' },
             { name: 'Pronunciation Practice', front: ['TARGET_LANGUAGE', 'PRONUNCIATION'], back: ['BASE_LANGUAGE'], verification: 'none' }
         ];
@@ -1147,7 +1151,6 @@ document.addEventListener('DOMContentLoaded', () => {
             skill.front = p.front;
             skill.back = p.back;
             skill.verificationMethod = p.verification;
-            skill.isAudioOnly = p.isAudioOnly || false;
             if (p.validation) skill.validationColumn = p.validation;
             if (p.ttsFront) skill.ttsFrontColumn = p.ttsFront;
             currentConfig.skills.push(skill);
@@ -1230,7 +1233,7 @@ document.addEventListener('DOMContentLoaded', () => {
             document.body.classList.remove('is-flipping');
         }, 600);
 
-        if (ttsOnHotkeyOnlyCheckbox && ttsOnHotkeyOnlyCheckbox.checked) return;
+        if (skillConfig.ttsOnHotkeyOnly) return;
 
         // Speak the content of the revealed face
         if (card.classList.contains('flipped')) {
@@ -1522,14 +1525,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // --- UI Update ---
         let displayText = textForFrontDisplay;
-        if (alternateUppercaseCheckbox && alternateUppercaseCheckbox.checked) {
+        if (skillConfig.alternateUppercase) {
             if (useUppercase) {
                 displayText = textForFrontDisplay.toUpperCase();
             }
             useUppercase = !useUppercase;
         }
 
-        const isAudioOnly = (audioOnlyFrontCheckbox && audioOnlyFrontCheckbox.checked) || skillConfig.isAudioOnly;
+        const isAudioOnly = skillConfig && skillConfig.front.length === 0 && skillConfig.ttsFrontColumn && skillConfig.ttsFrontColumn !== 'none';
 
         cardFrontContent.innerHTML = isAudioOnly ? '<span class="speech-icon">🔊</span>' : `<span>${displayText.replace(/\n/g, '<br>')}</span>`;
         cardBackContent.innerHTML = `<span>${textForBackDisplay.replace(/\n/g, '<br>')}</span>`;
@@ -1543,7 +1546,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }, 50);
 
         card.classList.remove('flipped');
-        if (ttsOnHotkeyOnlyCheckbox && !ttsOnHotkeyOnlyCheckbox.checked) {
+        if (!skillConfig.ttsOnHotkeyOnly) {
             const ttsRole = skillConfig.ttsFrontColumn;
             const lang = getLanguageForTts(ttsRole);
             speak(textForFrontTTS, { ttsRole: ttsRole, lang: lang });
@@ -1559,6 +1562,9 @@ document.addEventListener('DOMContentLoaded', () => {
             switch (reason.type) {
                 case 'due_review':
                     message = `This card is due for its ${reason.expiredInterval} review. Next review in ${reason.nextInterval}.`;
+                    break;
+                case 'bridging_card':
+                    message = 'Introducing a card from a previous skill.';
                     break;
                 case 'new_card':
                     message = 'Introducing a new, unseen card.';
@@ -1609,7 +1615,11 @@ document.addEventListener('DOMContentLoaded', () => {
     async function showNextCard({ forceNew = false, now = Date.now() } = {}) {
         if (cardData.length === 0) return;
 
+        const currentConfigName = configSelector.value;
+        const currentConfig = configs[currentConfigName];
         const activeSkills = getActiveSkills();
+        const userSkills = currentConfig ? currentConfig.skills : []; // The ordered list of all skills
+
         if (activeSkills.length === 0) {
             showTopNotification("No active skills. Please select skills to practice in Settings.", "error");
             return;
@@ -1617,7 +1627,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const allCardStats = await getAllCardStats();
 
-        const reviewableItems = [];
+        let reviewableItems = [];
         allCardStats.forEach((cardStats, cardIndex) => {
             activeSkills.forEach(skillId => {
                 reviewableItems.push({
@@ -1628,8 +1638,25 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         });
 
-        if (reviewableItems.length === 0) return;
+        if (activeFilterWords.size > 0) {
+            const roleToColumnMap = (configs[configSelector.value] || {}).roleToColumnMap || {};
+            const keyIndices = roleToColumnMap['TARGET_LANGUAGE'] || [];
+            if (keyIndices.length === 1) {
+                const keyIndex = keyIndices[0];
+                reviewableItems = reviewableItems.filter(item => {
+                    const key = cardData[item.cardIndex][keyIndex]?.toLowerCase();
+                    return key && activeFilterWords.has(key);
+                });
+            }
+        }
 
+        if (reviewableItems.length === 0) {
+            const message = activeFilterWords.size > 0 ? "No matching cards for the current filter." : "No cards to display.";
+            showTopNotification(message, "error");
+            return;
+        }
+
+        // --- Due Items (Priority 1) ---
         const dueItems = reviewableItems.filter(item => {
             if (!item.skillStats.lastViewed) return false;
             const intervalSeconds = repetitionIntervals[item.skillStats.intervalIndex];
@@ -1650,15 +1677,58 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        const newItems = reviewableItems.filter(item => item.skillStats.viewCount === 0);
-        if (newItems.length > 0) {
-            const nextItem = newItems[Math.floor(Math.random() * newItems.length)];
-            currentCardIndex = nextItem.cardIndex;
-            currentSkillId = nextItem.skillId;
-            await displayCard(currentCardIndex, { reason: { type: 'new_card' } });
-            return;
+        // --- New Items (Prioritized) ---
+        const unseenItems = reviewableItems.filter(item => item.skillStats.viewCount === 0);
+
+        if (unseenItems.length > 0) {
+            const skillOrderMap = new Map(userSkills.map((skill, index) => [skill.id, index]));
+
+            const bridgingItems = [];
+            const trulyNewItems = [];
+
+            unseenItems.forEach(item => {
+                const cardStats = allCardStats[item.cardIndex];
+                const currentSkillOrder = skillOrderMap.get(item.skillId);
+
+                let seenInPreviousSkill = false;
+                if (currentSkillOrder > 0) {
+                    for (const [skillId, stats] of Object.entries(cardStats.skills)) {
+                        const skillIdx = skillOrderMap.get(skillId);
+                        if (skillIdx !== undefined && skillIdx < currentSkillOrder && stats.viewCount > 0) {
+                            seenInPreviousSkill = true;
+                            break;
+                        }
+                    }
+                }
+
+                if (seenInPreviousSkill) {
+                    bridgingItems.push(item);
+                } else {
+                    trulyNewItems.push(item);
+                }
+            });
+
+            // --- Bridging Items (Priority 2) ---
+            if (bridgingItems.length > 0) {
+                const nextItem = bridgingItems[Math.floor(Math.random() * bridgingItems.length)];
+                currentCardIndex = nextItem.cardIndex;
+                currentSkillId = nextItem.skillId;
+                await displayCard(currentCardIndex, { reason: { type: 'bridging_card' } }); // new reason
+                return;
+            }
+
+            // --- Truly New Items (Priority 3) ---
+            if (trulyNewItems.length > 0) {
+                const nextItem = trulyNewItems[Math.floor(Math.random() * trulyNewItems.length)];
+                currentCardIndex = nextItem.cardIndex;
+                currentSkillId = nextItem.skillId;
+                await displayCard(currentCardIndex, { reason: { type: 'new_card' } });
+                return;
+            }
         }
 
+
+        // --- Least Learned (Priority 4) ---
         let reasonForDisplay;
         const allSkillsLearned = reviewableItems.every(item => getRetentionScore(item.skillStats) > 0);
         if (allSkillsLearned) {
@@ -2025,10 +2095,7 @@ document.addEventListener('DOMContentLoaded', () => {
             font: fontSelector.value,
             ttsRate: ttsRateSlider.value,
             ttsRateBase: ttsRateBaseSlider.value,
-            alternateUppercase: alternateUppercaseCheckbox.checked,
             disableAnimation: disableAnimationCheckbox.checked,
-            audioOnlyFront: audioOnlyFrontCheckbox.checked,
-            ttsOnHotkeyOnly: ttsOnHotkeyOnlyCheckbox.checked,
         };
 
         // Remove deprecated properties
@@ -2115,6 +2182,11 @@ document.addEventListener('DOMContentLoaded', () => {
             config.skills = [];
         }
 
+        if (config.skills.length === 0) {
+            addDefaultSkill(config);
+            handleSettingsChange();
+        }
+
         // Ensure activeSkills array exists
         if (!config.activeSkills) {
             config.activeSkills = config.skills.length > 0 ? [config.skills[0].id] : [];
@@ -2135,10 +2207,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (ttsRateSlider) ttsRateSlider.value = config.ttsRate || 1;
         if (ttsRateBaseSlider) ttsRateBaseSlider.value = config.ttsRateBase || 1.5;
-        if (alternateUppercaseCheckbox) alternateUppercaseCheckbox.checked = config.alternateUppercase || false;
         if (disableAnimationCheckbox) disableAnimationCheckbox.checked = config.disableAnimation || false;
-        if (audioOnlyFrontCheckbox) audioOnlyFrontCheckbox.checked = config.audioOnlyFront || false;
-        if (ttsOnHotkeyOnlyCheckbox) ttsOnHotkeyOnlyCheckbox.checked = config.ttsOnHotkeyOnly || false;
 
         if (repetitionIntervalsTextarea) {
             const configIntervalsString = config.repetitionIntervals;
