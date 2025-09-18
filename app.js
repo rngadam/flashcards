@@ -1036,7 +1036,7 @@ document.addEventListener('DOMContentLoaded', () => {
         populateSkillSelector();
         handleSettingsChange();
         modal.classList.add('hidden');
-        showTopNotification(`Skill '${skill.name}' saved.`, 'success');
+        showTopNotification(`Skill '${skillName}' saved.`, 'success');
     }
 
     function deleteSkill(skillId) {
