@@ -804,18 +804,7 @@ document.addEventListener('DOMContentLoaded', () => {
             rolesGrid.appendChild(select);
         });
 
-        // Add Auto-configure button
-        const autoConfigButton = document.createElement('button');
-        autoConfigButton.id = 'auto-configure-button';
-        autoConfigButton.textContent = 'Auto-Configure Skill Settings';
-        autoConfigButton.style.gridColumn = '1 / -1'; // Span across both columns
-        autoConfigButton.style.marginTop = '10px';
-
-
         columnRolesContainer.appendChild(rolesGrid);
-        rolesGrid.appendChild(autoConfigButton);
-
-        autoConfigButton.addEventListener('click', autoConfigureSkills);
     }
 
     function autoConfigureSkills() {
@@ -897,7 +886,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     class Skill {
-        constructor(name, id = Date.now().toString()) {
+        constructor(name, id = `${Date.now()}-${Math.random()}`) {
             this.id = id;
             this.name = name;
             this.verificationMethod = 'none'; // 'none', 'text', 'multiple-choice'
@@ -1697,6 +1686,9 @@ document.addEventListener('DOMContentLoaded', () => {
     function buildHistoryTbodyHtml(data) {
         let tbodyHtml = '<tbody>';
         const now = Date.now();
+        const currentConfig = configs[configSelector.value] || {};
+        const userSkills = currentConfig.skills || [];
+
         data.forEach(item => {
             tbodyHtml += '<tr>';
             item.card.forEach(cell => {
@@ -1704,11 +1696,11 @@ document.addEventListener('DOMContentLoaded', () => {
             });
 
             // Mastery column
-            const masteryHtml = Object.keys(SKILLS).map(skillId => {
-                const skill = SKILLS[skillId];
-                const initial = skill.label.match(/\b(\w)/g).join('');
-                const score = getRetentionScore(item.stats.skills[skillId]);
-                return `<span title="${skill.label}: ${score}">${initial}:${score}</span>`;
+            const masteryHtml = userSkills.map((skill, index) => {
+                const letter = String.fromCharCode(65 + index);
+                const skillStats = item.stats.skills[skill.id] || createDefaultSkillStats();
+                const score = getRetentionScore(skillStats);
+                return `<span title="${skill.name}: ${score}">${letter}:${score}</span>`;
             }).join(' ');
             tbodyHtml += `<td>${masteryHtml}</td>`;
 
@@ -2358,7 +2350,7 @@ function speak(text, { rate, lang, ttsRole } = {}) {
                         break;
                     case 'KeyK': {
                         const skillConfig = getCurrentSkillConfig();
-                        if (!skillConfig.validationColumn || skillConfig.validationColumn === 'none') {
+                        if (skillConfig && (!skillConfig.validationColumn || skillConfig.validationColumn === 'none')) {
                             markCardAsKnown(true);
                             showNextCard();
                         }
@@ -2366,7 +2358,7 @@ function speak(text, { rate, lang, ttsRole } = {}) {
                     }
                     case 'KeyJ': {
                         const skillConfig = getCurrentSkillConfig();
-                        if (!skillConfig.validationColumn || skillConfig.validationColumn === 'none') {
+                        if (skillConfig && (!skillConfig.validationColumn || skillConfig.validationColumn === 'none')) {
                             markCardAsKnown(false);
                             showNextCard({forceNew: true});
                         }
@@ -2374,6 +2366,7 @@ function speak(text, { rate, lang, ttsRole } = {}) {
                     }
                     case 'KeyF': {
                         const skillConfig = getCurrentSkillConfig();
+                        if (!skillConfig) break;
                         const text = card.classList.contains('flipped') ? textForBackTTS : textForFrontTTS;
                         const role = card.classList.contains('flipped') ? skillConfig.ttsBackColumn : skillConfig.ttsFrontColumn;
                         const lang = getLanguageForTts(role);
