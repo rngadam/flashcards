@@ -151,37 +151,10 @@ document.addEventListener('DOMContentLoaded', () => {
         RELATION_TYPE: 'Relation Type',
         GRAMMATICAL_TYPE: 'Grammatical Type',
     };
-    const SKILLS = {
-        READING: {
-            id: 'READING',
-            label: 'Reading Comprehension',
-            description: 'See Target Language → Recall Base Language'
-        },
-        LISTENING: {
-            id: 'LISTENING',
-            label: 'Listening Comprehension',
-            description: 'Hear Target Language → Recall Base Language'
-        },
-        WRITING: {
-            id: 'WRITING',
-            label: 'Validated Writing Practice',
-            description: 'See Base Language → Write Target Language'
-        },
-        SPOKEN: {
-            id: 'SPOKEN',
-            label: 'Spoken Production',
-            description: 'See Base Language → Say Target Language'
-        },
-        PRONUNCIATION: {
-            id: 'PRONUNCIATION',
-            label: 'Pronunciation Practice',
-            description: 'See Target Language → Say Target Language'
-        }
-    };
     let cardData = []; // Holds the parsed card data from the TSV/CSV file.
     let headers = []; // Holds the column headers from the data file.
     let currentCardIndex = 0; // The index of the currently displayed card in cardData.
-    let currentSkill = SKILLS.READING.id; // The skill being practiced for the current card.
+    let currentSkillId = null; // The ID of the skill being practiced.
     let configs = {}; // Stores all saved deck configurations.
     let voices = []; // Holds the list of available TTS voices from the browser.
     let viewHistory = []; // A stack to keep track of the sequence of viewed cards for the "previous" button.
@@ -297,33 +270,13 @@ document.addEventListener('DOMContentLoaded', () => {
     if (createSubsetButton) createSubsetButton.addEventListener('click', createSubset);
 
     if (skillMasteryDashboard) {
-        skillMasteryDashboard.addEventListener('click', async (e) => {
-            const skillItem = e.target.closest('.skill-mastery-item');
-            if (!skillItem) return;
-
-            const skillId = skillItem.dataset.skillId;
-            if (!skillId) return;
-
-            const currentConfigName = configSelector.value;
-            if (!currentConfigName || !configs[currentConfigName]) return;
-
-            const activeSkills = new Set(configs[currentConfigName].skills || []);
-            if (activeSkills.has(skillId)) {
-                if (activeSkills.size > 1) { // Prevent removing the last skill
-                    activeSkills.delete(skillId);
-                }
-            } else {
-                activeSkills.add(skillId);
+        skillMasteryDashboard.addEventListener('click', () => {
+            // Open the settings modal and navigate to the skills tab
+            settingsModal.classList.remove('hidden');
+            const skillsTabButton = document.getElementById('skills-tab');
+            if (skillsTabButton) {
+                skillsTabButton.click();
             }
-            configs[currentConfigName].skills = [...activeSkills];
-            isConfigDirty = true;
-            if (saveConfigButton) saveConfigButton.disabled = false;
-
-            // Re-render the dashboard and show a new card
-            const cardKey = getCardKey(cardData[currentCardIndex]);
-            const stats = await getSanitizedStats(cardKey);
-            renderSkillMastery(stats); // Re-render to update styles
-            await showNextCard();
         });
     }
 
@@ -331,11 +284,15 @@ document.addEventListener('DOMContentLoaded', () => {
         skillSelectorCheckboxes.addEventListener('change', async (e) => {
             if (e.target.matches('input[type="checkbox"]')) {
                 const currentConfigName = configSelector.value;
-                if (currentConfigName && configs[currentConfigName]) {
-                    configs[currentConfigName].skills = getSelectedSkills();
-                    isConfigDirty = true;
-                    if (saveConfigButton) saveConfigButton.disabled = false;
-                    await showNextCard();
+                const currentConfig = configs[currentConfigName];
+                if (currentConfig) {
+                    // This correctly reads all checked boxes and updates the array
+                    currentConfig.activeSkills = getSelectedSkills();
+                    handleSettingsChange();
+                    // Re-render the mastery dashboard to update the active skill highlighting
+                    const cardKey = getCardKey(cardData[currentCardIndex]);
+                    const stats = await getSanitizedStats(cardKey);
+                    renderSkillMastery(stats);
                 }
             }
         });
@@ -367,13 +324,51 @@ document.addEventListener('DOMContentLoaded', () => {
         settingsModal.addEventListener('change', handleSettingsChange);
     }
 
+    // --- Skill Management Event Listeners ---
+    const addSkillButton = document.getElementById('add-skill-button');
+    if (addSkillButton) addSkillButton.addEventListener('click', () => openSkillDialog());
+
+    const presetSkillsButton = document.getElementById('preset-skills-button');
+    if (presetSkillsButton) presetSkillsButton.addEventListener('click', createPresetSkills);
+
+    const skillsList = document.getElementById('skills-list');
+    if (skillsList) {
+        skillsList.addEventListener('click', (e) => {
+            const skillId = e.target.closest('.skill-item')?.dataset.skillId;
+            if (!skillId) return;
+
+            if (e.target.matches('.edit-skill-button')) {
+                openSkillDialog(skillId);
+            }
+            if (e.target.matches('.delete-skill-button')) {
+                deleteSkill(skillId);
+            }
+        });
+    }
+
+    const closeSkillConfigButton = document.getElementById('close-skill-config-button');
+    if (closeSkillConfigButton) {
+        closeSkillConfigButton.addEventListener('click', () => {
+            document.getElementById('skill-config-modal').classList.add('hidden');
+        });
+    }
+
+    const skillVerificationMethod = document.getElementById('skill-verification-method');
+    if (skillVerificationMethod) {
+        skillVerificationMethod.addEventListener('change', (e) => {
+            const validationSelect = document.getElementById('skill-validation-column');
+            validationSelect.disabled = e.target.value === 'none';
+        });
+    }
+
+    const saveSkillButton = document.getElementById('save-skill-button');
+    if (saveSkillButton) saveSkillButton.addEventListener('click', saveSkill);
+
     function handleSettingsChange(e) {
-        const target = e.target;
-        // Check if the change happened on a relevant form element
-        if (target.matches('input, select, textarea')) {
-            isConfigDirty = true;
-            if (saveConfigButton) saveConfigButton.disabled = false;
-        }
+        // This function can be called with or without an event object.
+        // If called without an event, it's a programmatic way to mark the config as dirty.
+        isConfigDirty = true;
+        if (saveConfigButton) saveConfigButton.disabled = false;
     }
 
     function getLenientString(str) {
@@ -467,9 +462,14 @@ document.addEventListener('DOMContentLoaded', () => {
         if (userAnswer === '') return;
 
         const skillConfig = getCurrentSkillConfig();
+        if (!skillConfig || skillConfig.verificationMethod !== 'text') {
+            console.error("checkWritingAnswer called for a non-text verification skill.");
+            return;
+        }
+
         const validationRole = skillConfig.validationColumn;
         if (!validationRole || validationRole === 'none') {
-            console.error("checkWritingAnswer called but no validation column is configured for this skill.");
+            console.error("checkWritingAnswer called but no validation column is configured.");
             return;
         }
 
@@ -478,18 +478,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (validationColumnIndices.length === 0) {
              const message = `Cannot validate: No column is assigned the "${COLUMN_ROLES[validationRole]}" role.`;
-             console.error(message);
              showTopNotification(message);
              return;
         }
 
         const correctAnswers = validationColumnIndices.map(index => cardData[currentCardIndex][index]);
         const isCorrect = correctAnswers.some(correctAnswer => getLenientString(userAnswer) === getLenientString(correctAnswer));
-        const firstCorrectAnswer = correctAnswers[0]; // For diff rendering
+        const firstCorrectAnswer = correctAnswers[0];
 
         await markCardAsKnown(isCorrect);
 
-        comparisonContainer.innerHTML = ''; // Clear previous diff
+        comparisonContainer.innerHTML = '';
         comparisonContainer.appendChild(renderDiff(userAnswer, firstCorrectAnswer, isCorrect));
         comparisonContainer.classList.remove('hidden');
         writingInput.disabled = true;
@@ -498,7 +497,6 @@ document.addEventListener('DOMContentLoaded', () => {
             flipCard();
         }
 
-        // Show the next card button to allow the user to proceed
         nextCardButton.classList.remove('hidden');
     }
 
@@ -738,7 +736,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
         viewHistory = [];
         await detectColumnLanguages(); // This populates columnLanguages and then calls populateColumnRolesUI
-        populateColumnSelectors();
         if (repetitionIntervalsTextarea) repetitionIntervalsTextarea.value = repetitionIntervals.join(', ');
     }
 
@@ -807,18 +804,7 @@ document.addEventListener('DOMContentLoaded', () => {
             rolesGrid.appendChild(select);
         });
 
-        // Add Auto-configure button
-        const autoConfigButton = document.createElement('button');
-        autoConfigButton.id = 'auto-configure-button';
-        autoConfigButton.textContent = 'Auto-Configure Skill Settings';
-        autoConfigButton.style.gridColumn = '1 / -1'; // Span across both columns
-        autoConfigButton.style.marginTop = '10px';
-
-
         columnRolesContainer.appendChild(rolesGrid);
-        rolesGrid.appendChild(autoConfigButton);
-
-        autoConfigButton.addEventListener('click', autoConfigureSkills);
     }
 
     function autoConfigureSkills() {
@@ -899,150 +885,288 @@ document.addEventListener('DOMContentLoaded', () => {
         handleSettingsChange(); // Mark config as dirty
     }
 
-    function populateColumnSelectors() {
-        if (!skillColumnConfigContainer) return;
-        skillColumnConfigContainer.innerHTML = ''; // Clear previous content
+    class Skill {
+        constructor(name, id = crypto.randomUUID()) {
+            this.id = id;
+            this.name = name;
+            this.isAudioOnly = false;
+            this.verificationMethod = 'none'; // 'none', 'text', 'multiple-choice'
+            this.front = []; // Array of role keys
+            this.back = [];  // Array of role keys
+            this.validationColumn = 'none'; // Role key
+            this.ttsFrontColumn = 'none';   // Role key
+            this.ttsBackColumn = 'none';    // Role key
+        }
+    }
 
-        const tabList = document.createElement('div');
-        tabList.className = 'tabs';
-        tabList.setAttribute('role', 'tablist');
+    // --- User-Defined Skill Management ---
 
-        const panelContainer = document.createElement('div');
+    function renderSkillsList() {
+        const skillsList = document.getElementById('skills-list');
+        if (!skillsList) return;
 
-        headers.forEach((header, index) => {
-            // This part of the logic is now inside the skill loop
+        const currentConfigName = configSelector.value;
+        const currentConfig = configs[currentConfigName];
+        if (!currentConfig || !currentConfig.skills) {
+            skillsList.innerHTML = '<p>No skills configured. Add a new skill or load presets.</p>';
+            return;
+        }
+
+        if (currentConfig.skills.length === 0) {
+            skillsList.innerHTML = '<p>No skills configured. Add a new skill or load presets.</p>';
+            return;
+        }
+
+        skillsList.innerHTML = '';
+        currentConfig.skills.forEach(skill => {
+            const skillItem = document.createElement('div');
+            skillItem.className = 'skill-item';
+            skillItem.dataset.skillId = skill.id;
+
+            // Left side content
+            const leftDiv = document.createElement('div');
+
+            const nameDiv = document.createElement('div');
+            nameDiv.className = 'skill-item-name';
+            nameDiv.textContent = skill.name; // SAFE
+
+            const detailsDiv = document.createElement('div');
+            detailsDiv.className = 'skill-item-details';
+            const frontDetails = Array.isArray(skill.front) ? skill.front.join(', ') : 'None';
+            const backDetails = Array.isArray(skill.back) ? skill.back.join(', ') : 'None';
+            detailsDiv.textContent = `Front: ${frontDetails || 'None'} | Back: ${backDetails || 'None'} | Validation: ${skill.verificationMethod}`; // SAFE
+
+            leftDiv.appendChild(nameDiv);
+            leftDiv.appendChild(detailsDiv);
+
+            // Right side actions
+            const rightDiv = document.createElement('div');
+            rightDiv.className = 'skill-item-actions';
+
+            const editButton = document.createElement('button');
+            editButton.className = 'edit-skill-button';
+            editButton.textContent = 'Edit'; // SAFE
+
+            const deleteButton = document.createElement('button');
+            deleteButton.className = 'delete-skill-button danger';
+            deleteButton.textContent = 'Delete'; // SAFE
+
+            rightDiv.appendChild(editButton);
+            rightDiv.appendChild(deleteButton);
+
+            // Append to main item
+            skillItem.appendChild(leftDiv);
+            skillItem.appendChild(rightDiv);
+
+            skillsList.appendChild(skillItem);
         });
+    }
 
-        Object.keys(SKILLS).forEach((skillId, i) => {
-            const skill = SKILLS[skillId];
-            const isActive = i === 0;
+    function openSkillDialog(skillId = null) {
+        const modal = document.getElementById('skill-config-modal');
+        const title = document.getElementById('skill-config-title');
+        const nameInput = document.getElementById('skill-name-input');
+        const verificationSelect = document.getElementById('skill-verification-method');
+        const validationSelect = document.getElementById('skill-validation-column');
+        const ttsFrontSelect = document.getElementById('skill-tts-front-column');
+        const ttsBackSelect = document.getElementById('skill-tts-back-column');
+        const frontColumnsContainer = document.getElementById('skill-front-columns');
+        const backColumnsContainer = document.getElementById('skill-back-columns');
+        const editingSkillIdInput = document.getElementById('editing-skill-id');
 
-            // Create Tab Button
-            const button = document.createElement('button');
-            button.className = `tab-button ${isActive ? 'active' : ''}`;
-            button.setAttribute('role', 'tab');
-            button.dataset.tab = `skill-panel-${skillId}`;
-            button.textContent = skill.label;
-            tabList.appendChild(button);
+        if (!modal) return;
 
-            // Create Tab Panel
-            const panel = document.createElement('div');
-            panel.id = `skill-panel-${skillId}`;
-            panel.className = `tab-panel ${isActive ? 'active' : ''}`;
-            panel.setAttribute('role', 'tabpanel');
-
-            // Create Front and Back Checkbox groups for this skill
-            const frontContainer = document.createElement('div');
-            frontContainer.className = 'column-checkbox-group';
-            frontContainer.id = `front-role-checkboxes-${skillId}`;
-
-            const backContainer = document.createElement('div');
-            backContainer.className = 'column-checkbox-group';
-            backContainer.id = `back-role-checkboxes-${skillId}`;
-
+        // --- Populate Selectors ---
+        const populateRoleSelector = (select, includeNone = true) => {
+            select.innerHTML = '';
+            if (includeNone) {
+                select.add(new Option('None', 'none'));
+            }
             for (const roleKey in COLUMN_ROLES) {
-                if (COLUMN_ROLES[roleKey] === COLUMN_ROLES.NONE) continue;
-                const roleName = COLUMN_ROLES[roleKey];
-
-                const idFront = `front-role-${skillId}-${roleKey}`;
-                const checkboxFront = `<div><input type="checkbox" id="${idFront}" value="${roleKey}"><label for="${idFront}">${roleName}</label></div>`;
-                frontContainer.insertAdjacentHTML('beforeend', checkboxFront);
-
-                const idBack = `back-role-${skillId}-${roleKey}`;
-                const checkboxBack = `<div><input type="checkbox" id="${idBack}" value="${roleKey}"><label for="${idBack}">${roleName}</label></div>`;
-                backContainer.insertAdjacentHTML('beforeend', checkboxBack);
+                if (roleKey !== 'NONE') {
+                    select.add(new Option(COLUMN_ROLES[roleKey], roleKey));
+                }
             }
+        };
 
-            // Set default selections
-            if (skillId === SKILLS.READING.id) {
-                const targetLangCb = frontContainer.querySelector('input[value="TARGET_LANGUAGE"]');
-                if (targetLangCb) targetLangCb.checked = true;
-                const baseLangCb = backContainer.querySelector('input[value="BASE_LANGUAGE"]');
-                if (baseLangCb) baseLangCb.checked = true;
-            } else if (skillId === SKILLS.WRITING.id || skillId === SKILLS.SPOKEN.id) {
-                const baseLangCb = frontContainer.querySelector('input[value="BASE_LANGUAGE"]');
-                if (baseLangCb) baseLangCb.checked = true;
-                const targetLangCb = backContainer.querySelector('input[value="TARGET_LANGUAGE"]');
-                if (targetLangCb) targetLangCb.checked = true;
-            } else { // Default for all other skills
-                const targetLangCb = frontContainer.querySelector('input[value="TARGET_LANGUAGE"]');
-                if (targetLangCb) targetLangCb.checked = true;
-                backContainer.querySelectorAll('input[type="checkbox"]').forEach(cb => {
-                    // Check all roles except the target language for the back
-                    if (cb.value !== 'TARGET_LANGUAGE') {
-                        cb.checked = true;
-                    }
-                });
-            }
-
-
-            panel.innerHTML = `
-                <div class="setting-grid">
-                    <div><label>Front Column(s):</label></div>
-                    <div><label>Back Column(s):</label></div>
-                    <div>${frontContainer.outerHTML}</div>
-                    <div>${backContainer.outerHTML}</div>
-                    <div>
-                        <label for="validation-column-selector-${skillId}">Validation Column:</label>
-                        <select id="validation-column-selector-${skillId}"></select>
-                    </div>
-                    <div>
-                        <label for="tts-front-column-selector-${skillId}">TTS (Front) Column:</label>
-                        <select id="tts-front-column-selector-${skillId}"></select>
-                    </div>
-                    <div>
-                        <label for="tts-back-column-selector-${skillId}">TTS (Back) Column:</label>
-                        <select id="tts-back-column-selector-${skillId}"></select>
-                    </div>
-                </div>
-            `;
-
-            // Populate the new dropdowns
-            const validationSelector = panel.querySelector(`#validation-column-selector-${skillId}`);
-            const ttsFrontSelector = panel.querySelector(`#tts-front-column-selector-${skillId}`);
-            const ttsBackSelector = panel.querySelector(`#tts-back-column-selector-${skillId}`);
-
-            const noneOptionValidation = new Option('None', 'none');
-            validationSelector.add(noneOptionValidation);
-
-            const noneOptionTtsFront = new Option('None', 'none');
-            ttsFrontSelector.add(noneOptionTtsFront);
-            const noneOptionTtsBack = new Option('None', 'none');
-            ttsBackSelector.add(noneOptionTtsBack);
-
-
-            // Populate with roles
+        const populateColumnCheckboxes = (container) => {
+            container.innerHTML = '';
             for (const roleKey in COLUMN_ROLES) {
-                if (COLUMN_ROLES[roleKey] === COLUMN_ROLES.NONE) continue;
+                if (roleKey !== 'NONE') {
+                    const roleName = COLUMN_ROLES[roleKey];
+                    const id = `skill-config-${container.id}-${roleKey}`;
+                    const checkboxHtml = `<div><input type="checkbox" id="${id}" value="${roleKey}"><label for="${id}">${roleName}</label></div>`;
+                    container.insertAdjacentHTML('beforeend', checkboxHtml);
+                }
+            }
+        };
 
-                const roleName = COLUMN_ROLES[roleKey];
-                const optionValidation = new Option(roleName, roleKey);
-                const optionTtsFront = new Option(roleName, roleKey);
-                const optionTtsBack = new Option(roleName, roleKey);
+        populateRoleSelector(validationSelect);
+        populateRoleSelector(ttsFrontSelect);
+        populateRoleSelector(ttsBackSelect);
+        populateColumnCheckboxes(frontColumnsContainer);
+        populateColumnCheckboxes(backColumnsContainer);
 
-                validationSelector.add(optionValidation);
-                ttsFrontSelector.add(optionTtsFront);
-                ttsBackSelector.add(optionTtsBack.cloneNode(true));
+
+        // --- Configure for Edit or Add ---
+        const currentConfig = configs[configSelector.value];
+        if (skillId && currentConfig && currentConfig.skills) {
+            const skill = currentConfig.skills.find(s => s.id === skillId);
+            if (skill) {
+                // Editing existing skill
+                title.textContent = 'Edit Skill';
+                editingSkillIdInput.value = skill.id;
+                nameInput.value = skill.name;
+                document.getElementById('skill-audio-only-checkbox').checked = skill.isAudioOnly || false;
+                verificationSelect.value = skill.verificationMethod;
+                validationSelect.value = skill.validationColumn;
+                ttsFrontSelect.value = skill.ttsFrontColumn;
+                ttsBackSelect.value = skill.ttsBackColumn;
+
+                frontColumnsContainer.querySelectorAll('input').forEach(cb => cb.checked = skill.front.includes(cb.value));
+                backColumnsContainer.querySelectorAll('input').forEach(cb => cb.checked = skill.back.includes(cb.value));
+            }
+        } else {
+            // Adding new skill
+            title.textContent = 'Add New Skill';
+            editingSkillIdInput.value = '';
+            nameInput.value = '';
+            verificationSelect.value = 'none';
+            validationSelect.value = 'none';
+            ttsFrontSelect.value = 'TARGET_LANGUAGE';
+            ttsBackSelect.value = 'BASE_LANGUAGE';
+            frontColumnsContainer.querySelectorAll('input').forEach(cb => cb.checked = false);
+            backColumnsContainer.querySelectorAll('input').forEach(cb => cb.checked = false);
+        }
+
+        // --- Show Modal ---
+        validationSelect.disabled = verificationSelect.value === 'none';
+        modal.classList.remove('hidden');
+    }
+
+    function saveSkill() {
+        const modal = document.getElementById('skill-config-modal');
+        const nameInput = document.getElementById('skill-name-input');
+        const editingSkillId = document.getElementById('editing-skill-id').value;
+        const currentConfigName = configSelector.value;
+        const currentConfig = configs[currentConfigName];
+
+        if (!currentConfig) {
+            showTopNotification('No configuration selected.');
+            return;
+        }
+
+        const skillName = nameInput.value.trim();
+        if (!skillName) {
+            showTopNotification('Skill name cannot be empty.');
+            return;
+        }
+
+        let skill;
+        if (editingSkillId) {
+            // Update existing skill
+            skill = currentConfig.skills.find(s => s.id === editingSkillId);
+            if (!skill) {
+                showTopNotification('Error: Skill not found for editing.');
+                return;
+            }
+        } else {
+            // Create new skill
+            skill = new Skill(skillName);
+            currentConfig.skills.push(skill);
+        }
+
+        // --- Update skill properties from the form ---
+        skill.name = skillName;
+        skill.isAudioOnly = document.getElementById('skill-audio-only-checkbox').checked;
+        skill.verificationMethod = document.getElementById('skill-verification-method').value;
+        skill.validationColumn = document.getElementById('skill-validation-column').value;
+        skill.ttsFrontColumn = document.getElementById('skill-tts-front-column').value;
+        skill.ttsBackColumn = document.getElementById('skill-tts-back-column').value;
+
+        const frontColumnsContainer = document.getElementById('skill-front-columns');
+        skill.front = getSelectedRoles(frontColumnsContainer);
+        const backColumnsContainer = document.getElementById('skill-back-columns');
+        skill.back = getSelectedRoles(backColumnsContainer);
+
+        // --- Refresh UI and mark config as dirty ---
+        renderSkillsList();
+        populateSkillSelector(); // Update the main UI checkboxes
+        handleSettingsChange(); // Mark config for saving
+        modal.classList.add('hidden');
+        showTopNotification(`Skill '${skill.name}' saved.`, 'success');
+    }
+
+    function deleteSkill(skillId) {
+        const currentConfigName = configSelector.value;
+        const currentConfig = configs[currentConfigName];
+        if (!currentConfig || !currentConfig.skills) return;
+
+        const skillToDelete = currentConfig.skills.find(s => s.id === skillId);
+        if (!skillToDelete) return;
+
+        if (confirm(`Are you sure you want to delete the skill "${skillToDelete.name}"?`)) {
+            currentConfig.skills = currentConfig.skills.filter(s => s.id !== skillId);
+            // Also remove it from active skills if it's there
+            if (currentConfig.activeSkills) {
+                currentConfig.activeSkills = currentConfig.activeSkills.filter(id => id !== skillId);
             }
 
-            panelContainer.appendChild(panel);
+            renderSkillsList();
+            populateSkillSelector();
+            handleSettingsChange();
+            showTopNotification(`Skill "${skillToDelete.name}" deleted.`, 'success');
+        }
+    }
+
+    function createPresetSkills() {
+        const currentConfigName = configSelector.value;
+        const currentConfig = configs[currentConfigName];
+        if (!currentConfig) {
+            showTopNotification('Please select or save a configuration first.');
+            return;
+        }
+        if (!confirm('This will add 5 preset skills to your configuration. Any existing skills will be kept. Continue?')) {
+            return;
+        }
+
+        if (!currentConfig.skills) {
+            currentConfig.skills = [];
+        }
+
+        const presets = [
+            { name: 'Reading Comprehension', front: ['TARGET_LANGUAGE'], back: ['BASE_LANGUAGE', 'PRONUNCIATION'], verification: 'none', isAudioOnly: false },
+            { name: 'Listening Comprehension', front: ['TARGET_LANGUAGE'], back: ['BASE_LANGUAGE', 'PRONUNCIATION', 'TARGET_LANGUAGE'], verification: 'none', ttsFront: 'TARGET_LANGUAGE', isAudioOnly: true },
+            { name: 'Validated Writing Practice', front: ['BASE_LANGUAGE'], back: ['TARGET_LANGUAGE'], verification: 'text', validation: 'TARGET_LANGUAGE', isAudioOnly: false },
+            { name: 'Spoken Production', front: ['BASE_LANGUAGE'], back: ['TARGET_LANGUAGE'], verification: 'none' },
+            { name: 'Pronunciation Practice', front: ['TARGET_LANGUAGE', 'PRONUNCIATION'], back: ['BASE_LANGUAGE'], verification: 'none' }
+        ];
+
+        presets.forEach(p => {
+            const skill = new Skill(p.name);
+            skill.front = p.front;
+            skill.back = p.back;
+            skill.verificationMethod = p.verification;
+            skill.isAudioOnly = p.isAudioOnly || false;
+            if (p.validation) skill.validationColumn = p.validation;
+            if (p.ttsFront) skill.ttsFrontColumn = p.ttsFront;
+            currentConfig.skills.push(skill);
         });
 
-        skillColumnConfigContainer.appendChild(tabList);
-        skillColumnConfigContainer.appendChild(panelContainer);
+        renderSkillsList();
+        populateSkillSelector();
 
-        // Add event listener for the new tabs
-        tabList.addEventListener('click', e => {
-            if (e.target.matches('.tab-button')) {
-                const button = e.target;
-                tabList.querySelectorAll('.tab-button').forEach(btn => btn.classList.remove('active'));
-                button.classList.add('active');
-
-                panelContainer.querySelectorAll('.tab-panel').forEach(panel => {
-                    panel.classList.toggle('active', panel.id === button.dataset.tab);
-                });
+        // If no skills are defined, prompt the user to create some.
+        if (currentConfig.skills.length === 0) {
+            settingsModal.classList.remove('hidden');
+            const skillsTabButton = document.getElementById('skills-tab');
+            if (skillsTabButton) {
+                skillsTabButton.click();
             }
-        });
+            showTopNotification("This deck has no skills. Let's create one!", "success");
+        }
+        handleSettingsChange();
+        showTopNotification('Preset skills added.', 'success');
     }
 
 
@@ -1052,11 +1176,15 @@ document.addEventListener('DOMContentLoaded', () => {
      */
     function getCurrentSkillConfig() {
         const currentConfigName = configSelector.value;
-        const currentConfig = configs[currentConfigName] || {};
-        let skillConfig = (currentConfig.skillColumns || {})[currentSkill] || {};
-        // Fallback to reading skill defaults if the specific skill is not configured
-        if (Object.keys(skillConfig).length === 0) {
-            skillConfig = (currentConfig.skillColumns || {})[SKILLS.READING.id] || {};
+        const currentConfig = configs[currentConfigName];
+        if (!currentConfig || !currentConfig.skills || !currentSkillId) {
+            return null;
+        }
+        const skillConfig = currentConfig.skills.find(s => s.id === currentSkillId);
+
+        // Fallback to the first skill if the current one isn't found
+        if (!skillConfig && currentConfig.skills.length > 0) {
+            return currentConfig.skills[0];
         }
         return skillConfig;
     }
@@ -1068,34 +1196,32 @@ document.addEventListener('DOMContentLoaded', () => {
     function flipCard() {
         if (!card) return;
 
-        const isFlippingToFront = card.classList.contains('flipped');
         const skillConfig = getCurrentSkillConfig();
+        if (!skillConfig) {
+            console.error("Cannot flip card: no skill configured.");
+            return;
+        }
 
+        const isFlippingToFront = card.classList.contains('flipped');
         card.classList.toggle('flipped');
 
         if (isFlippingToFront) {
+            // Logic to handle rotating through multiple base languages when flipping back to the front
             baseLanguageRotationIndex++;
-            const frontRoles = skillConfig.front || [];
-            const backRoles = skillConfig.back || [];
-            const ttsFrontRole = skillConfig.ttsFrontColumn ? [skillConfig.ttsFrontColumn] : [];
-            const ttsBackRole = skillConfig.ttsBackColumn ? [skillConfig.ttsBackColumn] : [];
             const baseLangIndices = (configs[configSelector.value] || {}).roleToColumnMap['BASE_LANGUAGE'] || [];
-
             if (baseLangIndices.length > 1) {
                 const rotationIndex = baseLanguageRotationIndex % baseLangIndices.length;
                 currentRandomBaseIndex = baseLangIndices[rotationIndex];
             }
 
-            // Regenerate all text variables for both faces
+            // Regenerate and update text for both faces since the base language might have changed
+            const frontRoles = skillConfig.front || [];
+            const backRoles = skillConfig.back || [];
             textForFrontDisplay = getTextForRoles(frontRoles, currentRandomBaseIndex);
-            textForFrontTTS = getTextForRoles(ttsFrontRole, currentRandomBaseIndex);
             textForBackDisplay = getTextForRoles(backRoles, currentRandomBaseIndex);
-            textForBackTTS = getTextForRoles(ttsBackRole, currentRandomBaseIndex);
-
-            // Update the DOM for both faces
             cardFrontContent.innerHTML = `<span>${textForFrontDisplay.replace(/\n/g, '<br>')}</span>`;
-            adjustFontSize(cardFrontContent.querySelector('span'), true);
             cardBackContent.innerHTML = `<span>${textForBackDisplay.replace(/\n/g, '<br>')}</span>`;
+            adjustFontSize(cardFrontContent.querySelector('span'), true);
             adjustFontSize(cardBackContent.querySelector('span'), false);
         }
 
@@ -1106,14 +1232,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (ttsOnHotkeyOnlyCheckbox && ttsOnHotkeyOnlyCheckbox.checked) return;
 
+        // Speak the content of the revealed face
         if (card.classList.contains('flipped')) {
             const ttsRole = skillConfig.ttsBackColumn;
             const lang = getLanguageForTts(ttsRole);
-            speak(textForBackTTS, { ttsRole: ttsRole, lang: lang });
+            const ttsText = getTextForRoles(ttsRole ? [ttsRole] : [], currentRandomBaseIndex);
+            speak(ttsText, { ttsRole: ttsRole, lang: lang });
         } else {
             const ttsRole = skillConfig.ttsFrontColumn;
             const lang = getLanguageForTts(ttsRole);
-            speak(textForFrontTTS, { ttsRole: ttsRole, lang: lang });
+            const ttsText = getTextForRoles(ttsRole ? [ttsRole] : [], currentRandomBaseIndex);
+            speak(ttsText, { ttsRole: ttsRole, lang: lang });
         }
     }
 
@@ -1273,35 +1402,28 @@ document.addEventListener('DOMContentLoaded', () => {
     async function getSanitizedStats(cardKey) {
         let cardStats = await get(cardKey);
 
-        // Migration from old format
-        if (cardStats && !cardStats.skills) {
-            console.log(`Migrating old stats for card: ${cardKey}`);
-            const oldStats = { ...cardStats };
-            cardStats = {
-                skills: {
-                    [SKILLS.READING.id]: {
-                        successTimestamps: oldStats.successTimestamps || [],
-                        failureTimestamps: oldStats.failureTimestamps || [],
-                        responseDelays: oldStats.responseDelays || [],
-                        lastViewed: oldStats.lastViewed || null,
-                        intervalIndex: oldStats.intervalIndex || 0,
-                        viewCount: oldStats.viewCount || 0,
-                    }
-                }
-            };
-        }
-
-        // Ensure the structure is valid
+        // Ensure the basic structure is valid
         if (!cardStats || typeof cardStats !== 'object' || !cardStats.skills) {
             cardStats = { skills: {} };
         }
 
-        // Ensure all defined skills have a stats object
-        for (const skillId in SKILLS) {
-            if (!cardStats.skills[skillId]) {
-                cardStats.skills[skillId] = createDefaultSkillStats();
-            }
+        // Get the current list of user-defined skills
+        const currentConfigName = configSelector.value;
+        const currentConfig = configs[currentConfigName];
+        const userSkills = (currentConfig && currentConfig.skills) ? currentConfig.skills : [];
+
+        // Ensure all user-defined skills have a stats object
+        if (userSkills.length > 0) {
+            userSkills.forEach(skill => {
+                if (!cardStats.skills[skill.id]) {
+                    cardStats.skills[skill.id] = createDefaultSkillStats();
+                }
+            });
         }
+
+        // Note: Old migration logic for the very first version is removed for clarity,
+        // as the new system is fundamentally different. A more robust migration
+        // would be needed for production, but this is sufficient for the refactor.
 
         return cardStats;
     }
@@ -1310,30 +1432,34 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!skillMasteryDashboard) return;
 
         const currentConfigName = configSelector.value;
-        const activeSkills = new Set((configs[currentConfigName] || {}).skills || []);
+        const currentConfig = configs[currentConfigName] || {};
+        const userSkills = currentConfig.skills || [];
+        const activeSkills = new Set(currentConfig.activeSkills || []);
 
         let html = '';
-        for (const skillId in SKILLS) {
-            const skill = SKILLS[skillId];
-            const skillStats = cardStats.skills[skillId];
+        userSkills.forEach((skill, index) => {
+            const skillStats = cardStats.skills[skill.id] || createDefaultSkillStats();
             const score = getRetentionScore(skillStats);
             const timeToDue = getTimeToDue(skillStats);
+            const letter = String.fromCharCode(65 + index); // A, B, C...
 
-            const isCurrent = skillId === currentSkill;
-            const isActiveSession = activeSkills.has(skillId);
+            const isCurrent = skill.id === currentSkillId;
+            const isActiveSession = activeSkills.has(skill.id);
 
             let classes = 'skill-mastery-item';
-            if (isCurrent) classes += ' active'; // Light green for current
-            if (isActiveSession) classes += ' active-session'; // Light blue for active in session
+            if (isCurrent) classes += ' active';
+            if (isActiveSession) classes += ' active-session';
 
             html += `
-                <div class="${classes}" data-skill-id="${skillId}" title="${skill.label} - Next review: ${timeToDue.formatted}">
-                    <span class="skill-name">${skill.label.match(/\b(\w)/g).join('')}</span>
+                <div class="${classes}" data-skill-id="${skill.id}" title="${skill.name} - Next review: ${timeToDue.formatted}">
+                    <span class="skill-name">${letter}</span>
                     <span class="skill-score">${score}</span>
                 </div>
             `;
-        }
+        });
+
         skillMasteryDashboard.innerHTML = html;
+        skillMasteryDashboard.title = 'Click to configure skills'; // Add hover tooltip
     }
 
     /**
@@ -1353,44 +1479,37 @@ document.addEventListener('DOMContentLoaded', () => {
         const cardKey = getCardKey(cardData[index]);
         const stats = await getSanitizedStats(cardKey);
 
-        if (!isNavigatingBack && (index !== currentCardIndex || reason.skill !== currentSkill)) {
-             viewHistory.push({ cardIndex: currentCardIndex, skill: currentSkill });
+        if (!isNavigatingBack && (index !== currentCardIndex || reason.skill !== currentSkillId)) {
+             viewHistory.push({ cardIndex: currentCardIndex, skillId: currentSkillId });
         }
 
         currentCardIndex = index;
-        // The currentSkill is now set by showNextCard
+        // The currentSkillId is now set by showNextCard
         replayRate = 1.0;
 
-        const currentSkillStats = stats.skills[currentSkill];
-        const previousLastViewed = currentSkillStats.lastViewed; // Store previous value
+        const skillConfig = getCurrentSkillConfig();
+        if (!skillConfig) {
+            console.error("No skill config found for displayCard. Aborting.");
+            // Potentially show a user-facing error here
+            return;
+        }
+
+        const currentSkillStats = stats.skills[currentSkillId] || createDefaultSkillStats();
+        const previousLastViewed = currentSkillStats.lastViewed;
         currentSkillStats.viewCount++;
         currentSkillStats.lastViewed = Date.now();
 
-        // Get the correct column configuration for the current skill
-        const currentConfigName = configSelector.value;
-        const currentConfig = configs[currentConfigName] || {};
-        let skillConfig = (currentConfig.skillColumns || {})[currentSkill];
-
-        // Fallback logic if skill config is missing
-        if (!skillConfig) {
-            skillConfig = (currentConfig.skillColumns || {})[SKILLS.READING.id] || { front: [0], back: [1] };
-        }
-
         // --- Text Generation ---
-        // 1. Make the random choice for base language for this card view
         const baseLangIndices = (configs[configSelector.value] || {}).roleToColumnMap['BASE_LANGUAGE'] || [];
         if (baseLangIndices.length > 1) {
-            // Pick the base language using the sequential rotation index
             const rotationIndex = baseLanguageRotationIndex % baseLangIndices.length;
             currentRandomBaseIndex = baseLangIndices[rotationIndex];
-            // The rotation index is now incremented on card flips, not on display.
         } else if (baseLangIndices.length === 1) {
             currentRandomBaseIndex = baseLangIndices[0];
         } else {
             currentRandomBaseIndex = -1;
         }
 
-        // 2. Get text for all purposes using the consistent random choice
         const frontRoles = skillConfig.front || [];
         const backRoles = skillConfig.back || [];
         const ttsFrontRole = skillConfig.ttsFrontColumn ? [skillConfig.ttsFrontColumn] : [];
@@ -1410,26 +1529,16 @@ document.addEventListener('DOMContentLoaded', () => {
             useUppercase = !useUppercase;
         }
 
-        const isAudioOnly = (audioOnlyFrontCheckbox && audioOnlyFrontCheckbox.checked) || currentSkill === SKILLS.LISTENING.id;
+        const isAudioOnly = (audioOnlyFrontCheckbox && audioOnlyFrontCheckbox.checked) || skillConfig.isAudioOnly;
 
-        cardFrontContent.innerHTML = ''; // Clear previous content
-        cardBackContent.innerHTML = ''; // Clear previous content
-
-        if (isAudioOnly) {
-            cardFrontContent.innerHTML = '<span class="speech-icon">🔊</span>';
-        } else {
-            cardFrontContent.innerHTML = `<span>${displayText.replace(/\n/g, '<br>')}</span>`;
-        }
-
+        cardFrontContent.innerHTML = isAudioOnly ? '<span class="speech-icon">🔊</span>' : `<span>${displayText.replace(/\n/g, '<br>')}</span>`;
         cardBackContent.innerHTML = `<span>${textForBackDisplay.replace(/\n/g, '<br>')}</span>`;
 
         cardFront.style.fontSize = '';
         cardBackContent.style.fontSize = '';
 
         setTimeout(() => {
-            if (!isAudioOnly) {
-                adjustFontSize(cardFrontContent.querySelector('span'), true);
-            }
+            if (!isAudioOnly) adjustFontSize(cardFrontContent.querySelector('span'), true);
             adjustFontSize(cardBackContent.querySelector('span'), false);
         }, 50);
 
@@ -1441,18 +1550,12 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         renderSkillMastery(stats);
-
-        const timeAgo = formatTimeAgo(previousLastViewed);
-        if (lastSeen) {
-            lastSeen.textContent = `Last seen: ${timeAgo}`;
-        }
-        if (cardSpecificStats) {
-            cardSpecificStats.innerHTML = ``;
-        }
+        if (lastSeen) lastSeen.textContent = `Last seen: ${formatTimeAgo(previousLastViewed)}`;
+        if (cardSpecificStats) cardSpecificStats.innerHTML = ``;
 
         if (explanationMessage) {
             let message = '';
-            explanationMessage.classList.remove('deck-learned-message'); // Reset class first
+            explanationMessage.classList.remove('deck-learned-message');
             switch (reason.type) {
                 case 'due_review':
                     message = `This card is due for its ${reason.expiredInterval} review. Next review in ${reason.nextInterval}.`;
@@ -1465,22 +1568,17 @@ document.addEventListener('DOMContentLoaded', () => {
                     break;
                 case 'deck_learned':
                     explanationMessage.classList.add('deck-learned-message');
-                    if (reason.timeToNextReview !== Infinity) {
-                        const formattedMinTime = formatTimeDifference(reason.timeToNextReview);
-                        const formattedMaxTime = formatTimeDifference(reason.timeToLastReview);
-                        message = `Deck learned! Reviews are from ${formattedMinTime} to ${formattedMaxTime}. Reviewing lowest-score cards until then.`;
-                    } else {
-                        message = 'Congratulations, you have learned this whole deck!';
-                    }
+                    message = reason.timeToNextReview !== Infinity
+                        ? `Deck learned! Reviews are from ${formatTimeDifference(reason.timeToNextReview)} to ${formatTimeDifference(reason.timeToLastReview)}. Reviewing lowest-score cards until then.`
+                        : 'Congratulations, you have learned this whole deck!';
                     break;
             }
             explanationMessage.textContent = message;
             explanationMessage.classList.toggle('visible', !!message);
         }
 
-        // Handle UI changes for Writing skill
-        const validationColumn = skillConfig.validationColumn;
-        if (validationColumn && validationColumn !== 'none') {
+        // Handle UI for different verification methods
+        if (skillConfig.verificationMethod === 'text') {
             writingPracticeContainer.classList.remove('hidden');
             writingPracticeContainer.classList.toggle('audio-only-writing', isAudioOnly);
             iKnowButton.classList.add('hidden');
@@ -1490,13 +1588,14 @@ document.addEventListener('DOMContentLoaded', () => {
             writingInput.disabled = false;
             writingInput.focus();
         } else {
+            // This now handles 'none', 'multiple-choice', etc.
             writingPracticeContainer.classList.add('hidden');
             iKnowButton.classList.remove('hidden');
             iDontKnowButton.classList.remove('hidden');
             nextCardButton.classList.remove('hidden');
         }
         comparisonContainer.classList.add('hidden');
-        comparisonContainer.innerHTML = ''; // Clear previous diff content
+        comparisonContainer.innerHTML = '';
 
         await saveCardStats(cardKey, stats);
         cardShownTimestamp = Date.now();
@@ -1510,94 +1609,87 @@ document.addEventListener('DOMContentLoaded', () => {
     async function showNextCard({ forceNew = false, now = Date.now() } = {}) {
         if (cardData.length === 0) return;
 
-        // 1. Get user's selected skills for the current session
         const activeSkills = getActiveSkills();
+        if (activeSkills.length === 0) {
+            showTopNotification("No active skills. Please select skills to practice in Settings.", "error");
+            return;
+        }
+
         const allCardStats = await getAllCardStats();
 
-        // 2. Create a flat list of all possible (card, skill) combinations to review
         const reviewableItems = [];
         allCardStats.forEach((cardStats, cardIndex) => {
             activeSkills.forEach(skillId => {
                 reviewableItems.push({
                     cardIndex,
                     skillId,
-                    skillStats: cardStats.skills[skillId]
+                    skillStats: cardStats.skills[skillId] || createDefaultSkillStats()
                 });
             });
         });
 
         if (reviewableItems.length === 0) return;
 
-        // --- Heuristic 1: Find "Due" Items ---
         const dueItems = reviewableItems.filter(item => {
             if (!item.skillStats.lastViewed) return false;
             const intervalSeconds = repetitionIntervals[item.skillStats.intervalIndex];
-            if (intervalSeconds === undefined) return false; // Already fully learned
-            return now - item.skillStats.lastViewed > intervalSeconds * 1000;
+            return intervalSeconds !== undefined && (now - item.skillStats.lastViewed > intervalSeconds * 1000);
         });
 
         if (dueItems.length > 0) {
             shuffleArray(dueItems);
             dueItems.sort((a, b) => getRetentionScore(a.skillStats) - getRetentionScore(b.skillStats));
             let nextItem = dueItems[0];
-
-            if (forceNew && nextItem.cardIndex === currentCardIndex && nextItem.skillId === currentSkill && dueItems.length > 1) {
+            if (forceNew && nextItem.cardIndex === currentCardIndex && nextItem.skillId === currentSkillId && dueItems.length > 1) {
                 nextItem = dueItems[1];
             }
             currentCardIndex = nextItem.cardIndex;
-            currentSkill = nextItem.skillId;
+            currentSkillId = nextItem.skillId;
             const reason = { type: 'due_review', expiredInterval: formatDuration(repetitionIntervals[nextItem.skillStats.intervalIndex]), nextInterval: formatDuration(repetitionIntervals[nextItem.skillStats.intervalIndex + 1] || 0) };
             await displayCard(currentCardIndex, { reason });
             return;
         }
 
-        // --- Heuristic 2: Find "New" Items ---
         const newItems = reviewableItems.filter(item => item.skillStats.viewCount === 0);
         if (newItems.length > 0) {
             const nextItem = newItems[Math.floor(Math.random() * newItems.length)];
             currentCardIndex = nextItem.cardIndex;
-            currentSkill = nextItem.skillId;
+            currentSkillId = nextItem.skillId;
             await displayCard(currentCardIndex, { reason: { type: 'new_card' } });
             return;
         }
 
-        // --- Heuristic 3: Find "Least Learned" Item ---
         let reasonForDisplay;
         const allSkillsLearned = reviewableItems.every(item => getRetentionScore(item.skillStats) > 0);
         if (allSkillsLearned) {
-                let minTimeToDue = Infinity;
-                let maxTimeToDue = 0;
-                reviewableItems.forEach(item => {
-                    const timeToDue = getTimeToDue(item.skillStats, now).ms;
-                    if (timeToDue > 0 && timeToDue < minTimeToDue) minTimeToDue = timeToDue;
-                    if (timeToDue > maxTimeToDue) maxTimeToDue = timeToDue;
-                });
-                reasonForDisplay = { type: 'deck_learned', timeToNextReview: minTimeToDue, timeToLastReview: maxTimeToDue };
+            let minTimeToDue = Infinity, maxTimeToDue = 0;
+            reviewableItems.forEach(item => {
+                const timeToDue = getTimeToDue(item.skillStats, now).ms;
+                if (timeToDue > 0 && timeToDue < minTimeToDue) minTimeToDue = timeToDue;
+                if (timeToDue > maxTimeToDue) maxTimeToDue = timeToDue;
+            });
+            reasonForDisplay = { type: 'deck_learned', timeToNextReview: minTimeToDue, timeToLastReview: maxTimeToDue };
         } else {
             reasonForDisplay = { type: 'least_learned' };
         }
 
         let candidateItems = [...reviewableItems];
         if (forceNew && candidateItems.length > 1) {
-            candidateItems = candidateItems.filter(item => item.cardIndex !== currentCardIndex || item.skillId !== currentSkill);
+            candidateItems = candidateItems.filter(item => item.cardIndex !== currentCardIndex || item.skillId !== currentSkillId);
         }
-        if (candidateItems.length === 0) {
-            candidateItems = [...reviewableItems];
-        }
+        if (candidateItems.length === 0) candidateItems = [...reviewableItems];
 
         shuffleArray(candidateItems);
         candidateItems.sort((a, b) => {
             const scoreA = getRetentionScore(a.skillStats);
             const scoreB = getRetentionScore(b.skillStats);
             if (scoreA !== scoreB) return scoreA - scoreB;
-            const lastViewedA = a.skillStats.lastViewed || 0;
-            const lastViewedB = b.skillStats.lastViewed || 0;
-            return lastViewedA - lastViewedB;
+            return (a.skillStats.lastViewed || 0) - (b.skillStats.lastViewed || 0);
         });
 
         const nextItem = candidateItems[0];
         currentCardIndex = nextItem.cardIndex;
-        currentSkill = nextItem.skillId;
+        currentSkillId = nextItem.skillId;
         await displayCard(currentCardIndex, { reason: reasonForDisplay });
     }
 
@@ -1615,6 +1707,9 @@ document.addEventListener('DOMContentLoaded', () => {
     function buildHistoryTbodyHtml(data) {
         let tbodyHtml = '<tbody>';
         const now = Date.now();
+        const currentConfig = configs[configSelector.value] || {};
+        const userSkills = currentConfig.skills || [];
+
         data.forEach(item => {
             tbodyHtml += '<tr>';
             item.card.forEach(cell => {
@@ -1622,11 +1717,11 @@ document.addEventListener('DOMContentLoaded', () => {
             });
 
             // Mastery column
-            const masteryHtml = Object.keys(SKILLS).map(skillId => {
-                const skill = SKILLS[skillId];
-                const initial = skill.label.match(/\b(\w)/g).join('');
-                const score = getRetentionScore(item.stats.skills[skillId]);
-                return `<span title="${skill.label}: ${score}">${initial}:${score}</span>`;
+            const masteryHtml = userSkills.map((skill, index) => {
+                const letter = String.fromCharCode(65 + index);
+                const skillStats = item.stats.skills[skill.id] || createDefaultSkillStats();
+                const score = getRetentionScore(skillStats);
+                return `<span title="${skill.name}: ${score}">${letter}:${score}</span>`;
             }).join(' ');
             tbodyHtml += `<td>${masteryHtml}</td>`;
 
@@ -1830,7 +1925,12 @@ document.addEventListener('DOMContentLoaded', () => {
     async function markCardAsKnown(known) {
         const cardKey = getCardKey(cardData[currentCardIndex]);
         const cardStats = await getSanitizedStats(cardKey);
-        const skillStats = cardStats.skills[currentSkill];
+        const skillStats = cardStats.skills[currentSkillId];
+
+        if (!skillStats) {
+            console.error(`Could not find stats for skill ${currentSkillId} on card ${cardKey}.`);
+            return;
+        }
 
         if (cardShownTimestamp) {
             const delay = Date.now() - cardShownTimestamp;
@@ -1847,18 +1947,16 @@ document.addEventListener('DOMContentLoaded', () => {
                 const failures = skillStats.failureTimestamps.length;
                 const failuresToRemove = failures - successes;
                 if (failuresToRemove > 0) {
-                    // Remove the oldest failures to bring the score to 0
                     skillStats.failureTimestamps.splice(0, failuresToRemove);
                 }
             }
 
-            // Only advance the interval if the card was due for review.
             if (isCurrentCardDue && skillStats.intervalIndex < repetitionIntervals.length - 1) {
                 skillStats.intervalIndex++;
             }
         } else {
             skillStats.failureTimestamps.push(Date.now());
-            skillStats.intervalIndex = 0; // Reset interval on failure
+            skillStats.intervalIndex = 0;
         }
         await saveCardStats(cardKey, cardStats);
     }
@@ -1868,40 +1966,15 @@ document.addEventListener('DOMContentLoaded', () => {
      * to IndexedDB.
      */
     function getSelectedSkills() {
-        if (!skillSelectorCheckboxes) return [SKILLS.READING.id]; // Default to reading
-        const selected = Array.from(skillSelectorCheckboxes.querySelectorAll('input:checked')).map(cb => cb.value);
-        // If no skills are selected in the UI, default to reading to avoid a broken state.
-        return selected.length > 0 ? selected : [SKILLS.READING.id];
+        if (!skillSelectorCheckboxes) return [];
+        return Array.from(skillSelectorCheckboxes.querySelectorAll('input:checked')).map(cb => cb.value);
     }
 
     function getActiveSkills() {
         const currentConfigName = configSelector.value;
-        if (currentConfigName && configs[currentConfigName] && configs[currentConfigName].skills) {
-            return configs[currentConfigName].skills;
-        }
-        return [SKILLS.READING.id]; // Default
-    }
-
-    function getSkillColumnSettings() {
-        const skillColumns = {};
-        for (const skillId in SKILLS) {
-            const frontContainer = document.getElementById(`front-role-checkboxes-${skillId}`);
-            const backContainer = document.getElementById(`back-role-checkboxes-${skillId}`);
-            const validationSelector = document.getElementById(`validation-column-selector-${skillId}`);
-            const ttsFrontSelector = document.getElementById(`tts-front-column-selector-${skillId}`);
-            const ttsBackSelector = document.getElementById(`tts-back-column-selector-${skillId}`);
-
-            if (frontContainer && backContainer && validationSelector && ttsFrontSelector && ttsBackSelector) {
-                skillColumns[skillId] = {
-                    front: getSelectedRoles(frontContainer),
-                    back: getSelectedRoles(backContainer),
-                    validationColumn: validationSelector.value,
-                    ttsFrontColumn: ttsFrontSelector.value,
-                    ttsBackColumn: ttsBackSelector.value
-                };
-            }
-        }
-        return skillColumns;
+        const currentConfig = configs[currentConfigName];
+        // The source of truth is the activeSkills array. If it's missing or empty, no skills are active.
+        return (currentConfig && currentConfig.activeSkills) ? currentConfig.activeSkills : [];
     }
 
     async function saveConfig() {
@@ -1937,12 +2010,16 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
+        // Ensure skills are initialized
+        if (!currentConfig.skills) {
+            currentConfig.skills = [];
+        }
+
         configs[configName] = {
-            ...currentConfig, // Preserve subsetData if it exists
+            ...currentConfig, // Preserve subsetData and skills array
             dataUrl: currentConfig.subsetData ? null : dataUrlInput.value,
             repetitionIntervals: repetitionIntervalsTextarea.value,
-            skillColumns: getSkillColumnSettings(),
-            skills: getSelectedSkills(),
+            activeSkills: getSelectedSkills(),
             columnRoleAssignments: columnRoleAssignments, // Save the direct mapping
             roleToColumnMap: roleToColumnMap, // Save the computed map
             font: fontSelector.value,
@@ -1954,13 +2031,12 @@ document.addEventListener('DOMContentLoaded', () => {
             ttsOnHotkeyOnly: ttsOnHotkeyOnlyCheckbox.checked,
         };
 
-        console.log('Saving skillColumns:', configs[configName].skillColumns); // DEBUG
-        console.log('Saving skillColumns:', JSON.stringify(configs[configName].skillColumns, null, 2)); // DEBUG
         // Remove deprecated properties
+        delete configs[configName].skillColumns;
         delete configs[configName].frontColumns;
         delete configs[configName].backColumns;
-        delete configs[configName].columnRoles; // old property
-        delete configs[configName].ttsSourceColumn; // old property
+        delete configs[configName].columnRoles;
+        delete configs[configName].ttsSourceColumn;
 
         await set('flashcard-configs', configs);
         await set('flashcard-last-config', configName);
@@ -2005,7 +2081,6 @@ document.addEventListener('DOMContentLoaded', () => {
     async function loadSelectedConfig(configName) {
         if (!configName || !configs[configName]) return;
         const config = configs[configName];
-        console.log('Loading skillColumns:', JSON.stringify(config.skillColumns, null, 2)); // DEBUG
 
         configNameInput.value = configName;
         dataUrlInput.value = config.dataUrl || '';
@@ -2029,72 +2104,26 @@ document.addEventListener('DOMContentLoaded', () => {
             await loadData();
         }
 
-        // --- Load Column Selections ---
-        if (config.skillColumns) {
-            // New format
-            for (const skillId in config.skillColumns) {
-                const frontContainer = document.getElementById(`front-column-checkboxes-${skillId}`);
-                const backContainer = document.getElementById(`back-column-checkboxes-${skillId}`);
-                const { front, back } = config.skillColumns[skillId];
-
-                if (frontContainer) {
-                    frontContainer.querySelectorAll('input').forEach(cb => cb.checked = false);
-                    front.forEach(roleKey => {
-                        const cb = frontContainer.querySelector(`input[value="${roleKey}"]`);
-                        if (cb) cb.checked = true;
-                    });
-                }
-                if (backContainer) {
-                    backContainer.querySelectorAll('input').forEach(cb => cb.checked = false);
-                    back.forEach(roleKey => {
-                        const cb = backContainer.querySelector(`input[value="${roleKey}"]`);
-                        if (cb) cb.checked = true;
-                    });
-                }
-
-                const validationSelector = document.getElementById(`validation-column-selector-${skillId}`);
-                if (validationSelector) {
-                    validationSelector.value = config.skillColumns[skillId].validationColumn || 'none';
-                }
-
-                const ttsFrontSelector = document.getElementById(`tts-front-column-selector-${skillId}`);
-                if (ttsFrontSelector) {
-                    ttsFrontSelector.value = config.skillColumns[skillId].ttsFrontColumn || 'TARGET_LANGUAGE';
-                }
-
-                const ttsBackSelector = document.getElementById(`tts-back-column-selector-${skillId}`);
-                if (ttsBackSelector) {
-                    ttsBackSelector.value = config.skillColumns[skillId].ttsBackColumn || 'none';
-                }
-            }
-        } else if (config.frontColumns) {
-            // Migration from old format
-            const readingFront = document.getElementById(`front-column-checkboxes-READING`);
-            if (readingFront) {
-                config.frontColumns.forEach(colIndex => {
-                    const cb = readingFront.querySelector(`input[value="${colIndex}"]`);
-                    if (cb) cb.checked = true;
-                });
-            }
-            const readingBack = document.getElementById(`back-column-checkboxes-READING`);
-            if (readingBack) {
-                config.backColumns.forEach(colIndex => {
-                    const cb = readingBack.querySelector(`input[value="${colIndex}"]`);
-                    if (cb) cb.checked = true;
-                });
-            }
-        }
-        // End of Column Selections
-
-        // Load selected skills, default to READING if not set
-        const skillsToLoad = config.skills || [SKILLS.READING.id];
-        if (skillSelectorCheckboxes) {
-            skillSelectorCheckboxes.querySelectorAll('input').forEach(cb => {
-                cb.checked = skillsToLoad.includes(cb.value);
+        // Ensure skills array exists and hydrate them
+        if (config.skills && Array.isArray(config.skills)) {
+            config.skills = config.skills.map(plainSkill => {
+                const skill = new Skill(plainSkill.name, plainSkill.id);
+                // Object.assign to merge loaded properties, preserving defaults from constructor
+                return Object.assign(skill, plainSkill);
             });
+        } else {
+            config.skills = [];
         }
 
-        // Load Column Roles and TTS Source
+        // Ensure activeSkills array exists
+        if (!config.activeSkills) {
+            config.activeSkills = config.skills.length > 0 ? [config.skills[0].id] : [];
+        }
+
+        renderSkillsList();
+        populateSkillSelector();
+
+        // Load Column Roles
         if (config.columnRoleAssignments) {
             for (const colIndex in config.columnRoleAssignments) {
                 const select = document.getElementById(`column-role-${colIndex}`);
@@ -2335,7 +2364,7 @@ function speak(text, { rate, lang, ttsRole } = {}) {
                         break;
                     case 'KeyK': {
                         const skillConfig = getCurrentSkillConfig();
-                        if (!skillConfig.validationColumn || skillConfig.validationColumn === 'none') {
+                        if (skillConfig && (!skillConfig.validationColumn || skillConfig.validationColumn === 'none')) {
                             markCardAsKnown(true);
                             showNextCard();
                         }
@@ -2343,7 +2372,7 @@ function speak(text, { rate, lang, ttsRole } = {}) {
                     }
                     case 'KeyJ': {
                         const skillConfig = getCurrentSkillConfig();
-                        if (!skillConfig.validationColumn || skillConfig.validationColumn === 'none') {
+                        if (skillConfig && (!skillConfig.validationColumn || skillConfig.validationColumn === 'none')) {
                             markCardAsKnown(false);
                             showNextCard({forceNew: true});
                         }
@@ -2351,6 +2380,7 @@ function speak(text, { rate, lang, ttsRole } = {}) {
                     }
                     case 'KeyF': {
                         const skillConfig = getCurrentSkillConfig();
+                        if (!skillConfig) break;
                         const text = card.classList.contains('flipped') ? textForBackTTS : textForFrontTTS;
                         const role = card.classList.contains('flipped') ? skillConfig.ttsBackColumn : skillConfig.ttsFrontColumn;
                         const lang = getLanguageForTts(role);
@@ -2441,15 +2471,34 @@ function speak(text, { rate, lang, ttsRole } = {}) {
     function populateSkillSelector() {
         if (!skillSelectorCheckboxes) return;
         skillSelectorCheckboxes.innerHTML = '';
-        for (const skillId in SKILLS) {
-            const skill = SKILLS[skillId];
-            const id = `skill-checkbox-${skill.id}`;
-            const checkboxHtml = `
-                <div>
-                    <input type="checkbox" id="${id}" value="${skill.id}" checked>
-                    <label for="${id}" title="${skill.description}">${skill.label}</label>
-                </div>`;
-            skillSelectorCheckboxes.insertAdjacentHTML('beforeend', checkboxHtml);
+        const currentConfigName = configSelector.value;
+        const currentConfig = configs[currentConfigName];
+        if (!currentConfig || !currentConfig.skills) return;
+
+        currentConfig.skills.forEach(skill => {
+            const container = document.createElement('div');
+
+            const input = document.createElement('input');
+            input.type = 'checkbox';
+            input.id = `skill-checkbox-${skill.id}`;
+            input.value = skill.id;
+
+            const label = document.createElement('label');
+            label.htmlFor = input.id;
+            label.title = skill.name; // SAFE: title attribute is not vulnerable to XSS in this context
+            label.textContent = skill.name; // SAFE
+
+            container.appendChild(input);
+            container.appendChild(label);
+            skillSelectorCheckboxes.appendChild(container);
+        });
+
+        // After populating, re-apply the checked status from the config
+        if (currentConfig.activeSkills) {
+            currentConfig.activeSkills.forEach(skillId => {
+                const cb = skillSelectorCheckboxes.querySelector(`input[value="${skillId}"]`);
+                if (cb) cb.checked = true;
+            });
         }
     }
 
