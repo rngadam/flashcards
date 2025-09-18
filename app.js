@@ -1082,7 +1082,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    function addDefaultSkill(currentConfig) {
+    async function addDefaultSkill(currentConfig) {
         if (!currentConfig || !currentConfig.skills) {
             return;
         }
@@ -1097,12 +1097,13 @@ document.addEventListener('DOMContentLoaded', () => {
             alternateUppercase: true,
             ttsOnHotkeyOnly: true
         };
-        (async () => {
-            const created = await createSkill(defaultSkillData);
-            currentConfig.skills.push(created);
-            if (!currentConfig.activeSkills) currentConfig.activeSkills = [];
-            currentConfig.activeSkills.push(created.id);
-        })();
+        // Precompute id so we don't double-hash inside createSkill
+        const id = await createSkillId(defaultSkillData);
+        defaultSkillData.id = id;
+        const created = await createSkill(defaultSkillData);
+        currentConfig.skills.push(created);
+        if (!currentConfig.activeSkills) currentConfig.activeSkills = [];
+        currentConfig.activeSkills.push(created.id);
     }
 
     async function createPresetSkills() {
@@ -1142,6 +1143,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 const id = await createSkillId(skillData);
                 // Skip if a skill with same stable id already exists
                 if (currentConfig.skills.find(s => s.id === id)) continue;
+                // Pass the precomputed id to createSkill to avoid re-hashing
+                skillData.id = id;
                 const created = await createSkill(skillData);
                 currentConfig.skills.push(created);
             }
@@ -2210,7 +2213,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         if (config.skills.length === 0) {
-            addDefaultSkill(config);
+            await addDefaultSkill(config);
             handleSettingsChange();
         }
 
