@@ -2512,6 +2512,9 @@ function speak(text, { rate, lang, ttsRole } = {}) {
     }
 
     utterance.rate = finalRate;
+
+        // Prevent speech queue conflicts and browser crashes
+        window.speechSynthesis.cancel();
         window.speechSynthesis.speak(utterance);
     }
 
