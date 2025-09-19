@@ -84,6 +84,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const disableAnimationCheckbox = document.getElementById('disable-animation');
     const audioOnlyFrontCheckbox = document.getElementById('audio-only-front');
     const ttsOnHotkeyOnlyCheckbox = document.getElementById('tts-on-hotkey-only');
+    const multipleChoiceCount = document.getElementById('multiple-choice-count');
     const configNameInput = document.getElementById('config-name');
     const skillSelectorCheckboxes = document.getElementById('skill-selector-checkboxes');
     const repetitionIntervalsTextarea = document.getElementById('repetition-intervals');
@@ -111,6 +112,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const writingPracticeContainer = document.getElementById('writing-practice-container');
     const writingInput = document.getElementById('writing-input');
     const writingSubmit = document.getElementById('writing-submit');
+    const multipleChoiceContainer = document.getElementById('multiple-choice-container');
     const comparisonContainer = document.getElementById('comparison-container');
     const slowReplayButton = document.getElementById('slow-replay-button');
     const slowReplayHotkey = document.getElementById('slow-replay-hotkey');
@@ -482,6 +484,73 @@ document.addEventListener('DOMContentLoaded', () => {
             flipCard();
         }
 
+        nextCardButton.classList.remove('hidden');
+    }
+
+    function generateMultipleChoiceOptions() {
+        const skillConfig = getCurrentSkillConfig();
+        const validationRole = skillConfig.validationColumn;
+        if (!validationRole || validationRole === 'none') {
+            console.error("generateMultipleChoiceOptions called but no validation column is configured.");
+            return;
+        }
+
+        const roleToColumnMap = (configs[configSelector.value] || {}).roleToColumnMap || {};
+        const validationColumnIndices = roleToColumnMap[validationRole] || [];
+
+        if (validationColumnIndices.length === 0) {
+             const message = `Cannot validate: No column is assigned the "${COLUMN_ROLES[validationRole]}" role.`;
+             showTopNotification(message);
+             return;
+        }
+
+        const correctAnswer = cardData[currentCardIndex][validationColumnIndices[0]];
+
+        const numChoices = parseInt((configs[configSelector.value] || {}).multipleChoiceCount || 4, 10);
+
+        // Create a pool of unique distractors from all other cards.
+        const distractorPool = [...new Set(
+            cardData
+                .filter((_, index) => index !== currentCardIndex)
+                .map(card => card[validationColumnIndices[0]])
+                .filter(Boolean) // Filter out empty/null/undefined values
+        )];
+
+        shuffleArray(distractorPool);
+
+        // Combine the correct answer with a slice of the shuffled distractors.
+        const options = [
+            correctAnswer,
+            ...distractorPool.slice(0, numChoices - 1)
+        ];
+
+        shuffleArray(options);
+
+        multipleChoiceContainer.innerHTML = '';
+        options.forEach(option => {
+            const button = document.createElement('button');
+            button.textContent = option;
+            button.addEventListener('click', () => checkMultipleChoiceAnswer(option, correctAnswer));
+            multipleChoiceContainer.appendChild(button);
+        });
+    }
+
+    async function checkMultipleChoiceAnswer(selectedAnswer, correctAnswer) {
+        const isCorrect = selectedAnswer === correctAnswer;
+        await markCardAsKnown(isCorrect);
+
+        Array.from(multipleChoiceContainer.children).forEach(button => {
+            button.disabled = true;
+            if (button.textContent === correctAnswer) {
+                button.classList.add('correct');
+            } else if (button.textContent === selectedAnswer) {
+                button.classList.add('incorrect');
+            }
+        });
+
+        if (!card.classList.contains('flipped')) {
+            flipCard();
+        }
         nextCardButton.classList.remove('hidden');
     }
 
@@ -1599,15 +1668,24 @@ document.addEventListener('DOMContentLoaded', () => {
         if (skillConfig.verificationMethod === 'text') {
             writingPracticeContainer.classList.remove('hidden');
             writingPracticeContainer.classList.toggle('audio-only-writing', isAudioOnly);
+            multipleChoiceContainer.classList.add('hidden');
             iKnowButton.classList.add('hidden');
             iDontKnowButton.classList.add('hidden');
             nextCardButton.classList.add('hidden');
             writingInput.value = '';
             writingInput.disabled = false;
             writingInput.focus();
+        } else if (skillConfig.verificationMethod === 'multipleChoice') {
+            writingPracticeContainer.classList.add('hidden');
+            multipleChoiceContainer.classList.remove('hidden');
+            iKnowButton.classList.add('hidden');
+            iDontKnowButton.classList.add('hidden');
+            nextCardButton.classList.add('hidden');
+            generateMultipleChoiceOptions();
         } else {
             // This now handles 'none', 'multiple-choice', etc.
             writingPracticeContainer.classList.add('hidden');
+            multipleChoiceContainer.classList.add('hidden');
             iKnowButton.classList.remove('hidden');
             iDontKnowButton.classList.remove('hidden');
             nextCardButton.classList.remove('hidden');
@@ -2126,6 +2204,7 @@ document.addEventListener('DOMContentLoaded', () => {
             ttsRate: ttsRateSlider.value,
             ttsRateBase: ttsRateBaseSlider.value,
             disableAnimation: disableAnimationCheckbox.checked,
+            multipleChoiceCount: multipleChoiceCount.value,
         };
 
         // Remove deprecated properties
@@ -2238,6 +2317,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (ttsRateSlider) ttsRateSlider.value = config.ttsRate || 1;
         if (ttsRateBaseSlider) ttsRateBaseSlider.value = config.ttsRateBase || 1.5;
         if (disableAnimationCheckbox) disableAnimationCheckbox.checked = config.disableAnimation || false;
+        if (multipleChoiceCount) multipleChoiceCount.value = config.multipleChoiceCount || 4;
 
         if (repetitionIntervalsTextarea) {
             const configIntervalsString = config.repetitionIntervals;

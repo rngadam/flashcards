@@ -159,6 +159,10 @@
                 <label for="repetition-intervals">Repetition Intervals (seconds, comma-separated):</label>
                 <textarea id="repetition-intervals" rows="3"></textarea>
             </div>
+            <div class="setting">
+                <label for="multiple-choice-count">Number of Multiple Choice Options:</label>
+                <input type="number" id="multiple-choice-count" min="2" max="10" value="4">
+            </div>
         </div>
 
         <div id="filter-settings" class="tab-panel" role="tabpanel" aria-labelledby="filter-tab">
@@ -278,6 +282,9 @@
         <button id="slow-replay-button">🔊</button>
         <input type="text" id="writing-input" placeholder="Type the answer...">
         <button id="writing-submit">Submit</button>
+      </div>
+      <div id="multiple-choice-container" class="hidden">
+        <!-- buttons will be dynamically generated here -->
       </div>
       <div id="explanation-message"></div>
     </div>

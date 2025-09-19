@@ -867,3 +867,35 @@ button.danger:hover {
     font-size: 10em; /* Make the icon large */
     color: #888;
 }
+
+#multiple-choice-container {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 10px;
+    position: absolute;
+    bottom: 20px;
+    left: 0;
+    width: 100%;
+    padding: 0 20px;
+    box-sizing: border-box;
+}
+
+#multiple-choice-container.hidden {
+    display: none;
+}
+
+#multiple-choice-container button {
+    flex-grow: 1;
+    min-width: 40%;
+}
+
+#multiple-choice-container button.correct {
+    background-color: #28a745;
+    color: white;
+}
+
+#multiple-choice-container button.incorrect {
+    background-color: #dc3545;
+    color: white;
+}
