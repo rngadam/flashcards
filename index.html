@@ -167,17 +167,24 @@
 
         <div id="filter-settings" class="tab-panel" role="tabpanel" aria-labelledby="filter-tab">
             <div class="setting">
-                <label for="filter-text">Text to Filter by:</label>
-                <textarea id="filter-text" rows="5" placeholder="Paste text here..."></textarea>
-                <small>The deck will only show cards where the 'Target Language' column matches a word from this text.</small>
+                <input type="checkbox" id="enable-filter-settings-checkbox">
+                <label for="enable-filter-settings-checkbox">Enable Filter</label>
             </div>
             <div class="setting">
-                <input type="checkbox" id="filter-allow-overflow">
+                <label for="filter-text">Text to Filter by:</label>
+                <textarea id="filter-text" rows="5" placeholder="Paste text here..."></textarea>
+                <small>The deck will only show cards where the 'Target Language' column contains a word from this text.</small>
+            </div>
+            <div class="setting">
+                <div id="filter-intersection-info">Found 0 matching words in the deck.</div>
+            </div>
+            <div class="setting">
+                <input type="checkbox" id="filter-allow-overflow" checked>
                 <label for="filter-allow-overflow">Allow other cards after filtered set is learned</label>
             </div>
             <div class="button-container">
-                <button id="apply-filter-button">Apply Filter</button>
-                <button id="clear-filter-button" class="danger">Clear Filter</button>
+                <button id="apply-filter-button">Apply</button>
+                <button id="clear-filter-button" class="danger">Clear</button>
             </div>
         </div>
 
@@ -257,8 +264,13 @@
     </div>
 
     <div id="skill-selector-bar">
-        <!-- Skill checkboxes will be populated here by JS -->
-        <div id="skill-selector-checkboxes" class="column-checkbox-group"></div>
+        <div id="skill-selector-checkboxes" class="column-checkbox-group">
+            <!-- Skill checkboxes will be populated here by JS -->
+        </div>
+        <div id="skill-selector-filter" class="column-checkbox-group">
+            <input type="checkbox" id="enable-filter-checkbox" value="filter">
+            <label for="enable-filter-checkbox" title="Enable/Disable Word Filter">Filter</label>
+        </div>
     </div>
 
     <div id="card-container">

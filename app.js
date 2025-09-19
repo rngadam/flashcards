@@ -104,6 +104,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const clearFilterButton = document.getElementById('clear-filter-button');
     const filterTextarea = document.getElementById('filter-text');
     const filterAllowOverflowCheckbox = document.getElementById('filter-allow-overflow');
+    const enableFilterCheckbox = document.getElementById('enable-filter-checkbox');
+    const enableFilterSettingsCheckbox = document.getElementById('enable-filter-settings-checkbox');
+    const filterIntersectionInfo = document.getElementById('filter-intersection-info');
     const writingPracticeContainer = document.getElementById('writing-practice-container');
     const writingInput = document.getElementById('writing-input');
     const writingSubmit = document.getElementById('writing-submit');
@@ -306,6 +309,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (applyFilterButton) applyFilterButton.addEventListener('click', applyFilter);
     if (clearFilterButton) clearFilterButton.addEventListener('click', clearFilter);
+    if (filterTextarea) filterTextarea.addEventListener('input', updateFilterIntersectionInfo);
+    if (enableFilterCheckbox) enableFilterCheckbox.addEventListener('change', () => {
+        setFilterEnabled(enableFilterCheckbox.checked);
+        showNextCard();
+    });
+    if (enableFilterSettingsCheckbox) enableFilterSettingsCheckbox.addEventListener('change', () => {
+        setFilterEnabled(enableFilterSettingsCheckbox.checked);
+        showNextCard();
+    });
 
     const handleSlowReplay = () => {
         const skillConfig = getCurrentSkillConfig();
@@ -562,6 +574,51 @@ document.addEventListener('DOMContentLoaded', () => {
         // The main control buttons are now always visible during MC, so no need to show/hide them.
     }
 
+    function setFilterEnabled(isEnabled) {
+        if (enableFilterCheckbox) enableFilterCheckbox.checked = isEnabled;
+        if (enableFilterSettingsCheckbox) enableFilterSettingsCheckbox.checked = isEnabled;
+        // The actual filtering logic is now tied to showNextCard, which respects the checkbox state.
+    }
+
+    function getDeckWords() {
+        const roleToColumnMap = (configs[configSelector.value] || {}).roleToColumnMap || {};
+        const keyIndices = roleToColumnMap['TARGET_LANGUAGE'] || [];
+        if (keyIndices.length !== 1) return new Set();
+
+        const keyIndex = keyIndices[0];
+        const deckWords = new Set();
+        cardData.forEach(card => {
+            const key = card[keyIndex]?.toLowerCase();
+            if (key) {
+                // Split by non-letter characters to handle multiple words in one cell
+                key.match(/[\p{L}\p{N}]+/gu)?.forEach(word => deckWords.add(word));
+            }
+        });
+        return deckWords;
+    }
+
+    function updateFilterIntersectionInfo() {
+        if (!filterTextarea || !filterIntersectionInfo) return;
+
+        const text = filterTextarea.value;
+        if (!text.trim()) {
+            filterIntersectionInfo.textContent = 'Enter text to see matching words.';
+            return;
+        }
+
+        const deckWords = getDeckWords();
+        if (deckWords.size === 0) {
+            filterIntersectionInfo.textContent = 'Load a deck to see matching words.';
+            return;
+        }
+
+        const filterWords = new Set(text.toLowerCase().match(/[\p{L}\p{N}]+/gu));
+        const intersection = new Set([...deckWords].filter(word => filterWords.has(word)));
+
+        filterIntersectionInfo.textContent = `Found ${intersection.size} matching words in the deck.`;
+    }
+
+
     function applyFilter() {
         const text = filterTextarea.value;
         if (!text) {
@@ -573,16 +630,21 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
+        // The words are now parsed and stored. The actual filtering happens in showNextCard.
         const words = new Set(text.match(/[\p{L}\p{N}]+/gu).map(w => w.toLowerCase()));
         activeFilterWords = words;
+        setFilterEnabled(true); // Applying a filter should enable it.
         showTopNotification(`Filter applied. Found ${words.size} unique words.`, 'success');
+        updateFilterIntersectionInfo();
         showNextCard();
     }
 
     function clearFilter() {
         activeFilterWords.clear();
+        setFilterEnabled(false); // Clearing a filter should disable it.
         if (filterTextarea) filterTextarea.value = '';
         showTopNotification('Filter cleared.', 'success');
+        updateFilterIntersectionInfo();
         showNextCard();
     }
 
@@ -1670,25 +1732,31 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (explanationMessage) {
             let message = '';
+            const deckIcon = reason.isFiltered ? 'Filter 🐠' : 'Deck 📚';
             explanationMessage.classList.remove('deck-learned-message');
+
             switch (reason.type) {
             case 'due_review':
-                message = `This card is due for its ${reason.expiredInterval} review. Next review in ${reason.nextInterval}.`;
+                message = `[${deckIcon}] This card is due for its ${reason.expiredInterval} review. Next review in ${reason.nextInterval}.`;
                 break;
             case 'bridging_card':
-                message = 'Introducing a card from a previous skill.';
+                message = `[${deckIcon}] Introducing a card from a previous skill.`;
                 break;
             case 'new_card':
-                message = 'Introducing a new, unseen card.';
+                message = `[${deckIcon}] Introducing a new, unseen card.`;
                 break;
             case 'least_learned':
-                message = 'Reviewing card with the lowest score.';
+                message = `[${deckIcon}] Reviewing card with the lowest score.`;
                 break;
             case 'deck_learned':
                 explanationMessage.classList.add('deck-learned-message');
-                message = reason.timeToNextReview !== Infinity
-                    ? `Deck learned! Reviews are from ${formatTimeDifference(reason.timeToNextReview)} to ${formatTimeDifference(reason.timeToLastReview)}. Reviewing lowest-score cards until then.`
-                    : 'Congratulations, you have learned this whole deck!';
+                if (reason.isFiltered) {
+                    message = 'Filtered deck learned! Proceeding with regular deck.';
+                } else {
+                    message = reason.timeToNextReview !== Infinity
+                        ? `Deck learned! Reviews are from ${formatTimeDifference(reason.timeToNextReview)} to ${formatTimeDifference(reason.timeToLastReview)}. Reviewing lowest-score cards until then.`
+                        : 'Congratulations, you have learned this whole deck!';
+                }
                 break;
             }
             explanationMessage.textContent = message;
@@ -1734,7 +1802,7 @@ document.addEventListener('DOMContentLoaded', () => {
         return Promise.all(promises);
     }
 
-    function findNextCardFromList(items, { forceNew = false, now = Date.now(), allCardStats = [], userSkills = [] } = {}) {
+    function findNextCardFromList(items, { forceNew = false, now = Date.now(), allCardStats = [], userSkills = [], isFiltered = false } = {}) {
         if (items.length === 0) return null;
 
         // --- Due Items (Priority 1) ---
@@ -1751,7 +1819,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (forceNew && nextItem.cardIndex === currentCardIndex && nextItem.skillId === currentSkillId && dueItems.length > 1) {
                 nextItem = dueItems[1];
             }
-            const reason = { type: 'due_review', expiredInterval: formatDuration(repetitionIntervals[nextItem.skillStats.intervalIndex]), nextInterval: formatDuration(repetitionIntervals[nextItem.skillStats.intervalIndex + 1] || 0) };
+            const reason = { type: 'due_review', expiredInterval: formatDuration(repetitionIntervals[nextItem.skillStats.intervalIndex]), nextInterval: formatDuration(repetitionIntervals[nextItem.skillStats.intervalIndex + 1] || 0), isFiltered };
             return { nextItem, reason };
         }
 
@@ -1784,11 +1852,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
             if (bridgingItems.length > 0) {
                 const nextItem = bridgingItems[Math.floor(Math.random() * bridgingItems.length)];
-                return { nextItem, reason: { type: 'bridging_card' } };
+                return { nextItem, reason: { type: 'bridging_card', isFiltered } };
             }
             if (trulyNewItems.length > 0) {
                 const nextItem = trulyNewItems[Math.floor(Math.random() * trulyNewItems.length)];
-                return { nextItem, reason: { type: 'new_card' } };
+                return { nextItem, reason: { type: 'new_card', isFiltered } };
             }
         }
 
@@ -1802,9 +1870,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (timeToDue > 0 && timeToDue < minTimeToDue) minTimeToDue = timeToDue;
                 if (timeToDue > maxTimeToDue) maxTimeToDue = timeToDue;
             });
-            reasonForDisplay = { type: 'deck_learned', timeToNextReview: minTimeToDue, timeToLastReview: maxTimeToDue };
+            reasonForDisplay = { type: 'deck_learned', timeToNextReview: minTimeToDue, timeToLastReview: maxTimeToDue, isFiltered };
         } else {
-            reasonForDisplay = { type: 'least_learned' };
+            reasonForDisplay = { type: 'least_learned', isFiltered };
         }
 
         let candidateItems = [...items];
@@ -1859,36 +1927,56 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // 2. Determine the list of items to select from (filtered or all)
         let itemsToSelectFrom = allReviewableItems;
-        let isFiltered = false;
+        let isFiltered = enableFilterCheckbox.checked && activeFilterWords.size > 0;
+        let filteredItems = [];
 
-        if (activeFilterWords.size > 0) {
+        if (isFiltered) {
             const roleToColumnMap = (configs[configSelector.value] || {}).roleToColumnMap || {};
             const keyIndices = roleToColumnMap['TARGET_LANGUAGE'] || [];
             if (keyIndices.length === 1) {
                 const keyIndex = keyIndices[0];
-                const filteredItems = allReviewableItems.filter(item => {
-                    const key = cardData[item.cardIndex][keyIndex]?.toLowerCase();
-                    return key && activeFilterWords.has(key);
+                // The deck words are now split, so we need to check if any word in the card's target field is in the filter
+                const deckWords = getDeckWords();
+                filteredItems = allReviewableItems.filter(item => {
+                    const cardText = cardData[item.cardIndex][keyIndex]?.toLowerCase();
+                    if (!cardText) return false;
+                    const cardWords = cardText.match(/[\p{L}\p{N}]+/gu) || [];
+                    return cardWords.some(word => activeFilterWords.has(word));
                 });
 
                 if (filteredItems.length > 0) {
                     itemsToSelectFrom = filteredItems;
-                    isFiltered = true;
                 } else {
                     showTopNotification('No matching cards for the current filter.', 'error');
+                    // If no cards match, we should probably stop instead of showing the whole deck.
                     return;
                 }
             }
         }
 
         // 3. Find the next card from the determined list
-        const findNextCardOptions = { forceNew, now, allCardStats, userSkills };
+        const findNextCardOptions = { forceNew, now, allCardStats, userSkills, isFiltered };
         let result = findNextCardFromList(itemsToSelectFrom, findNextCardOptions);
 
         // 4. Handle overflow if the filtered set is learned
-        if (!result && isFiltered && filterAllowOverflowCheckbox.checked) {
-            showTopNotification('Filtered set learned! Showing other cards.', 'success');
-            result = findNextCardFromList(allReviewableItems, findNextCardOptions);
+        const filteredDeckIsLearned = isFiltered && result && result.reason.type === 'deck_learned';
+
+        if (filteredDeckIsLearned && filterAllowOverflowCheckbox.checked) {
+            // The bug is here: `findNextCardFromList` is called again on the *entire* deck.
+            // This is correct, but we need to pass `isFiltered: false` to the next call
+            // so the explanation message is correct.
+            const overflowResult = findNextCardFromList(allReviewableItems, { ...findNextCardOptions, isFiltered: false });
+            if (overflowResult) {
+                // We show a special message for this case.
+                overflowResult.reason = { type: 'deck_learned', isFiltered: true }; // This triggers "Filtered deck learned!"
+                result = overflowResult;
+            }
+        } else if (!result && isFiltered && filterAllowOverflowCheckbox.checked) {
+            // This case handles when the filtered list is exhausted (e.g., all cards are new but seen).
+            const overflowResult = findNextCardFromList(allReviewableItems, { ...findNextCardOptions, isFiltered: false });
+            if (overflowResult) {
+                result = overflowResult;
+            }
         }
 
         // 5. Display the card or a message
