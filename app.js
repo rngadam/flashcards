@@ -523,9 +523,15 @@ document.addEventListener('DOMContentLoaded', () => {
         multipleChoiceContainer.classList.remove('answered'); // Reset answered state
         options.forEach((option, index) => {
             const button = document.createElement('button');
-            // Store the raw option text in a data attribute for reliable checking
-            button.dataset.option = option;
-            button.innerHTML = `<span class="mc-option-number">${index + 1}</span> ${option}`;
+            button.dataset.option = option; // Store the raw option text for reliable checking
+
+            const numberSpan = document.createElement('span');
+            numberSpan.className = 'mc-option-number';
+            numberSpan.textContent = index + 1;
+
+            button.appendChild(numberSpan);
+            button.appendChild(document.createTextNode(` ${option}`)); // Append the option as a text node
+
             button.addEventListener('click', () => checkMultipleChoiceAnswer(option, correctAnswer));
             multipleChoiceContainer.appendChild(button);
         });
@@ -1299,7 +1305,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // If flipping is attempted during an active (unanswered) multiple-choice question,
         // treat it as "I don't know" and show the next card.
-        if (multipleChoiceContainer.classList.contains('visible') && !multipleChoiceContainer.classList.contains('answered')) {
+        if (!multipleChoiceContainer.classList.contains('hidden') && !multipleChoiceContainer.classList.contains('answered')) {
             markCardAsKnown(false);
             showNextCard({ forceNew: true });
             return;
@@ -1694,7 +1700,6 @@ document.addEventListener('DOMContentLoaded', () => {
             writingPracticeContainer.classList.remove('hidden');
             writingPracticeContainer.classList.toggle('audio-only-writing', isAudioOnly);
             multipleChoiceContainer.classList.add('hidden');
-            multipleChoiceContainer.classList.remove('visible');
             iKnowButton.classList.add('hidden');
             iDontKnowButton.classList.add('hidden');
             nextCardButton.classList.add('hidden');
@@ -1704,7 +1709,6 @@ document.addEventListener('DOMContentLoaded', () => {
         } else if (skillConfig.verificationMethod === VERIFICATION_METHODS.MULTIPLE_CHOICE) {
             writingPracticeContainer.classList.add('hidden');
             multipleChoiceContainer.classList.remove('hidden');
-            multipleChoiceContainer.classList.add('visible');
             // Ensure main control buttons are visible during multiple choice.
             iKnowButton.classList.remove('hidden');
             iDontKnowButton.classList.remove('hidden');
@@ -1714,7 +1718,6 @@ document.addEventListener('DOMContentLoaded', () => {
             // This now handles 'none'
             writingPracticeContainer.classList.add('hidden');
             multipleChoiceContainer.classList.add('hidden');
-            multipleChoiceContainer.classList.remove('visible');
             iKnowButton.classList.remove('hidden');
             iDontKnowButton.classList.remove('hidden');
             nextCardButton.classList.remove('hidden');
@@ -2565,10 +2568,10 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
 
-        const isMultipleChoiceActive = multipleChoiceContainer.classList.contains('visible') && !multipleChoiceContainer.classList.contains('answered');
+        const isMultipleChoiceActive = !multipleChoiceContainer.classList.contains('hidden') && !multipleChoiceContainer.classList.contains('answered');
 
         // Handle numeric hotkeys for multiple choice
-        if (e.type === 'keydown' && e.code.startsWith('Digit')) {
+        if (e.code.startsWith('Digit')) {
             if (isMultipleChoiceActive) {
                 e.preventDefault();
                 const choiceIndex = parseInt(e.code.replace('Digit', ''), 10) - 1;

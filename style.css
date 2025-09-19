@@ -888,7 +888,7 @@ button.danger:hover {
 }
 
 #multiple-choice-container button {
-    flex-basis: calc(50% - 10px); /* Two buttons per row with gap */
+    flex-basis: calc(50% - 7.5px); /* Two buttons per row with gap. 7.5px is half of the 15px gap. */
     flex-grow: 0; /* Prevent buttons from growing */
     margin: 0;
     padding: 12px; /* Smaller padding */
