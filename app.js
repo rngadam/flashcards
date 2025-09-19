@@ -605,42 +605,42 @@ document.addEventListener('DOMContentLoaded', () => {
         return deckWords;
     }
 
-function getHighlightHTML(text, intersection) {
-    // Escape HTML to prevent XSS and then highlight
-    const escapedText = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-    const highlightedHtml = escapedText.replace(/[\p{L}\p{N}]+/gu, (word) => {
-        if (intersection.has(word.toLowerCase())) {
-            return `<span class="match">${word}</span>`;
-        }
-        return word;
-    });
-    return highlightedHtml;
-}
+    function getHighlightHTML(text, intersection) {
+        // Escape HTML to prevent XSS and then highlight
+        const escapedText = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        const highlightedHtml = escapedText.replace(/[\p{L}\p{N}]+/gu, (word) => {
+            if (intersection.has(word.toLowerCase())) {
+                return `<span class="match">${word}</span>`;
+            }
+            return word;
+        });
+        return highlightedHtml;
+    }
 
-function updateFilterHighlights() {
-    if (!filterTextarea || !filterHighlightLayer || !filterIntersectionInfo) return;
+    function updateFilterHighlights() {
+        if (!filterTextarea || !filterHighlightLayer || !filterIntersectionInfo) return;
 
         const text = filterTextarea.value;
         if (!text.trim()) {
-        filterHighlightLayer.innerHTML = '';
+            filterHighlightLayer.innerHTML = '';
             filterIntersectionInfo.textContent = 'Enter text to see matching words.';
             return;
         }
 
         const deckWords = getDeckWords();
         if (deckWords.size === 0) {
-        filterHighlightLayer.innerHTML = '';
+            filterHighlightLayer.innerHTML = '';
             filterIntersectionInfo.textContent = 'Load a deck to see matching words.';
             return;
         }
 
-    const filterWords = new Set((text.toLowerCase().match(/[\p{L}\p{N}]+/gu) || []));
+        const filterWords = new Set((text.toLowerCase().match(/[\p{L}\p{N}]+/gu) || []));
         const intersection = new Set([...deckWords].filter(word => filterWords.has(word)));
 
-    const highlightedHtml = getHighlightHTML(text, intersection);
+        const highlightedHtml = getHighlightHTML(text, intersection);
 
-    filterHighlightLayer.innerHTML = highlightedHtml;
-    filterIntersectionInfo.textContent = `Found ${intersection.size} matching words in the deck. Words: ${[...intersection].join(', ')}`;
+        filterHighlightLayer.innerHTML = highlightedHtml;
+        filterIntersectionInfo.textContent = `Found ${intersection.size} matching words in the deck. Words: ${[...intersection].join(', ')}`;
     }
 
 
@@ -661,7 +661,7 @@ function updateFilterHighlights() {
         activeFilterWords = words;
         setFilterEnabled(true); // Applying a filter should enable it.
         showTopNotification(`Filter applied. Found ${words.size} unique words.`, 'success');
-        updateFilterIntersectionInfo();
+        updateFilterHighlights();
         showNextCard();
     }
 
@@ -670,7 +670,7 @@ function updateFilterHighlights() {
         setFilterEnabled(false); // Clearing a filter should disable it.
         if (filterTextarea) filterTextarea.value = '';
         showTopNotification('Filter cleared.', 'success');
-        updateFilterIntersectionInfo();
+        updateFilterHighlights();
         showNextCard();
     }
 
