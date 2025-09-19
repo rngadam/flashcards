@@ -2,7 +2,7 @@ import { franc } from 'https://cdn.jsdelivr.net/npm/franc@6.2.0/+esm';
 import { eld } from 'https://cdn.jsdelivr.net/npm/efficient-language-detector-no-dynamic-import@1.0.3/+esm';
 import { get, set, del } from 'https://cdn.jsdelivr.net/npm/idb-keyval/+esm';
 import { getLenientString, transformSlashText } from './lib/string-utils.js';
-import { Skill, createSkillId, createSkill } from './lib/skill-utils.js';
+import { Skill, createSkillId, createSkill, VERIFICATION_METHODS } from './lib/skill-utils.js';
 
 /**
  * @file Main application logic for the Flashcards web app.
@@ -365,7 +365,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (skillVerificationMethod) {
         skillVerificationMethod.addEventListener('change', (e) => {
             const validationSelect = document.getElementById('skill-validation-column');
-            validationSelect.disabled = e.target.value === 'none';
+            validationSelect.disabled = e.target.value === VERIFICATION_METHODS.NONE;
         });
     }
 
@@ -442,7 +442,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (userAnswer === '') return;
 
         const skillConfig = getCurrentSkillConfig();
-        if (!skillConfig || skillConfig.verificationMethod !== 'text') {
+        if (!skillConfig || skillConfig.verificationMethod !== VERIFICATION_METHODS.TEXT) {
             console.error('checkWritingAnswer called for a non-text verification skill.');
             return;
         }
@@ -979,6 +979,19 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!modal) return;
 
         // --- Populate Selectors ---
+        const populateVerificationMethodSelector = (select) => {
+            select.innerHTML = '';
+            // Manually define the display text for each method
+            const displayTexts = {
+                [VERIFICATION_METHODS.NONE]: 'None (Self-Assessed)',
+                [VERIFICATION_METHODS.TEXT]: 'Text Input',
+                [VERIFICATION_METHODS.MULTIPLE_CHOICE]: 'Multiple Choice'
+            };
+            for (const method of Object.values(VERIFICATION_METHODS)) {
+                select.add(new Option(displayTexts[method], method));
+            }
+        };
+
         const populateRoleSelector = (select, includeNone = true) => {
             select.innerHTML = '';
             if (includeNone) {
@@ -1003,6 +1016,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         };
 
+        populateVerificationMethodSelector(verificationSelect);
         populateRoleSelector(validationSelect);
         populateRoleSelector(ttsFrontSelect);
         populateRoleSelector(ttsBackSelect);
@@ -1034,7 +1048,7 @@ document.addEventListener('DOMContentLoaded', () => {
             title.textContent = 'Add New Skill';
             editingSkillIdInput.value = '';
             nameInput.value = '';
-            verificationSelect.value = 'none';
+            verificationSelect.value = VERIFICATION_METHODS.NONE;
             validationSelect.value = 'none';
             ttsFrontSelect.value = 'TARGET_LANGUAGE';
             ttsBackSelect.value = 'BASE_LANGUAGE';
@@ -1676,7 +1690,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         // Handle UI for different verification methods
-        if (skillConfig.verificationMethod === 'text') {
+        if (skillConfig.verificationMethod === VERIFICATION_METHODS.TEXT) {
             writingPracticeContainer.classList.remove('hidden');
             writingPracticeContainer.classList.toggle('audio-only-writing', isAudioOnly);
             multipleChoiceContainer.classList.add('hidden');
@@ -1687,7 +1701,7 @@ document.addEventListener('DOMContentLoaded', () => {
             writingInput.value = '';
             writingInput.disabled = false;
             writingInput.focus();
-        } else if (skillConfig.verificationMethod === 'multiple-choice') {
+        } else if (skillConfig.verificationMethod === VERIFICATION_METHODS.MULTIPLE_CHOICE) {
             writingPracticeContainer.classList.add('hidden');
             multipleChoiceContainer.classList.remove('hidden');
             multipleChoiceContainer.classList.add('visible');
