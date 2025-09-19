@@ -2513,10 +2513,10 @@ function speak(text, { rate, lang, ttsRole } = {}) {
 
     utterance.rate = finalRate;
 
-        // Prevent speech queue conflicts and browser crashes
-        window.speechSynthesis.cancel();
-        window.speechSynthesis.speak(utterance);
-    }
+    // Prevent speech queue conflicts and browser crashes
+    window.speechSynthesis.cancel();
+    window.speechSynthesis.speak(utterance);
+}
 
     /**
      * Handles all keyboard shortcuts for the application.
