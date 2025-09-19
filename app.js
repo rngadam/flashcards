@@ -2,7 +2,7 @@ import { franc } from 'https://cdn.jsdelivr.net/npm/franc@6.2.0/+esm';
 import { eld } from 'https://cdn.jsdelivr.net/npm/efficient-language-detector-no-dynamic-import@1.0.3/+esm';
 import { get, set, del } from 'https://cdn.jsdelivr.net/npm/idb-keyval/+esm';
 import { getLenientString, transformSlashText } from './lib/string-utils.js';
-import { Skill, createSkillId, createSkill } from './lib/skill-utils.js';
+import { Skill, createSkillId, createSkill, VERIFICATION_METHODS } from './lib/skill-utils.js';
 
 /**
  * @file Main application logic for the Flashcards web app.
@@ -365,7 +365,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (skillVerificationMethod) {
         skillVerificationMethod.addEventListener('change', (e) => {
             const validationSelect = document.getElementById('skill-validation-column');
-            validationSelect.disabled = e.target.value === 'none';
+            validationSelect.disabled = e.target.value === VERIFICATION_METHODS.NONE;
         });
     }
 
@@ -442,7 +442,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (userAnswer === '') return;
 
         const skillConfig = getCurrentSkillConfig();
-        if (!skillConfig || skillConfig.verificationMethod !== 'text') {
+        if (!skillConfig || skillConfig.verificationMethod !== VERIFICATION_METHODS.TEXT) {
             console.error('checkWritingAnswer called for a non-text verification skill.');
             return;
         }
@@ -520,23 +520,38 @@ document.addEventListener('DOMContentLoaded', () => {
         shuffleArray(options);
 
         multipleChoiceContainer.innerHTML = '';
-        options.forEach(option => {
+        multipleChoiceContainer.classList.remove('answered'); // Reset answered state
+        options.forEach((option, index) => {
             const button = document.createElement('button');
-            button.textContent = option;
+            button.dataset.option = option; // Store the raw option text for reliable checking
+
+            const numberSpan = document.createElement('span');
+            numberSpan.className = 'mc-option-number';
+            numberSpan.textContent = index + 1;
+
+            button.appendChild(numberSpan);
+            button.appendChild(document.createTextNode(` ${option}`)); // Append the option as a text node
+
             button.addEventListener('click', () => checkMultipleChoiceAnswer(option, correctAnswer));
             multipleChoiceContainer.appendChild(button);
         });
     }
 
     async function checkMultipleChoiceAnswer(selectedAnswer, correctAnswer) {
+        // If an answer has already been submitted, do nothing.
+        if (multipleChoiceContainer.classList.contains('answered')) return;
+
         const isCorrect = selectedAnswer === correctAnswer;
         await markCardAsKnown(isCorrect);
 
+        // Mark the container as answered to prevent further clicks and to change styling.
+        multipleChoiceContainer.classList.add('answered');
+
         Array.from(multipleChoiceContainer.children).forEach(button => {
-            button.disabled = true;
-            if (button.textContent === correctAnswer) {
+            // Use the data attribute for a reliable check
+            if (button.dataset.option === correctAnswer) {
                 button.classList.add('correct');
-            } else if (button.textContent === selectedAnswer) {
+            } else if (button.dataset.option === selectedAnswer) {
                 button.classList.add('incorrect');
             }
         });
@@ -544,7 +559,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!card.classList.contains('flipped')) {
             flipCard();
         }
-        nextCardButton.classList.remove('hidden');
+        // The main control buttons are now always visible during MC, so no need to show/hide them.
     }
 
     function applyFilter() {
@@ -970,6 +985,19 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!modal) return;
 
         // --- Populate Selectors ---
+        const populateVerificationMethodSelector = (select) => {
+            select.innerHTML = '';
+            // Manually define the display text for each method
+            const displayTexts = {
+                [VERIFICATION_METHODS.NONE]: 'None (Self-Assessed)',
+                [VERIFICATION_METHODS.TEXT]: 'Text Input',
+                [VERIFICATION_METHODS.MULTIPLE_CHOICE]: 'Multiple Choice'
+            };
+            for (const method of Object.values(VERIFICATION_METHODS)) {
+                select.add(new Option(displayTexts[method], method));
+            }
+        };
+
         const populateRoleSelector = (select, includeNone = true) => {
             select.innerHTML = '';
             if (includeNone) {
@@ -994,6 +1022,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         };
 
+        populateVerificationMethodSelector(verificationSelect);
         populateRoleSelector(validationSelect);
         populateRoleSelector(ttsFrontSelect);
         populateRoleSelector(ttsBackSelect);
@@ -1025,7 +1054,7 @@ document.addEventListener('DOMContentLoaded', () => {
             title.textContent = 'Add New Skill';
             editingSkillIdInput.value = '';
             nameInput.value = '';
-            verificationSelect.value = 'none';
+            verificationSelect.value = VERIFICATION_METHODS.NONE;
             validationSelect.value = 'none';
             ttsFrontSelect.value = 'TARGET_LANGUAGE';
             ttsBackSelect.value = 'BASE_LANGUAGE';
@@ -1273,6 +1302,14 @@ document.addEventListener('DOMContentLoaded', () => {
      */
     function flipCard() {
         if (!card) return;
+
+        // If flipping is attempted during an active (unanswered) multiple-choice question,
+        // treat it as "I don't know" and show the next card.
+        if (!multipleChoiceContainer.classList.contains('hidden') && !multipleChoiceContainer.classList.contains('answered')) {
+            markCardAsKnown(false);
+            showNextCard({ forceNew: true });
+            return;
+        }
 
         const skillConfig = getCurrentSkillConfig();
         if (!skillConfig) {
@@ -1659,7 +1696,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         // Handle UI for different verification methods
-        if (skillConfig.verificationMethod === 'text') {
+        if (skillConfig.verificationMethod === VERIFICATION_METHODS.TEXT) {
             writingPracticeContainer.classList.remove('hidden');
             writingPracticeContainer.classList.toggle('audio-only-writing', isAudioOnly);
             multipleChoiceContainer.classList.add('hidden');
@@ -1669,15 +1706,16 @@ document.addEventListener('DOMContentLoaded', () => {
             writingInput.value = '';
             writingInput.disabled = false;
             writingInput.focus();
-        } else if (skillConfig.verificationMethod === 'multipleChoice') {
+        } else if (skillConfig.verificationMethod === VERIFICATION_METHODS.MULTIPLE_CHOICE) {
             writingPracticeContainer.classList.add('hidden');
             multipleChoiceContainer.classList.remove('hidden');
-            iKnowButton.classList.add('hidden');
-            iDontKnowButton.classList.add('hidden');
-            nextCardButton.classList.add('hidden');
+            // Ensure main control buttons are visible during multiple choice.
+            iKnowButton.classList.remove('hidden');
+            iDontKnowButton.classList.remove('hidden');
+            nextCardButton.classList.remove('hidden');
             generateMultipleChoiceOptions();
         } else {
-            // This now handles 'none', 'multiple-choice', etc.
+            // This now handles 'none'
             writingPracticeContainer.classList.add('hidden');
             multipleChoiceContainer.classList.add('hidden');
             iKnowButton.classList.remove('hidden');
@@ -2517,14 +2555,32 @@ document.addEventListener('DOMContentLoaded', () => {
      * @param {KeyboardEvent} e - The keyboard event object.
      */
     function handleHotkeys(e) {
-        if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') {
+        if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT' || e.target.tagName === 'TEXTAREA') {
+            // Allow all keys to function normally in textareas
+            if (e.target.tagName === 'TEXTAREA') return;
+
             if (e.code === 'Enter' && writingPracticeContainer.classList.contains('hidden')) {
                 // Allow enter to submit forms in settings, etc.
                 return;
             }
             if (e.code !== 'Enter') {
-                return; // Only allow Enter key in inputs
+                return; // Only allow Enter key in inputs/selects
             }
+        }
+
+        const isMultipleChoiceActive = !multipleChoiceContainer.classList.contains('hidden') && !multipleChoiceContainer.classList.contains('answered');
+
+        // Handle numeric hotkeys for multiple choice
+        if (e.code.startsWith('Digit')) {
+            if (isMultipleChoiceActive) {
+                e.preventDefault();
+                const choiceIndex = parseInt(e.code.replace('Digit', ''), 10) - 1;
+                const buttons = multipleChoiceContainer.querySelectorAll('button');
+                if (choiceIndex >= 0 && choiceIndex < buttons.length) {
+                    buttons[choiceIndex].click();
+                }
+            }
+            return; // Consume the event so it doesn't do anything else
         }
 
 
@@ -2539,7 +2595,7 @@ document.addEventListener('DOMContentLoaded', () => {
             case 'Space':
                 e.preventDefault();
                 if (card && !card.classList.contains('flipped')) {
-                    flipCard();
+                    flipCard(); // flipCard now contains the logic for MC "I don't know"
                 }
                 break;
             case 'ArrowRight':
@@ -2548,22 +2604,16 @@ document.addEventListener('DOMContentLoaded', () => {
             case 'ArrowLeft':
                 showPrevCard();
                 break;
-            case 'KeyK': {
-                const skillConfig = getCurrentSkillConfig();
-                if (skillConfig && (!skillConfig.validationColumn || skillConfig.validationColumn === 'none')) {
-                    markCardAsKnown(true);
-                    showNextCard();
-                }
+            case 'KeyK':
+                // Allow 'k' to work anytime, even to override a multiple choice answer.
+                markCardAsKnown(true);
+                showNextCard();
                 break;
-            }
-            case 'KeyJ': {
-                const skillConfig = getCurrentSkillConfig();
-                if (skillConfig && (!skillConfig.validationColumn || skillConfig.validationColumn === 'none')) {
-                    markCardAsKnown(false);
-                    showNextCard({forceNew: true});
-                }
+            case 'KeyJ':
+                // Allow 'j' to work anytime.
+                markCardAsKnown(false);
+                showNextCard({forceNew: true});
                 break;
-            }
             case 'KeyF': {
                 const skillConfig = getCurrentSkillConfig();
                 if (!skillConfig) break;

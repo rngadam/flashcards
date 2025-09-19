@@ -872,12 +872,14 @@ button.danger:hover {
     display: flex;
     flex-wrap: wrap;
     justify-content: center;
-    gap: 10px;
+    gap: 15px; /* Increased gap for better spacing */
     position: absolute;
     bottom: 20px;
-    left: 0;
-    width: 100%;
-    padding: 0 20px;
+    left: 50%;
+    transform: translateX(-50%); /* Ensures true centering */
+    width: 90%; /* Max width of the container */
+    max-width: 800px; /* Prevents it from getting too wide on large screens */
+    padding: 0;
     box-sizing: border-box;
 }
 
@@ -886,9 +888,38 @@ button.danger:hover {
 }
 
 #multiple-choice-container button {
-    flex-grow: 1;
-    min-width: 40%;
+    flex-basis: calc(50% - 7.5px); /* Two buttons per row with gap. 7.5px is half of the 15px gap. */
+    flex-grow: 0; /* Prevent buttons from growing */
+    margin: 0;
+    padding: 12px; /* Smaller padding */
+    font-size: 1.1em; /* Smaller font size */
+    text-align: left;
+    display: flex;
+    align-items: center;
+    transition: background-color 0.3s, opacity 0.3s;
 }
+
+.mc-option-number {
+    display: inline-block;
+    width: 24px;
+    height: 24px;
+    line-height: 24px;
+    text-align: center;
+    border-radius: 50%;
+    background-color: rgba(0,0,0,0.1);
+    margin-right: 12px;
+    font-weight: bold;
+}
+
+/* Styles for when an answer has been selected */
+#multiple-choice-container.answered button:not(.correct):not(.incorrect) {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+#multiple-choice-container.answered button {
+    cursor: default;
+}
+
 
 #multiple-choice-container button.correct {
     background-color: #28a745;
