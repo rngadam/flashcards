@@ -506,18 +506,23 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const correctAnswer = cardData[currentCardIndex][validationColumnIndices[0]];
 
-        const options = [correctAnswer];
-        const numChoices = (configs[configSelector.value] || {}).multipleChoiceCount || 4;
+        const numChoices = parseInt((configs[configSelector.value] || {}).multipleChoiceCount || 4, 10);
 
-        while (options.length < numChoices) {
-            const randomIndex = Math.floor(Math.random() * cardData.length);
-            if (randomIndex === currentCardIndex) continue;
+        // Create a pool of unique distractors from all other cards.
+        const distractorPool = [...new Set(
+            cardData
+                .filter((_, index) => index !== currentCardIndex)
+                .map(card => card[validationColumnIndices[0]])
+                .filter(Boolean) // Filter out empty/null/undefined values
+        )];
 
-            const distractor = cardData[randomIndex][validationColumnIndices[0]];
-            if (distractor && !options.includes(distractor)) {
-                options.push(distractor);
-            }
-        }
+        shuffleArray(distractorPool);
+
+        // Combine the correct answer with a slice of the shuffled distractors.
+        const options = [
+            correctAnswer,
+            ...distractorPool.slice(0, numChoices - 1)
+        ];
 
         shuffleArray(options);
 
