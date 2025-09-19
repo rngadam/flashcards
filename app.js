@@ -520,23 +520,32 @@ document.addEventListener('DOMContentLoaded', () => {
         shuffleArray(options);
 
         multipleChoiceContainer.innerHTML = '';
-        options.forEach(option => {
+        multipleChoiceContainer.classList.remove('answered'); // Reset answered state
+        options.forEach((option, index) => {
             const button = document.createElement('button');
-            button.textContent = option;
+            // Store the raw option text in a data attribute for reliable checking
+            button.dataset.option = option;
+            button.innerHTML = `<span class="mc-option-number">${index + 1}</span> ${option}`;
             button.addEventListener('click', () => checkMultipleChoiceAnswer(option, correctAnswer));
             multipleChoiceContainer.appendChild(button);
         });
     }
 
     async function checkMultipleChoiceAnswer(selectedAnswer, correctAnswer) {
+        // If an answer has already been submitted, do nothing.
+        if (multipleChoiceContainer.classList.contains('answered')) return;
+
         const isCorrect = selectedAnswer === correctAnswer;
         await markCardAsKnown(isCorrect);
 
+        // Mark the container as answered to prevent further clicks and to change styling.
+        multipleChoiceContainer.classList.add('answered');
+
         Array.from(multipleChoiceContainer.children).forEach(button => {
-            button.disabled = true;
-            if (button.textContent === correctAnswer) {
+            // Use the data attribute for a reliable check
+            if (button.dataset.option === correctAnswer) {
                 button.classList.add('correct');
-            } else if (button.textContent === selectedAnswer) {
+            } else if (button.dataset.option === selectedAnswer) {
                 button.classList.add('incorrect');
             }
         });
@@ -544,7 +553,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!card.classList.contains('flipped')) {
             flipCard();
         }
-        nextCardButton.classList.remove('hidden');
+        // The main control buttons are now always visible during MC, so no need to show/hide them.
     }
 
     function applyFilter() {
@@ -1274,6 +1283,14 @@ document.addEventListener('DOMContentLoaded', () => {
     function flipCard() {
         if (!card) return;
 
+        // If flipping is attempted during an active (unanswered) multiple-choice question,
+        // treat it as "I don't know" and show the next card.
+        if (multipleChoiceContainer.classList.contains('visible') && !multipleChoiceContainer.classList.contains('answered')) {
+            markCardAsKnown(false);
+            showNextCard({ forceNew: true });
+            return;
+        }
+
         const skillConfig = getCurrentSkillConfig();
         if (!skillConfig) {
             console.error('Cannot flip card: no skill configured.');
@@ -1663,23 +1680,27 @@ document.addEventListener('DOMContentLoaded', () => {
             writingPracticeContainer.classList.remove('hidden');
             writingPracticeContainer.classList.toggle('audio-only-writing', isAudioOnly);
             multipleChoiceContainer.classList.add('hidden');
+            multipleChoiceContainer.classList.remove('visible');
             iKnowButton.classList.add('hidden');
             iDontKnowButton.classList.add('hidden');
             nextCardButton.classList.add('hidden');
             writingInput.value = '';
             writingInput.disabled = false;
             writingInput.focus();
-        } else if (skillConfig.verificationMethod === 'multipleChoice') {
+        } else if (skillConfig.verificationMethod === 'multiple-choice') {
             writingPracticeContainer.classList.add('hidden');
             multipleChoiceContainer.classList.remove('hidden');
-            iKnowButton.classList.add('hidden');
-            iDontKnowButton.classList.add('hidden');
-            nextCardButton.classList.add('hidden');
+            multipleChoiceContainer.classList.add('visible');
+            // Ensure main control buttons are visible during multiple choice.
+            iKnowButton.classList.remove('hidden');
+            iDontKnowButton.classList.remove('hidden');
+            nextCardButton.classList.remove('hidden');
             generateMultipleChoiceOptions();
         } else {
-            // This now handles 'none', 'multiple-choice', etc.
+            // This now handles 'none'
             writingPracticeContainer.classList.add('hidden');
             multipleChoiceContainer.classList.add('hidden');
+            multipleChoiceContainer.classList.remove('visible');
             iKnowButton.classList.remove('hidden');
             iDontKnowButton.classList.remove('hidden');
             nextCardButton.classList.remove('hidden');
@@ -2517,14 +2538,32 @@ document.addEventListener('DOMContentLoaded', () => {
      * @param {KeyboardEvent} e - The keyboard event object.
      */
     function handleHotkeys(e) {
-        if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') {
+        if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT' || e.target.tagName === 'TEXTAREA') {
+            // Allow all keys to function normally in textareas
+            if (e.target.tagName === 'TEXTAREA') return;
+
             if (e.code === 'Enter' && writingPracticeContainer.classList.contains('hidden')) {
                 // Allow enter to submit forms in settings, etc.
                 return;
             }
             if (e.code !== 'Enter') {
-                return; // Only allow Enter key in inputs
+                return; // Only allow Enter key in inputs/selects
             }
+        }
+
+        const isMultipleChoiceActive = multipleChoiceContainer.classList.contains('visible') && !multipleChoiceContainer.classList.contains('answered');
+
+        // Handle numeric hotkeys for multiple choice
+        if (e.type === 'keydown' && e.code.startsWith('Digit')) {
+            if (isMultipleChoiceActive) {
+                e.preventDefault();
+                const choiceIndex = parseInt(e.code.replace('Digit', ''), 10) - 1;
+                const buttons = multipleChoiceContainer.querySelectorAll('button');
+                if (choiceIndex >= 0 && choiceIndex < buttons.length) {
+                    buttons[choiceIndex].click();
+                }
+            }
+            return; // Consume the event so it doesn't do anything else
         }
 
 
@@ -2539,7 +2578,7 @@ document.addEventListener('DOMContentLoaded', () => {
             case 'Space':
                 e.preventDefault();
                 if (card && !card.classList.contains('flipped')) {
-                    flipCard();
+                    flipCard(); // flipCard now contains the logic for MC "I don't know"
                 }
                 break;
             case 'ArrowRight':
@@ -2548,22 +2587,16 @@ document.addEventListener('DOMContentLoaded', () => {
             case 'ArrowLeft':
                 showPrevCard();
                 break;
-            case 'KeyK': {
-                const skillConfig = getCurrentSkillConfig();
-                if (skillConfig && (!skillConfig.validationColumn || skillConfig.validationColumn === 'none')) {
-                    markCardAsKnown(true);
-                    showNextCard();
-                }
+            case 'KeyK':
+                // Allow 'k' to work anytime, even to override a multiple choice answer.
+                markCardAsKnown(true);
+                showNextCard();
                 break;
-            }
-            case 'KeyJ': {
-                const skillConfig = getCurrentSkillConfig();
-                if (skillConfig && (!skillConfig.validationColumn || skillConfig.validationColumn === 'none')) {
-                    markCardAsKnown(false);
-                    showNextCard({forceNew: true});
-                }
+            case 'KeyJ':
+                // Allow 'j' to work anytime.
+                markCardAsKnown(false);
+                showNextCard({forceNew: true});
                 break;
-            }
             case 'KeyF': {
                 const skillConfig = getCurrentSkillConfig();
                 if (!skillConfig) break;
