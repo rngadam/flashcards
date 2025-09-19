@@ -1,4 +1,4 @@
-import { franc, francAll } from 'https://cdn.jsdelivr.net/npm/franc@6.2.0/+esm';
+import { franc } from 'https://cdn.jsdelivr.net/npm/franc@6.2.0/+esm';
 import { eld } from 'https://cdn.jsdelivr.net/npm/efficient-language-detector-no-dynamic-import@1.0.3/+esm';
 import { get, set, del } from 'https://cdn.jsdelivr.net/npm/idb-keyval/+esm';
 import { getLenientString, transformSlashText } from './lib/string-utils.js';
@@ -76,26 +76,21 @@ document.addEventListener('DOMContentLoaded', () => {
     const resetStatsButton = document.getElementById('reset-stats');
     const dataUrlInput = document.getElementById('data-url');
     const columnRolesContainer = document.getElementById('column-roles-container');
-    const skillColumnConfigContainer = document.getElementById('skill-column-config-container');
     const fontSelector = document.getElementById('font-selector');
     const ttsRateSlider = document.getElementById('tts-rate');
     const ttsRateBaseSlider = document.getElementById('tts-rate-base');
-    const alternateUppercaseCheckbox = document.getElementById('alternate-uppercase');
     const disableAnimationCheckbox = document.getElementById('disable-animation');
     const audioOnlyFrontCheckbox = document.getElementById('audio-only-front');
-    const ttsOnHotkeyOnlyCheckbox = document.getElementById('tts-on-hotkey-only');
     const multipleChoiceCount = document.getElementById('multiple-choice-count');
     const configNameInput = document.getElementById('config-name');
     const skillSelectorCheckboxes = document.getElementById('skill-selector-checkboxes');
     const repetitionIntervalsTextarea = document.getElementById('repetition-intervals');
     const configSelector = document.getElementById('config-selector');
     const cardContainer = document.getElementById('card-container');
-    const cardStatsDisplay = document.getElementById('card-stats');
     const skillMasteryDashboard = document.getElementById('skill-mastery-dashboard');
     const cardSpecificStats = document.getElementById('card-specific-stats');
     const cardFront = document.querySelector('.card-front');
     const cardFrontContent = document.getElementById('card-front-content');
-    const cardBack = document.querySelector('.card-back');
     const cardBackContent = document.getElementById('card-back-content');
     const flipCardButton = document.getElementById('flip-card');
     const card = document.getElementById('card');
@@ -173,7 +168,6 @@ document.addEventListener('DOMContentLoaded', () => {
     let replayRate = 1.0; // Tracks the current playback rate for the 'f' key replay feature.
     let cardShownTimestamp = null; // Tracks when the card was shown to calculate response delay.
     let isCurrentCardDue = false; // Tracks if the current card was shown because it was due for review.
-    let isConfigDirty = false; // Tracks if the current config has unsaved changes.
     let columnLanguages = []; // Holds the detected language for each column.
     let activeFilterWords = new Set(); // Holds the words for the current filter.
 
@@ -378,10 +372,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const saveSkillButton = document.getElementById('save-skill-button');
     if (saveSkillButton) saveSkillButton.addEventListener('click', saveSkill);
 
-    function handleSettingsChange(e) {
+    function handleSettingsChange() {
         // This function can be called with or without an event object.
         // If called without an event, it's a programmatic way to mark the config as dirty.
-        isConfigDirty = true;
         if (saveConfigButton) saveConfigButton.disabled = false;
     }
 
@@ -423,7 +416,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const correctContent = document.createElement('div');
         let correctPointer = 0;
         diff.forEach(part => {
-             // We only care about parts that ended up in the correct answer
+            // We only care about parts that ended up in the correct answer
             if (part.removed) return;
 
             const span = document.createElement('span');
@@ -450,13 +443,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const skillConfig = getCurrentSkillConfig();
         if (!skillConfig || skillConfig.verificationMethod !== 'text') {
-            console.error("checkWritingAnswer called for a non-text verification skill.");
+            console.error('checkWritingAnswer called for a non-text verification skill.');
             return;
         }
 
         const validationRole = skillConfig.validationColumn;
         if (!validationRole || validationRole === 'none') {
-            console.error("checkWritingAnswer called but no validation column is configured.");
+            console.error('checkWritingAnswer called but no validation column is configured.');
             return;
         }
 
@@ -464,9 +457,9 @@ document.addEventListener('DOMContentLoaded', () => {
         const validationColumnIndices = roleToColumnMap[validationRole] || [];
 
         if (validationColumnIndices.length === 0) {
-             const message = `Cannot validate: No column is assigned the "${COLUMN_ROLES[validationRole]}" role.`;
-             showTopNotification(message);
-             return;
+            const message = `Cannot validate: No column is assigned the "${COLUMN_ROLES[validationRole]}" role.`;
+            showTopNotification(message);
+            return;
         }
 
         const correctAnswers = validationColumnIndices.map(index => cardData[currentCardIndex][index]);
@@ -491,7 +484,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const skillConfig = getCurrentSkillConfig();
         const validationRole = skillConfig.validationColumn;
         if (!validationRole || validationRole === 'none') {
-            console.error("generateMultipleChoiceOptions called but no validation column is configured.");
+            console.error('generateMultipleChoiceOptions called but no validation column is configured.');
             return;
         }
 
@@ -499,9 +492,9 @@ document.addEventListener('DOMContentLoaded', () => {
         const validationColumnIndices = roleToColumnMap[validationRole] || [];
 
         if (validationColumnIndices.length === 0) {
-             const message = `Cannot validate: No column is assigned the "${COLUMN_ROLES[validationRole]}" role.`;
-             showTopNotification(message);
-             return;
+            const message = `Cannot validate: No column is assigned the "${COLUMN_ROLES[validationRole]}" role.`;
+            showTopNotification(message);
+            return;
         }
 
         const correctAnswer = cardData[currentCardIndex][validationColumnIndices[0]];
@@ -622,7 +615,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     throw new Error(`HTTP error! status: ${response.status}`);
                 }
             } else {
-                 // Network request was successful
+                // Network request was successful
                 const text = await response.text();
                 await parseData(text);
                 updateCacheStatus(response);
@@ -644,23 +637,23 @@ document.addEventListener('DOMContentLoaded', () => {
                     const headers = new Headers(cachedResponse.headers);
                     headers.set('X-From-Cache', 'true');
                     const syntheticResponse = new Response(cachedResponse.body, {
-                      status: cachedResponse.status,
-                      statusText: cachedResponse.statusText,
-                      headers: headers
+                        status: cachedResponse.status,
+                        statusText: cachedResponse.statusText,
+                        headers: headers
                     });
                     updateCacheStatus(syntheticResponse);
 
                     if (settingsModal) settingsModal.classList.add('hidden');
                     document.body.classList.add('debug-data-loaded');
                 } else {
-                     const message = `Failed to load data: ${error.message}. No cached data available.`;
-                     console.error(message);
-                     showTopNotification(message);
+                    const message = `Failed to load data: ${error.message}. No cached data available.`;
+                    console.error(message);
+                    showTopNotification(message);
                 }
             } catch (cacheError) {
-                 const message = `Failed to load data from both network and cache: ${cacheError.message}`;
-                 console.error(message);
-                 showTopNotification(message);
+                const message = `Failed to load data from both network and cache: ${cacheError.message}`;
+                console.error(message);
+                showTopNotification(message);
             }
         }
     }
@@ -817,6 +810,7 @@ document.addEventListener('DOMContentLoaded', () => {
         columnRolesContainer.appendChild(rolesGrid);
     }
 
+    /* eslint-disable-next-line no-unused-vars */
     function autoConfigureSkills() {
         // 1. Read the current role assignments from the UI
         const columnRoles = {};
@@ -880,13 +874,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
             // Default validation settings
             switch (skillId) {
-                case 'LISTENING':
-                case 'WRITING':
-                    validationSelector.value = 'TARGET_LANGUAGE';
-                    break;
-                default:
-                    validationSelector.value = 'none';
-                    break;
+            case 'LISTENING':
+            case 'WRITING':
+                validationSelector.value = 'TARGET_LANGUAGE';
+                break;
+            default:
+                validationSelector.value = 'none';
+                break;
             }
         }
 
@@ -1147,7 +1141,7 @@ document.addEventListener('DOMContentLoaded', () => {
             renderSkillsList();
             populateSkillSelector();
             handleSettingsChange();
-            showTopNotification(`All skills have been deleted.`, 'success');
+            showTopNotification('All skills have been deleted.', 'success');
         }
     }
 
@@ -1282,7 +1276,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const skillConfig = getCurrentSkillConfig();
         if (!skillConfig) {
-            console.error("Cannot flip card: no skill configured.");
+            console.error('Cannot flip card: no skill configured.');
             return;
         }
 
@@ -1409,7 +1403,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         const intervalSeconds = repetitionIntervals[skillStats.intervalIndex];
         if (intervalSeconds === undefined) {
-             return { ms: Infinity, formatted: 'Learned' }; // Card is fully learned
+            return { ms: Infinity, formatted: 'Learned' }; // Card is fully learned
         }
         const dueDate = skillStats.lastViewed + (intervalSeconds * 1000);
         const timeToDueMs = dueDate - now;
@@ -1564,7 +1558,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const stats = await getSanitizedStats(cardKey);
 
         if (!isNavigatingBack && (index !== currentCardIndex || reason.skill !== currentSkillId)) {
-             viewHistory.push({ cardIndex: currentCardIndex, skillId: currentSkillId });
+            viewHistory.push({ cardIndex: currentCardIndex, skillId: currentSkillId });
         }
 
         currentCardIndex = index;
@@ -1573,7 +1567,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const skillConfig = getCurrentSkillConfig();
         if (!skillConfig) {
-            console.error("No skill config found for displayCard. Aborting.");
+            console.error('No skill config found for displayCard. Aborting.');
             // Potentially show a user-facing error here
             return;
         }
@@ -1635,30 +1629,30 @@ document.addEventListener('DOMContentLoaded', () => {
 
         renderSkillMastery(stats);
         if (lastSeen) lastSeen.textContent = `Last seen: ${formatTimeAgo(previousLastViewed)}`;
-        if (cardSpecificStats) cardSpecificStats.innerHTML = ``;
+        if (cardSpecificStats) cardSpecificStats.innerHTML = '';
 
         if (explanationMessage) {
             let message = '';
             explanationMessage.classList.remove('deck-learned-message');
             switch (reason.type) {
-                case 'due_review':
-                    message = `This card is due for its ${reason.expiredInterval} review. Next review in ${reason.nextInterval}.`;
-                    break;
-                case 'bridging_card':
-                    message = 'Introducing a card from a previous skill.';
-                    break;
-                case 'new_card':
-                    message = 'Introducing a new, unseen card.';
-                    break;
-                case 'least_learned':
-                    message = 'Reviewing card with the lowest score.';
-                    break;
-                case 'deck_learned':
-                    explanationMessage.classList.add('deck-learned-message');
-                    message = reason.timeToNextReview !== Infinity
-                        ? `Deck learned! Reviews are from ${formatTimeDifference(reason.timeToNextReview)} to ${formatTimeDifference(reason.timeToLastReview)}. Reviewing lowest-score cards until then.`
-                        : 'Congratulations, you have learned this whole deck!';
-                    break;
+            case 'due_review':
+                message = `This card is due for its ${reason.expiredInterval} review. Next review in ${reason.nextInterval}.`;
+                break;
+            case 'bridging_card':
+                message = 'Introducing a card from a previous skill.';
+                break;
+            case 'new_card':
+                message = 'Introducing a new, unseen card.';
+                break;
+            case 'least_learned':
+                message = 'Reviewing card with the lowest score.';
+                break;
+            case 'deck_learned':
+                explanationMessage.classList.add('deck-learned-message');
+                message = reason.timeToNextReview !== Infinity
+                    ? `Deck learned! Reviews are from ${formatTimeDifference(reason.timeToNextReview)} to ${formatTimeDifference(reason.timeToLastReview)}. Reviewing lowest-score cards until then.`
+                    : 'Congratulations, you have learned this whole deck!';
+                break;
             }
             explanationMessage.textContent = message;
             explanationMessage.classList.toggle('visible', !!message);
@@ -1802,7 +1796,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const userSkills = currentConfig ? currentConfig.skills : [];
 
         if (activeSkills.length === 0) {
-            showTopNotification("No active skills. Please select skills to practice in Settings.", "error");
+            showTopNotification('No active skills. Please select skills to practice in Settings.', 'error');
             return;
         }
 
@@ -1821,7 +1815,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         if (allReviewableItems.length === 0) {
-            showTopNotification("No cards to display.", "error");
+            showTopNotification('No cards to display.', 'error');
             return;
         }
 
@@ -1843,7 +1837,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     itemsToSelectFrom = filteredItems;
                     isFiltered = true;
                 } else {
-                    showTopNotification("No matching cards for the current filter.", "error");
+                    showTopNotification('No matching cards for the current filter.', 'error');
                     return;
                 }
             }
@@ -1855,7 +1849,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // 4. Handle overflow if the filtered set is learned
         if (!result && isFiltered && filterAllowOverflowCheckbox.checked) {
-            showTopNotification("Filtered set learned! Showing other cards.", "success");
+            showTopNotification('Filtered set learned! Showing other cards.', 'success');
             result = findNextCardFromList(allReviewableItems, findNextCardOptions);
         }
 
@@ -1866,8 +1860,8 @@ document.addEventListener('DOMContentLoaded', () => {
             currentSkillId = nextItem.skillId;
             await displayCard(currentCardIndex, { reason });
         } else {
-            const message = isFiltered ? "You have learned all cards in the filtered set!" : "You have learned all cards in the deck!";
-            showTopNotification(message, "success");
+            const message = isFiltered ? 'You have learned all cards in the filtered set!' : 'You have learned all cards in the deck!';
+            showTopNotification(message, 'success');
         }
     }
 
@@ -1877,7 +1871,7 @@ document.addEventListener('DOMContentLoaded', () => {
     async function showPrevCard() {
         if (viewHistory.length > 0) {
             const prevState = viewHistory.pop();
-            currentSkill = prevState.skill; // Restore the skill for that card
+            currentSkillId = prevState.skillId; // Restore the skill for that card
             await displayCard(prevState.cardIndex, { isNavigatingBack: true });
         }
     }
@@ -2076,7 +2070,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (keyIndices.length === 0) {
             // This should be prevented by validation in saveConfig, but as a fallback:
-            console.error("No Target Language column set for getCardKey!");
+            console.error('No Target Language column set for getCardKey!');
             return `invalid-card-${Math.random()}`;
         }
         const keyIndex = keyIndices[0]; // Use the first one
@@ -2221,17 +2215,16 @@ document.addEventListener('DOMContentLoaded', () => {
         if (configTitle) configTitle.textContent = configName;
         if (deckTitle) deckTitle.textContent = configName;
         showTopNotification(`Configuration '${configName}' saved!`, 'success');
-        isConfigDirty = false;
         if (saveConfigButton) saveConfigButton.disabled = true;
     }
 
     async function resetDeckStats() {
         if (cardData.length === 0) {
-            showTopNotification("No deck is loaded. Please load a deck first.");
+            showTopNotification('No deck is loaded. Please load a deck first.');
             return;
         }
 
-        const confirmation = confirm("Are you sure you want to reset all statistics for every card in the current deck? This action cannot be undone.");
+        const confirmation = confirm('Are you sure you want to reset all statistics for every card in the current deck? This action cannot be undone.');
         if (!confirmation) {
             return;
         }
@@ -2239,14 +2232,14 @@ document.addEventListener('DOMContentLoaded', () => {
         try {
             const promises = cardData.map(card => del(getCardKey(card)));
             await Promise.all(promises);
-            showTopNotification("Statistics for the current deck have been reset.", 'success');
+            showTopNotification('Statistics for the current deck have been reset.', 'success');
             // Optionally, reload the current card to show its stats are reset
             if (currentCardIndex >= 0) {
                 await displayCard(currentCardIndex);
             }
         } catch (error) {
-            console.error("Failed to reset deck statistics:", error);
-            showTopNotification("An error occurred while trying to reset the deck statistics.");
+            console.error('Failed to reset deck statistics:', error);
+            showTopNotification('An error occurred while trying to reset the deck statistics.');
         }
     }
 
@@ -2342,7 +2335,6 @@ document.addEventListener('DOMContentLoaded', () => {
         if (cardData.length > 0) {
             showNextCard();
         }
-        isConfigDirty = false;
         if (saveConfigButton) saveConfigButton.disabled = true;
     }
 
@@ -2384,10 +2376,10 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         } catch (error) {
             // If anything goes wrong with IndexedDB, show the settings modal as a fallback.
-            console.error("Error loading initial configs from IndexedDB:", error);
+            console.error('Error loading initial configs from IndexedDB:', error);
             document.body.style.backgroundColor = 'red'; // Visual indicator of an error
             if (settingsModal) {
-                 settingsModal.classList.remove('hidden');
+                settingsModal.classList.remove('hidden');
             }
         }
     }
@@ -2449,7 +2441,7 @@ document.addEventListener('DOMContentLoaded', () => {
      * @param {string} [options.lang] - The BCP 47 language code.
      * @param {string} [options.ttsRole] - The role of the content being spoken (e.g., 'BASE_LANGUAGE').
      */
-function speak(text, { rate, lang, ttsRole } = {}) {
+    function speak(text, { rate, lang, ttsRole } = {}) {
         if (!('speechSynthesis' in window) || speechSynthesis.speaking || !text) {
             return;
         }
@@ -2460,16 +2452,16 @@ function speak(text, { rate, lang, ttsRole } = {}) {
 
         const utterance = new SpeechSynthesisUtterance(sanitizedText);
 
-    // The language is now passed in directly.
-    const finalLang = lang || 'en'; // Default to English if not provided
-    console.log(`Using language: ${finalLang} for text: "${sanitizedText.substring(0, 30)}..."`);
+        // The language is now passed in directly.
+        const finalLang = lang || 'en'; // Default to English if not provided
+        console.log(`Using language: ${finalLang} for text: "${sanitizedText.substring(0, 30)}..."`);
 
 
         // Display detected language on the card
         const isFlipped = card.classList.contains('flipped');
         const displayer = isFlipped ? ttsLangDisplayBack : ttsLangDisplayFront;
         if (displayer) {
-            // Clear both displays immediately when speaking starts
+        // Clear both displays immediately when speaking starts
             if(ttsLangDisplayFront) ttsLangDisplayFront.textContent = '';
             if(ttsLangDisplayBack) ttsLangDisplayBack.textContent = '';
 
@@ -2485,10 +2477,10 @@ function speak(text, { rate, lang, ttsRole } = {}) {
             }
         }
 
-    // Find a suitable voice.
-    let voice = voices.find(v => v.lang === finalLang);
+        // Find a suitable voice.
+        let voice = voices.find(v => v.lang === finalLang);
         if (!voice) {
-        voice = voices.find(v => v.lang.startsWith(finalLang));
+            voice = voices.find(v => v.lang.startsWith(finalLang));
         }
         if (!voice) {
             voice = voices.find(v => v.default);
@@ -2496,22 +2488,25 @@ function speak(text, { rate, lang, ttsRole } = {}) {
 
         if (voice) {
             utterance.voice = voice;
-        utterance.lang = voice.lang;
+            utterance.lang = voice.lang;
         }
 
-    // Determine the rate
-    let finalRate;
-    if (rate) {
-        finalRate = rate;
-    } else if (ttsRole === 'BASE_LANGUAGE' && ttsRateBaseSlider) {
-        finalRate = ttsRateBaseSlider.value;
-    } else if (ttsRateSlider) {
-        finalRate = ttsRateSlider.value;
-    } else {
-        finalRate = 1;
-    }
+        // Determine the rate
+        let finalRate;
+        if (rate) {
+            finalRate = rate;
+        } else if (ttsRole === 'BASE_LANGUAGE' && ttsRateBaseSlider) {
+            finalRate = ttsRateBaseSlider.value;
+        } else if (ttsRateSlider) {
+            finalRate = ttsRateSlider.value;
+        } else {
+            finalRate = 1;
+        }
 
-    utterance.rate = finalRate;
+        utterance.rate = finalRate;
+
+        // Prevent speech queue conflicts and browser crashes
+        window.speechSynthesis.cancel();
         window.speechSynthesis.speak(utterance);
     }
 
@@ -2524,8 +2519,8 @@ function speak(text, { rate, lang, ttsRole } = {}) {
     function handleHotkeys(e) {
         if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') {
             if (e.code === 'Enter' && writingPracticeContainer.classList.contains('hidden')) {
-                 // Allow enter to submit forms in settings, etc.
-                 return;
+                // Allow enter to submit forms in settings, etc.
+                return;
             }
             if (e.code !== 'Enter') {
                 return; // Only allow Enter key in inputs
@@ -2534,63 +2529,63 @@ function speak(text, { rate, lang, ttsRole } = {}) {
 
 
         switch(e.type) {
-            case 'keydown':
-                switch(e.code) {
-                    case 'Enter':
-                        if (!nextCardButton.classList.contains('hidden')) {
-                            showNextCard();
-                        }
-                        break;
-                    case 'Space':
-                        e.preventDefault();
-                        if (card && !card.classList.contains('flipped')) {
-                            flipCard();
-                        }
-                        break;
-                    case 'ArrowRight':
-                        showNextCard();
-                        break;
-                    case 'ArrowLeft':
-                        showPrevCard();
-                        break;
-                    case 'KeyK': {
-                        const skillConfig = getCurrentSkillConfig();
-                        if (skillConfig && (!skillConfig.validationColumn || skillConfig.validationColumn === 'none')) {
-                            markCardAsKnown(true);
-                            showNextCard();
-                        }
-                        break;
-                    }
-                    case 'KeyJ': {
-                        const skillConfig = getCurrentSkillConfig();
-                        if (skillConfig && (!skillConfig.validationColumn || skillConfig.validationColumn === 'none')) {
-                            markCardAsKnown(false);
-                            showNextCard({forceNew: true});
-                        }
-                        break;
-                    }
-                    case 'KeyF': {
-                        const skillConfig = getCurrentSkillConfig();
-                        if (!skillConfig) break;
-                        const text = card.classList.contains('flipped') ? textForBackTTS : textForFrontTTS;
-                        const role = card.classList.contains('flipped') ? skillConfig.ttsBackColumn : skillConfig.ttsFrontColumn;
-                        const lang = getLanguageForTts(role);
-                        replayRate = Math.max(0.1, replayRate - 0.2);
-                        speak(text, { rate: replayRate, ttsRole: role, lang: lang });
-                        break;
-                    }
+        case 'keydown':
+            switch(e.code) {
+            case 'Enter':
+                if (!nextCardButton.classList.contains('hidden')) {
+                    showNextCard();
                 }
                 break;
-            case 'keyup':
-                switch(e.code) {
-                    case 'Space':
-                        e.preventDefault();
-                        if (card && card.classList.contains('flipped')) {
-                            flipCard();
-                        }
-                        break;
+            case 'Space':
+                e.preventDefault();
+                if (card && !card.classList.contains('flipped')) {
+                    flipCard();
                 }
                 break;
+            case 'ArrowRight':
+                showNextCard();
+                break;
+            case 'ArrowLeft':
+                showPrevCard();
+                break;
+            case 'KeyK': {
+                const skillConfig = getCurrentSkillConfig();
+                if (skillConfig && (!skillConfig.validationColumn || skillConfig.validationColumn === 'none')) {
+                    markCardAsKnown(true);
+                    showNextCard();
+                }
+                break;
+            }
+            case 'KeyJ': {
+                const skillConfig = getCurrentSkillConfig();
+                if (skillConfig && (!skillConfig.validationColumn || skillConfig.validationColumn === 'none')) {
+                    markCardAsKnown(false);
+                    showNextCard({forceNew: true});
+                }
+                break;
+            }
+            case 'KeyF': {
+                const skillConfig = getCurrentSkillConfig();
+                if (!skillConfig) break;
+                const text = card.classList.contains('flipped') ? textForBackTTS : textForFrontTTS;
+                const role = card.classList.contains('flipped') ? skillConfig.ttsBackColumn : skillConfig.ttsFrontColumn;
+                const lang = getLanguageForTts(role);
+                replayRate = Math.max(0.1, replayRate - 0.2);
+                speak(text, { rate: replayRate, ttsRole: role, lang: lang });
+                break;
+            }
+            }
+            break;
+        case 'keyup':
+            switch(e.code) {
+            case 'Space':
+                e.preventDefault();
+                if (card && card.classList.contains('flipped')) {
+                    flipCard();
+                }
+                break;
+            }
+            break;
         }
     }
 
@@ -2615,7 +2610,7 @@ function speak(text, { rate, lang, ttsRole } = {}) {
         card.style.transform = `translate(${diffX}px, ${diffY}px) rotate(${diffX / 20}deg)`;
     }
 
-    function dragEnd(e) {
+    function dragEnd() {
         if (!isDragging) return;
         isDragging = false;
 
