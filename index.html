@@ -170,9 +170,12 @@
                 <input type="checkbox" id="enable-filter-settings-checkbox">
                 <label for="enable-filter-settings-checkbox">Enable Filter</label>
             </div>
-            <div class="setting">
+            <div class="setting" id="filter-text-container">
                 <label for="filter-text">Text to Filter by:</label>
-                <textarea id="filter-text" rows="5" placeholder="Paste text here..."></textarea>
+                <div class="highlight-container">
+                    <div id="filter-highlight-layer" class="highlight-layer"></div>
+                    <textarea id="filter-text" rows="5" placeholder="Paste text here..."></textarea>
+                </div>
                 <small>The deck will only show cards where the 'Target Language' column contains a word from this text.</small>
             </div>
             <div class="setting">

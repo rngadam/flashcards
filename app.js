@@ -107,6 +107,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const enableFilterCheckbox = document.getElementById('enable-filter-checkbox');
     const enableFilterSettingsCheckbox = document.getElementById('enable-filter-settings-checkbox');
     const filterIntersectionInfo = document.getElementById('filter-intersection-info');
+    const filterHighlightLayer = document.getElementById('filter-highlight-layer');
     const writingPracticeContainer = document.getElementById('writing-practice-container');
     const writingInput = document.getElementById('writing-input');
     const writingSubmit = document.getElementById('writing-submit');
@@ -309,15 +310,22 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (applyFilterButton) applyFilterButton.addEventListener('click', applyFilter);
     if (clearFilterButton) clearFilterButton.addEventListener('click', clearFilter);
-    if (filterTextarea) filterTextarea.addEventListener('input', updateFilterIntersectionInfo);
-    if (enableFilterCheckbox) enableFilterCheckbox.addEventListener('change', () => {
-        setFilterEnabled(enableFilterCheckbox.checked);
+    if (filterTextarea) {
+        filterTextarea.addEventListener('input', updateFilterHighlights);
+        filterTextarea.addEventListener('scroll', () => {
+            if (filterHighlightLayer) {
+                filterHighlightLayer.scrollTop = filterTextarea.scrollTop;
+                filterHighlightLayer.scrollLeft = filterTextarea.scrollLeft;
+            }
+        });
+    }
+    function handleFilterToggle(event) {
+        setFilterEnabled(event.target.checked);
         showNextCard();
-    });
-    if (enableFilterSettingsCheckbox) enableFilterSettingsCheckbox.addEventListener('change', () => {
-        setFilterEnabled(enableFilterSettingsCheckbox.checked);
-        showNextCard();
-    });
+    }
+
+    if (enableFilterCheckbox) enableFilterCheckbox.addEventListener('change', handleFilterToggle);
+    if (enableFilterSettingsCheckbox) enableFilterSettingsCheckbox.addEventListener('change', handleFilterToggle);
 
     const handleSlowReplay = () => {
         const skillConfig = getCurrentSkillConfig();
@@ -597,25 +605,42 @@ document.addEventListener('DOMContentLoaded', () => {
         return deckWords;
     }
 
-    function updateFilterIntersectionInfo() {
-        if (!filterTextarea || !filterIntersectionInfo) return;
+function getHighlightHTML(text, intersection) {
+    // Escape HTML to prevent XSS and then highlight
+    const escapedText = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    const highlightedHtml = escapedText.replace(/[\p{L}\p{N}]+/gu, (word) => {
+        if (intersection.has(word.toLowerCase())) {
+            return `<span class="match">${word}</span>`;
+        }
+        return word;
+    });
+    return highlightedHtml;
+}
+
+function updateFilterHighlights() {
+    if (!filterTextarea || !filterHighlightLayer || !filterIntersectionInfo) return;
 
         const text = filterTextarea.value;
         if (!text.trim()) {
+        filterHighlightLayer.innerHTML = '';
             filterIntersectionInfo.textContent = 'Enter text to see matching words.';
             return;
         }
 
         const deckWords = getDeckWords();
         if (deckWords.size === 0) {
+        filterHighlightLayer.innerHTML = '';
             filterIntersectionInfo.textContent = 'Load a deck to see matching words.';
             return;
         }
 
-        const filterWords = new Set(text.toLowerCase().match(/[\p{L}\p{N}]+/gu));
+    const filterWords = new Set((text.toLowerCase().match(/[\p{L}\p{N}]+/gu) || []));
         const intersection = new Set([...deckWords].filter(word => filterWords.has(word)));
 
-        filterIntersectionInfo.textContent = `Found ${intersection.size} matching words in the deck.`;
+    const highlightedHtml = getHighlightHTML(text, intersection);
+
+    filterHighlightLayer.innerHTML = highlightedHtml;
+    filterIntersectionInfo.textContent = `Found ${intersection.size} matching words in the deck. Words: ${[...intersection].join(', ')}`;
     }
 
 
@@ -631,7 +656,8 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         // The words are now parsed and stored. The actual filtering happens in showNextCard.
-        const words = new Set(text.match(/[\p{L}\p{N}]+/gu).map(w => w.toLowerCase()));
+        const wordsArray = text.match(/[\p{L}\p{N}]+/gu) || [];
+        const words = new Set(wordsArray.map(w => w.toLowerCase()));
         activeFilterWords = words;
         setFilterEnabled(true); // Applying a filter should enable it.
         showTopNotification(`Filter applied. Found ${words.size} unique words.`, 'success');
@@ -1936,7 +1962,6 @@ document.addEventListener('DOMContentLoaded', () => {
             if (keyIndices.length === 1) {
                 const keyIndex = keyIndices[0];
                 // The deck words are now split, so we need to check if any word in the card's target field is in the filter
-                const deckWords = getDeckWords();
                 filteredItems = allReviewableItems.filter(item => {
                     const cardText = cardData[item.cardIndex][keyIndex]?.toLowerCase();
                     if (!cardText) return false;
