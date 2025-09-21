@@ -1,6 +1,6 @@
 import { franc } from 'https://cdn.jsdelivr.net/npm/franc@6.2.0/+esm';
 import { eld } from 'https://cdn.jsdelivr.net/npm/efficient-language-detector-no-dynamic-import@1.0.3/+esm';
-import { get, set, del } from 'https://cdn.jsdelivr.net/npm/idb-keyval/+esm';
+import { get, set, del, keys } from 'https://cdn.jsdelivr.net/npm/idb-keyval/+esm';
 import { getLenientString, transformSlashText } from './lib/string-utils.js';
 import { Skill, createSkillId, createSkill, VERIFICATION_METHODS } from './lib/skill-utils.js';
 
@@ -355,6 +355,26 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const exportSkillsButton = document.getElementById('export-skills-button');
     if (exportSkillsButton) exportSkillsButton.addEventListener('click', exportSkills);
+
+    const exportAllDataButton = document.getElementById('export-all-data-button');
+    if (exportAllDataButton) exportAllDataButton.addEventListener('click', exportAllData);
+
+    const importAllDataButton = document.getElementById('import-all-data-button');
+    const importFileInput = document.getElementById('import-file-input');
+
+    if (importAllDataButton) {
+        importAllDataButton.addEventListener('click', () => {
+            importFileInput.click();
+        });
+    }
+    if (importFileInput) {
+        importFileInput.addEventListener('change', (event) => {
+            const file = event.target.files[0];
+            if (file) {
+                importAllData(file);
+            }
+        });
+    }
 
     const deleteAllSkillsButton = document.getElementById('delete-all-skills-button');
     if (deleteAllSkillsButton) deleteAllSkillsButton.addEventListener('click', deleteAllSkills);
@@ -1362,6 +1382,155 @@ document.addEventListener('DOMContentLoaded', () => {
         URL.revokeObjectURL(url);
 
         showTopNotification('Skills exported successfully.', 'success');
+    }
+
+    async function exportAllData() {
+        try {
+            showTopNotification('Exporting all data... this may take a moment.', 'success');
+
+            const allKeys = await keys();
+            const dataToExport = {
+                version: 1,
+                exportDate: new Date().toISOString(),
+                configs: null,
+                cardStats: {}
+            };
+
+            const dataPromises = allKeys.map(async (key) => {
+                const value = await get(key);
+                return { key, value };
+            });
+
+            const allData = await Promise.all(dataPromises);
+
+            allData.forEach(({ key, value }) => {
+                if (key === 'flashcard-configs') {
+                    dataToExport.configs = value;
+                } else if (key !== 'flashcard-last-config') {
+                    dataToExport.cardStats[key] = value;
+                }
+            });
+
+            const jsonString = JSON.stringify(dataToExport, null, 2);
+            const blob = new Blob([jsonString], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+
+            const now = new Date();
+            const year = now.getFullYear();
+            const month = String(now.getMonth() + 1).padStart(2, '0');
+            const day = String(now.getDate()).padStart(2, '0');
+            const hours = String(now.getHours()).padStart(2, '0');
+            const minutes = String(now.getMinutes()).padStart(2, '0');
+            a.download = `flashcards-backup-${year}-${month}-${day}-${hours}${minutes}.json`;
+
+            a.href = url;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+
+            showTopNotification('All data exported successfully!', 'success');
+        } catch (error) {
+            console.error('Failed to export all data:', error);
+            showTopNotification(`Error exporting data: ${error.message}`, 'error');
+        }
+    }
+
+    async function importAllData(file) {
+        const reader = new FileReader();
+        reader.onload = async (event) => {
+            try {
+                const json = event.target.result;
+                const data = JSON.parse(json);
+
+                if (!data.version || !data.configs || !data.cardStats) {
+                    throw new Error('Invalid backup file format.');
+                }
+
+                const confirmation = confirm(
+                    'Are you sure you want to import this backup? ' +
+                    'This will overwrite all existing configurations and merge card statistics. ' +
+                    'This action cannot be undone.'
+                );
+
+                if (!confirmation) {
+                    showTopNotification('Import cancelled.', 'success');
+                    return;
+                }
+
+                showTopNotification('Importing data... please wait.', 'success');
+
+                // Overwrite configs
+                await set('flashcard-configs', data.configs);
+
+                // Optimized card stat merging
+                const cardKeys = Object.keys(data.cardStats);
+                const existingStatsPromises = cardKeys.map(key => get(key));
+                const existingStatsList = await Promise.all(existingStatsPromises);
+
+                const writePromises = [];
+                for (let i = 0; i < cardKeys.length; i++) {
+                    const cardKey = cardKeys[i];
+                    const importedStats = data.cardStats[cardKey];
+                    const existingStats = existingStatsList[i];
+
+                    if (existingStats) {
+                        const mergedStats = mergeCardStats(existingStats, importedStats);
+                        writePromises.push(set(cardKey, mergedStats));
+                    } else {
+                        writePromises.push(set(cardKey, importedStats));
+                    }
+                }
+                await Promise.all(writePromises);
+
+                showTopNotification('Import successful! The application will now reload.', 'success');
+
+                // Reload the application to apply changes
+                setTimeout(() => {
+                    window.location.reload();
+                }, 2000);
+
+            } catch (error) {
+                console.error('Failed to import data:', error);
+                showTopNotification(`Error importing data: ${error.message}`, 'error');
+            } finally {
+                // Reset file input so the same file can be selected again
+                importFileInput.value = '';
+            }
+        };
+        reader.readAsText(file);
+    }
+
+    function mergeCardStats(existing, imported) {
+        // Ensure both stats objects have the 'skills' property
+        if (!existing.skills) existing.skills = {};
+        if (!imported.skills) return existing; // Nothing to merge from
+
+        for (const skillId in imported.skills) {
+            const importedSkill = imported.skills[skillId];
+            const existingSkill = existing.skills[skillId];
+
+            if (existingSkill) {
+                // Merge arrays, avoiding duplicates
+                existingSkill.successTimestamps = [...new Set([...existingSkill.successTimestamps, ...importedSkill.successTimestamps])].sort((a, b) => a - b);
+                existingSkill.failureTimestamps = [...new Set([...existingSkill.failureTimestamps, ...importedSkill.failureTimestamps])].sort((a, b) => a - b);
+                existingSkill.responseDelays = [...(existingSkill.responseDelays || []), ...(importedSkill.responseDelays || [])];
+
+                // Sum view counts
+                existingSkill.viewCount = (existingSkill.viewCount || 0) + (importedSkill.viewCount || 0);
+
+                // Take the more recent lastViewed timestamp
+                existingSkill.lastViewed = Math.max(existingSkill.lastViewed || 0, importedSkill.lastViewed || 0);
+
+                // Take the higher intervalIndex
+                existingSkill.intervalIndex = Math.max(existingSkill.intervalIndex || 0, importedSkill.intervalIndex || 0);
+            } else {
+                // If the skill doesn't exist on the existing card, add it
+                existing.skills[skillId] = importedSkill;
+            }
+        }
+        return existing;
     }
 
 
