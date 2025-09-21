@@ -95,7 +95,14 @@ describe('getHighlightHTML', () => {
         const text = '<script>alert("xss")</script> & some text';
         const intersection = new Set(['script', 'text']);
         const result = getHighlightHTML(text, intersection);
-        expect(result).to.equal('&lt;<span class="match">script</span>&gt;alert("xss")&lt;/<span class="match">script</span>&gt; &amp; some <span class="match">text</span>');
+        expect(result).to.equal('&lt;<span class="match">script</span>&gt;alert(&quot;xss&quot;)&lt;/<span class="match">script</span>&gt; &amp; some <span class="match">text</span>');
+    });
+
+    it('(Security) should correctly escape single and double quotes', () => {
+        const text = `it's a "quote"`;
+        const intersection = new Set(['quote']);
+        const result = getHighlightHTML(text, intersection);
+        expect(result).to.equal('it&#039;s a &quot;<span class="match">quote</span>&quot;');
     });
 
     it('(Case Insensitivity) should match words regardless of their case', () => {
