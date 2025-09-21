@@ -99,7 +99,7 @@ describe('getHighlightHTML', () => {
     });
 
     it('(Security) should correctly escape single and double quotes', () => {
-        const text = `it's a "quote"`;
+        const text = 'it\'s a "quote"';
         const intersection = new Set(['quote']);
         const result = getHighlightHTML(text, intersection);
         expect(result).to.equal('it&#039;s a &quot;<span class="match">quote</span>&quot;');
