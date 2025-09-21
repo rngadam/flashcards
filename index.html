@@ -110,6 +110,7 @@
           <button class="tab-button" id="skills-tab" data-tab="skills-settings" role="tab" aria-controls="skills-settings" aria-selected="false">Skills</button>
           <button class="tab-button" id="advanced-tab" data-tab="advanced-settings" role="tab" aria-controls="advanced-settings" aria-selected="false">Advanced</button>
           <button class="tab-button" id="filter-tab" data-tab="filter-settings" role="tab" aria-controls="filter-settings" aria-selected="false">Filter</button>
+          <button class="tab-button" id="backup-tab" data-tab="backup-settings" role="tab" aria-controls="backup-settings" aria-selected="false">Backup</button>
           <button class="tab-button" id="dangerous-tab" data-tab="dangerous-settings" role="tab" aria-controls="dangerous-settings" aria-selected="false">Dangerous</button>
         </div>
 
@@ -191,16 +192,19 @@
             </div>
         </div>
 
-        <div id="dangerous-settings" class="tab-panel" role="tabpanel" aria-labelledby="dangerous-tab">
-            <div class="setting">
-                <p>This action cannot be undone.</p>
-                <button id="reset-stats" class="danger">Reset Current Deck Stats</button>
-            </div>
+        <div id="backup-settings" class="tab-panel" role="tabpanel" aria-labelledby="backup-tab">
             <div class="setting">
                 <p>Save or load a full backup of all configurations and card statistics.</p>
                 <button id="export-all-data-button">Export All Data</button>
                 <button id="import-all-data-button">Import from Backup</button>
                 <input type="file" id="import-file-input" accept=".json" style="display: none;">
+            </div>
+        </div>
+
+        <div id="dangerous-settings" class="tab-panel" role="tabpanel" aria-labelledby="dangerous-tab">
+            <div class="setting">
+                <p>This action cannot be undone.</p>
+                <button id="reset-stats" class="danger">Reset Current Deck Stats</button>
             </div>
         </div>
 

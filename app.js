@@ -1396,15 +1396,20 @@ document.addEventListener('DOMContentLoaded', () => {
                 cardStats: {}
             };
 
-            for (const key of allKeys) {
+            const dataPromises = allKeys.map(async (key) => {
                 const value = await get(key);
+                return { key, value };
+            });
+
+            const allData = await Promise.all(dataPromises);
+
+            allData.forEach(({ key, value }) => {
                 if (key === 'flashcard-configs') {
                     dataToExport.configs = value;
                 } else if (key !== 'flashcard-last-config') {
-                    // Avoid exporting the 'last-config' key as it's session-specific
                     dataToExport.cardStats[key] = value;
                 }
-            }
+            });
 
             const jsonString = JSON.stringify(dataToExport, null, 2);
             const blob = new Blob([jsonString], { type: 'application/json' });
@@ -1459,18 +1464,25 @@ document.addEventListener('DOMContentLoaded', () => {
                 // Overwrite configs
                 await set('flashcard-configs', data.configs);
 
-                // Merge card stats
-                for (const cardKey in data.cardStats) {
+                // Optimized card stat merging
+                const cardKeys = Object.keys(data.cardStats);
+                const existingStatsPromises = cardKeys.map(key => get(key));
+                const existingStatsList = await Promise.all(existingStatsPromises);
+
+                const writePromises = [];
+                for (let i = 0; i < cardKeys.length; i++) {
+                    const cardKey = cardKeys[i];
                     const importedStats = data.cardStats[cardKey];
-                    const existingStats = await get(cardKey);
+                    const existingStats = existingStatsList[i];
 
                     if (existingStats) {
                         const mergedStats = mergeCardStats(existingStats, importedStats);
-                        await set(cardKey, mergedStats);
+                        writePromises.push(set(cardKey, mergedStats));
                     } else {
-                        await set(cardKey, importedStats);
+                        writePromises.push(set(cardKey, importedStats));
                     }
                 }
+                await Promise.all(writePromises);
 
                 showTopNotification('Import successful! The application will now reload.', 'success');
 
@@ -1501,8 +1513,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
             if (existingSkill) {
                 // Merge arrays, avoiding duplicates
-                existingSkill.successTimestamps = [...new Set([...existingSkill.successTimestamps, ...importedSkill.successTimestamps])].sort();
-                existingSkill.failureTimestamps = [...new Set([...existingSkill.failureTimestamps, ...importedSkill.failureTimestamps])].sort();
+                existingSkill.successTimestamps = [...new Set([...existingSkill.successTimestamps, ...importedSkill.successTimestamps])].sort((a, b) => a - b);
+                existingSkill.failureTimestamps = [...new Set([...existingSkill.failureTimestamps, ...importedSkill.failureTimestamps])].sort((a, b) => a - b);
                 existingSkill.responseDelays = [...(existingSkill.responseDelays || []), ...(importedSkill.responseDelays || [])];
 
                 // Sum view counts
