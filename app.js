@@ -393,6 +393,26 @@ document.addEventListener('DOMContentLoaded', () => {
                 deleteSkill(skillId);
             }
         });
+
+        Sortable.create(skillsList, {
+            animation: 150,
+            onEnd: function (evt) {
+                const currentConfigName = configSelector.value;
+                const currentConfig = configs[currentConfigName];
+                if (!currentConfig || !currentConfig.skills) return;
+
+                // The evt.oldIndex and evt.newIndex are what we need.
+                // Get the skill that was moved
+                const movedSkill = currentConfig.skills.splice(evt.oldIndex, 1)[0];
+                // Re-insert it at the new index
+                currentConfig.skills.splice(evt.newIndex, 0, movedSkill);
+
+
+                // Mark the configuration as changed and refresh UI that depends on skill order
+                handleSettingsChange();
+                populateSkillSelector();
+            }
+        });
     }
 
     const closeSkillConfigButton = document.getElementById('close-skill-config-button');
