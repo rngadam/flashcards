@@ -404,6 +404,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 // The evt.oldIndex and evt.newIndex are what we need.
                 // Get the skill that was moved
                 const movedSkill = currentConfig.skills.splice(evt.oldIndex, 1)[0];
+                if (!movedSkill) return; // Guard against undefined skill
                 // Re-insert it at the new index
                 currentConfig.skills.splice(evt.newIndex, 0, movedSkill);
 
