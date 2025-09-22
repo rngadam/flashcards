@@ -778,11 +778,6 @@ button.danger:hover {
     z-index: 10;
 }
 
-#writing-practice-container.audio-only-writing {
-    align-items: center; /* Center vertically for audio-only */
-    height: 100%;
-    bottom: 0;
-}
 
 #writing-practice-container.hidden {
     display: none;
