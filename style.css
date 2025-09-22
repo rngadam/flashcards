@@ -23,15 +23,15 @@ body.is-flipping {
   align-items: center;
   padding: 10px;
   box-sizing: border-box;
+  gap: 20px;
 }
 
-#config-title {
-  margin: 0;
-  font-size: 2em;
-  font-weight: bold;
-  text-transform: uppercase;
-  flex-grow: 1;
-  text-align: center;
+#top-left-controls {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    flex-grow: 1;
+    overflow: hidden;
 }
 
 #settings-button, #help-button, #history-button {
@@ -92,14 +92,36 @@ body.desktop .desktop-only-buttons {
     align-items: center;
 }
 /* Mobile First (Default) */
-.desktop-only-buttons {
+.desktop-only-buttons,
+#top-left-controls {
     display: none;
 }
 #hamburger-menu {
     display: block;
 }
+#mobile-skill-selector-container {
+    display: block;
+    padding-bottom: 15px;
+    border-bottom: 1px solid #eee;
+    margin-bottom: 15px;
+}
+#mobile-skill-selector-container label {
+    font-weight: bold;
+    display: block;
+    margin-bottom: 10px;
+}
+#mobile-skill-selector-checkboxes,
+#mobile-skill-selector-filter {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
 
 /* Desktop Overrides */
+body.desktop #top-left-controls {
+    display: flex;
+}
 body.desktop .desktop-only-buttons {
     display: flex;
     align-items: center;
@@ -107,11 +129,8 @@ body.desktop .desktop-only-buttons {
 body.desktop #hamburger-menu {
     display: none;
 }
-body.desktop #config-title {
-    display: block;
-}
-body.desktop #skill-selector-bar {
-    display: flex;
+body.desktop #mobile-skill-selector-container {
+    display: none;
 }
 body.desktop .btn-text {
     display: inline;
@@ -658,30 +677,14 @@ button.danger:hover {
     font-weight: bold;
 }
 
-#skill-selector-bar {
-    margin-bottom: 15px;
-    padding: 10px;
-    background-color: #fff;
-    border-radius: 8px;
-    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-    width: 80%;
-    max-width: 1400px;
-}
-
 #skill-selector-checkboxes {
     display: flex;
-    flex-wrap: nowrap;
+    flex-wrap: nowrap; /* Prevent wrapping */
     justify-content: flex-start;
     gap: 15px;
-    overflow-x: auto;
-    padding-bottom: 5px;
+    overflow-x: auto; /* Allow horizontal scrolling */
+    padding-bottom: 5px; /* For scrollbar visibility */
     flex-grow: 1;
-}
-
-#skill-selector-bar {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
 }
 
 #skill-selector-filter {
