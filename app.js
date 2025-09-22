@@ -1548,6 +1548,10 @@ document.addEventListener('DOMContentLoaded', () => {
         return skillConfig;
     }
 
+    function isAudioOnly(skillConfig) {
+        return skillConfig && skillConfig.front.length === 0 && skillConfig.ttsFrontColumn && skillConfig.ttsFrontColumn !== 'none';
+    }
+
     /**
      * Flips the current card and handles the flip animation.
      * Also triggers TTS for the revealed side if enabled.
@@ -1587,9 +1591,7 @@ document.addEventListener('DOMContentLoaded', () => {
             textForFrontDisplay = getTextForRoles(frontRoles, currentRandomBaseIndex);
             textForBackDisplay = getTextForRoles(backRoles, currentRandomBaseIndex);
 
-            const isAudioOnly = skillConfig && skillConfig.front.length === 0 && skillConfig.ttsFrontColumn && skillConfig.ttsFrontColumn !== 'none';
-
-            if (isAudioOnly) {
+            if (isAudioOnly(skillConfig)) {
                 cardFrontContent.innerHTML = '<span class="speech-icon">🔊</span>';
             } else {
                 cardFrontContent.innerHTML = `<span>${textForFrontDisplay.replace(/\n/g, '<br>')}</span>`;
@@ -1904,16 +1906,14 @@ document.addEventListener('DOMContentLoaded', () => {
             useUppercase = !useUppercase;
         }
 
-        const isAudioOnly = skillConfig && skillConfig.front.length === 0 && skillConfig.ttsFrontColumn && skillConfig.ttsFrontColumn !== 'none';
-
-        cardFrontContent.innerHTML = isAudioOnly ? '<span class="speech-icon">🔊</span>' : `<span>${displayText.replace(/\n/g, '<br>')}</span>`;
+        cardFrontContent.innerHTML = isAudioOnly(skillConfig) ? '<span class="speech-icon">🔊</span>' : `<span>${displayText.replace(/\n/g, '<br>')}</span>`;
         cardBackContent.innerHTML = `<span>${textForBackDisplay.replace(/\n/g, '<br>')}</span>`;
 
         cardFront.style.fontSize = '';
         cardBackContent.style.fontSize = '';
 
         setTimeout(() => {
-            if (!isAudioOnly) adjustFontSize(cardFrontContent.querySelector('span'), true);
+            if (!isAudioOnly(skillConfig)) adjustFontSize(cardFrontContent.querySelector('span'), true);
             adjustFontSize(cardBackContent.querySelector('span'), false);
         }, 50);
 
