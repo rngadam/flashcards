@@ -290,8 +290,12 @@ document.addEventListener('DOMContentLoaded', () => {
         const sourceCheckboxes = source.querySelectorAll('input[type="checkbox"]');
         const destCheckboxes = destination.querySelectorAll('input[type="checkbox"]');
 
+        // Create a map of destination checkboxes by their value for O(1) lookup.
+        const destMap = new Map();
+        destCheckboxes.forEach(cb => destMap.set(cb.value, cb));
+
         sourceCheckboxes.forEach(sourceCb => {
-            const destCb = Array.from(destCheckboxes).find(cb => cb.value === sourceCb.value);
+            const destCb = destMap.get(sourceCb.value);
             if (destCb && destCb.checked !== sourceCb.checked) {
                 destCb.checked = sourceCb.checked;
             }
@@ -301,8 +305,7 @@ document.addEventListener('DOMContentLoaded', () => {
     async function handleSkillSelectionChange(e) {
         if (e.target.matches('input[type="checkbox"]')) {
             // Sync the other set of checkboxes
-            const isMobile = e.currentTarget.id.includes('mobile');
-            if (isMobile) {
+            if (e.currentTarget === mobileSkillSelectorCheckboxes) {
                 syncCheckboxes(mobileSkillSelectorCheckboxes, skillSelectorCheckboxes);
             } else {
                 syncCheckboxes(skillSelectorCheckboxes, mobileSkillSelectorCheckboxes);
@@ -350,12 +353,6 @@ document.addEventListener('DOMContentLoaded', () => {
     function handleFilterToggle(event) {
         const isChecked = event.target.checked;
         setFilterEnabled(isChecked);
-        // Sync the other checkbox
-        if (event.target.id === 'enable-filter-checkbox') {
-            if (mobileEnableFilterCheckbox) mobileEnableFilterCheckbox.checked = isChecked;
-        } else if (event.target.id === 'mobile-enable-filter-checkbox') {
-            if (enableFilterCheckbox) enableFilterCheckbox.checked = isChecked;
-        }
         showNextCard();
     }
 
