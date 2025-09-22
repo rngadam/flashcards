@@ -2,11 +2,11 @@ body {
   font-family: Arial, sans-serif;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  justify-content: center;
   height: 100vh;
   margin: 0;
   background-color: #f0f0f0;
+  padding: 10px;
+  box-sizing: border-box;
 }
 
 body.is-flipping {
@@ -14,16 +14,15 @@ body.is-flipping {
 }
 
 #top-bar {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 10px;
+  width: 100%;
+  padding-bottom: 10px; /* Space between bar and card */
+  height: 50px; /* Fixed height */
   box-sizing: border-box;
   gap: 20px;
+  flex-shrink: 0; /* Prevent the top bar from shrinking */
 }
 
 #top-left-controls {
@@ -284,15 +283,21 @@ body.desktop .btn-text {
 }
 
 #card-container {
-  width: 80%;
-  height: 60%;
+  width: 100%;
+  flex-grow: 1; /* Allow card container to take up available space */
   perspective: 1000px;
   position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 0; /* Important for flex-grow in a flex column */
 }
 
 #card {
-  width: 100%;
-  height: 100%;
+  width: 95%;
+  height: 95%;
+  max-width: 1400px;
+  max-height: 800px;
   position: relative;
   transform-style: preserve-3d;
   transition: transform 0.6s;
@@ -365,7 +370,8 @@ body.desktop .btn-text {
 
 
 #controls {
-  margin-top: 20px;
+  flex-shrink: 0; /* Prevent controls from shrinking */
+  padding-top: 10px;
 }
 
 button {
