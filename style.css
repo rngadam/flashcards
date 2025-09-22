@@ -332,6 +332,24 @@ body.desktop .btn-text {
   transform: rotateY(180deg);
 }
 
+.card-overlays {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    transform-style: preserve-3d;
+    pointer-events: none; /* Pass clicks through the container */
+}
+
+.card-overlays > * {
+    pointer-events: auto; /* Re-enable clicks on the children */
+}
+
+.card.flipped .card-overlays {
+    transform: rotateY(-180deg);
+}
+
 #deck-title {
     position: absolute;
     top: 10px;
