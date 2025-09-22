@@ -311,17 +311,18 @@ document.addEventListener('DOMContentLoaded', () => {
                 syncCheckboxes(skillSelectorCheckboxes, mobileSkillSelectorCheckboxes);
             }
 
-            const currentConfigName = configSelector.value;
-            const currentConfig = configs[currentConfigName];
-            if (currentConfig) {
-                currentConfig.activeSkills = getSelectedSkills();
-                handleSettingsChange();
-                if (cardData.length > 0 && currentCardIndex < cardData.length) {
-                    const cardKey = getCardKey(cardData[currentCardIndex]);
-                    const stats = await getSanitizedStats(cardKey);
-                    renderSkillMastery(stats);
-                }
+            // Save the new skill selection immediately
+            await saveCurrentConfig();
+
+            // Render the mastery dashboard for the current card with the new settings
+            if (cardData.length > 0 && currentCardIndex < cardData.length) {
+                const cardKey = getCardKey(cardData[currentCardIndex]);
+                const stats = await getSanitizedStats(cardKey);
+                renderSkillMastery(stats);
             }
+
+            // Immediately find and display the next appropriate card
+            showNextCard();
         }
     }
 
@@ -350,9 +351,10 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
     }
-    function handleFilterToggle(event) {
+    async function handleFilterToggle(event) {
         const isChecked = event.target.checked;
         setFilterEnabled(isChecked);
+        await saveCurrentConfig(); // Persist the change
         showNextCard();
     }
 
@@ -692,10 +694,10 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
 
-    function applyFilter() {
+    async function applyFilter() {
         const text = filterTextarea.value;
         if (!text) {
-            clearFilter(); // If text is empty, just clear the filter.
+            await clearFilter(); // If text is empty, just clear the filter.
             return;
         }
         if (cardData.length === 0) {
@@ -703,21 +705,24 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        // The words are now parsed and stored. The actual filtering happens in showNextCard.
         const wordsArray = text.match(/[\p{L}\p{N}]+/gu) || [];
         const words = new Set(wordsArray.map(w => w.toLowerCase()));
         activeFilterWords = words;
         setFilterEnabled(true); // Applying a filter should enable it.
-        showTopNotification(`Filter applied. Found ${words.size} unique words.`, 'success');
+
+        await saveCurrentConfig(); // Persist the filter text and state
+        showTopNotification(`Filter applied and saved. Found ${words.size} unique words.`, 'success');
         updateFilterHighlights();
         showNextCard();
     }
 
-    function clearFilter() {
+    async function clearFilter() {
         activeFilterWords.clear();
-        setFilterEnabled(false); // Clearing a filter should disable it.
+        setFilterEnabled(false);
         if (filterTextarea) filterTextarea.value = '';
-        showTopNotification('Filter cleared.', 'success');
+
+        await saveCurrentConfig(); // Persist the cleared filter
+        showTopNotification('Filter cleared and saved.', 'success');
         updateFilterHighlights();
         showNextCard();
     }
@@ -2505,12 +2510,17 @@ document.addEventListener('DOMContentLoaded', () => {
         return (currentConfig && currentConfig.activeSkills) ? currentConfig.activeSkills : [];
     }
 
-    async function saveConfig() {
-        if (!configNameInput) return;
-        const configName = configNameInput.value.trim();
+    /**
+     * The core, unified function for saving the current configuration to IndexedDB.
+     * It gathers all settings from the UI and state, validates them, and persists.
+     * It does not show notifications, making it suitable for background saves.
+     * @returns {Promise<boolean>} A promise that resolves to true on success, false on validation failure.
+     */
+    async function saveCurrentConfig() {
+        const configName = configSelector.value;
         if (!configName) {
-            showTopNotification('Please enter a configuration name.');
-            return;
+            // This can happen if no config is selected. Silently fail.
+            return false;
         }
 
         const currentConfig = configs[configName] || {};
@@ -2520,7 +2530,6 @@ document.addEventListener('DOMContentLoaded', () => {
             columnRoleAssignments[select.dataset.columnIndex] = select.value;
         });
 
-        // Create the role-to-column map
         const roleToColumnMap = {};
         for (const roleKey in COLUMN_ROLES) {
             roleToColumnMap[roleKey] = [];
@@ -2532,46 +2541,70 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
 
-        // Validate that exactly one column has the Target Language role
         if (roleToColumnMap['TARGET_LANGUAGE'].length !== 1) {
-            showTopNotification('Configuration not saved: Please assign exactly one column the "Target Language" role.');
-            return;
+            showTopNotification('Config not saved: Assign exactly one "Target Language" column.', 'error');
+            return false;
         }
 
-        // Ensure skills are initialized
         if (!currentConfig.skills) {
             currentConfig.skills = [];
         }
 
+        // Update the single config object with all current settings
         configs[configName] = {
-            ...currentConfig, // Preserve subsetData and skills array
+            ...currentConfig,
             dataUrl: currentConfig.subsetData ? null : dataUrlInput.value,
             repetitionIntervals: repetitionIntervalsTextarea.value,
             activeSkills: getSelectedSkills(),
-            columnRoleAssignments: columnRoleAssignments, // Save the direct mapping
-            roleToColumnMap: roleToColumnMap, // Save the computed map
+            columnRoleAssignments: columnRoleAssignments,
+            roleToColumnMap: roleToColumnMap,
             font: fontSelector.value,
             ttsRate: ttsRateSlider.value,
             ttsRateBase: ttsRateBaseSlider.value,
             disableAnimation: disableAnimationCheckbox.checked,
             multipleChoiceCount: multipleChoiceCount.value,
+            // Add filter settings
+            filterIsEnabled: enableFilterSettingsCheckbox.checked,
+            filterText: filterTextarea.value,
+            filterAllowOverflow: filterAllowOverflowCheckbox.checked
         };
 
-        // Remove deprecated properties
-        delete configs[configName].skillColumns;
-        delete configs[configName].frontColumns;
-        delete configs[configName].backColumns;
-        delete configs[configName].columnRoles;
-        delete configs[configName].ttsSourceColumn;
-
+        // Persist all configs and the last used one
         await set('flashcard-configs', configs);
         await set('flashcard-last-config', configName);
-        populateConfigSelector();
-        configSelector.value = configName;
+
+        // Update UI elements that reflect the config name
         if (configTitle) configTitle.textContent = configName;
         if (deckTitle) deckTitle.textContent = configName;
-        showTopNotification(`Configuration '${configName}' saved!`, 'success');
         if (saveConfigButton) saveConfigButton.disabled = true;
+
+        return true;
+    }
+
+    /**
+     * A wrapper for saveCurrentConfig, designed to be called by the user-facing "Save" button.
+     * It handles UI feedback like notifications.
+     */
+    async function saveConfig() {
+        if (!configNameInput) return;
+        const configName = configNameInput.value.trim();
+        if (!configName) {
+            showTopNotification('Please enter a configuration name.', 'error');
+            return;
+        }
+
+        // Ensure the dropdown reflects the name being saved
+        if (configSelector.value !== configName) {
+            configs[configName] = configs[configSelector.value] || {};
+            delete configs[configSelector.value];
+            populateConfigSelector();
+            configSelector.value = configName;
+        }
+
+        const success = await saveCurrentConfig();
+        if (success) {
+            showTopNotification(`Configuration '${configName}' saved!`, 'success');
+        }
     }
 
     async function resetDeckStats() {
@@ -2686,6 +2719,16 @@ document.addEventListener('DOMContentLoaded', () => {
                 card.classList.remove('no-animation');
             }
         }
+
+        // Load filter settings
+        if (filterTextarea) filterTextarea.value = config.filterText || '';
+        if (filterAllowOverflowCheckbox) filterAllowOverflowCheckbox.checked = config.filterAllowOverflow !== false; // default to true
+        setFilterEnabled(config.filterIsEnabled || false);
+        updateFilterHighlights(); // Update highlights based on loaded text
+        const wordsArray = (config.filterText || '').match(/[\p{L}\p{N}]+/gu) || [];
+        activeFilterWords = new Set(wordsArray.map(w => w.toLowerCase()));
+
+
         await set('flashcard-last-config', configName);
 
         if (cardData.length > 0) {
