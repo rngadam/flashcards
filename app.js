@@ -1548,6 +1548,10 @@ document.addEventListener('DOMContentLoaded', () => {
         return skillConfig;
     }
 
+    function isAudioOnly(skillConfig) {
+        return skillConfig && skillConfig.front.length === 0 && skillConfig.ttsFrontColumn && skillConfig.ttsFrontColumn !== 'none';
+    }
+
     /**
      * Flips the current card and handles the flip animation.
      * Also triggers TTS for the revealed side if enabled.
@@ -1586,9 +1590,15 @@ document.addEventListener('DOMContentLoaded', () => {
             const backRoles = skillConfig.back || [];
             textForFrontDisplay = getTextForRoles(frontRoles, currentRandomBaseIndex);
             textForBackDisplay = getTextForRoles(backRoles, currentRandomBaseIndex);
-            cardFrontContent.innerHTML = `<span>${textForFrontDisplay.replace(/\n/g, '<br>')}</span>`;
+
+            if (isAudioOnly(skillConfig)) {
+                cardFrontContent.innerHTML = '<span class="speech-icon">🔊</span>';
+            } else {
+                cardFrontContent.innerHTML = `<span>${textForFrontDisplay.replace(/\n/g, '<br>')}</span>`;
+                adjustFontSize(cardFrontContent.querySelector('span'), true);
+            }
+
             cardBackContent.innerHTML = `<span>${textForBackDisplay.replace(/\n/g, '<br>')}</span>`;
-            adjustFontSize(cardFrontContent.querySelector('span'), true);
             adjustFontSize(cardBackContent.querySelector('span'), false);
         }
 
@@ -1896,16 +1906,14 @@ document.addEventListener('DOMContentLoaded', () => {
             useUppercase = !useUppercase;
         }
 
-        const isAudioOnly = skillConfig && skillConfig.front.length === 0 && skillConfig.ttsFrontColumn && skillConfig.ttsFrontColumn !== 'none';
-
-        cardFrontContent.innerHTML = isAudioOnly ? '<span class="speech-icon">🔊</span>' : `<span>${displayText.replace(/\n/g, '<br>')}</span>`;
+        cardFrontContent.innerHTML = isAudioOnly(skillConfig) ? '<span class="speech-icon">🔊</span>' : `<span>${displayText.replace(/\n/g, '<br>')}</span>`;
         cardBackContent.innerHTML = `<span>${textForBackDisplay.replace(/\n/g, '<br>')}</span>`;
 
         cardFront.style.fontSize = '';
         cardBackContent.style.fontSize = '';
 
         setTimeout(() => {
-            if (!isAudioOnly) adjustFontSize(cardFrontContent.querySelector('span'), true);
+            if (!isAudioOnly(skillConfig)) adjustFontSize(cardFrontContent.querySelector('span'), true);
             adjustFontSize(cardBackContent.querySelector('span'), false);
         }, 50);
 
@@ -2776,12 +2784,21 @@ document.addEventListener('DOMContentLoaded', () => {
         const isFlipped = card.classList.contains('flipped');
         const displayer = isFlipped ? ttsLangDisplayBack : ttsLangDisplayFront;
         if (displayer) {
-        // Clear both displays immediately when speaking starts
-            if(ttsLangDisplayFront) ttsLangDisplayFront.textContent = '';
-            if(ttsLangDisplayBack) ttsLangDisplayBack.textContent = '';
+            // When speaking for the back, don't clear the front.
+            // When speaking for the front, clear the back.
+            if (isFlipped) {
+                if (ttsLangDisplayBack) ttsLangDisplayBack.textContent = '';
+            } else {
+                if (ttsLangDisplayFront) ttsLangDisplayFront.textContent = '';
+                if (ttsLangDisplayBack) ttsLangDisplayBack.textContent = '';
+            }
 
             const updateLanguageDisplay = () => {
-                displayer.textContent = finalLang;
+                if (displayer === ttsLangDisplayFront) {
+                    displayer.textContent = `🔊 ${finalLang}`;
+                } else {
+                    displayer.textContent = finalLang;
+                }
             };
 
             // If we are showing the back, delay the update to sync with the animation
