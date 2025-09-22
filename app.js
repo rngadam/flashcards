@@ -2776,12 +2776,21 @@ document.addEventListener('DOMContentLoaded', () => {
         const isFlipped = card.classList.contains('flipped');
         const displayer = isFlipped ? ttsLangDisplayBack : ttsLangDisplayFront;
         if (displayer) {
-        // Clear both displays immediately when speaking starts
-            if(ttsLangDisplayFront) ttsLangDisplayFront.textContent = '';
-            if(ttsLangDisplayBack) ttsLangDisplayBack.textContent = '';
+            // When speaking for the back, don't clear the front.
+            // When speaking for the front, clear the back.
+            if (isFlipped) {
+                if (ttsLangDisplayBack) ttsLangDisplayBack.textContent = '';
+            } else {
+                if (ttsLangDisplayFront) ttsLangDisplayFront.textContent = '';
+                if (ttsLangDisplayBack) ttsLangDisplayBack.textContent = '';
+            }
 
             const updateLanguageDisplay = () => {
-                displayer.textContent = finalLang;
+                if (displayer === ttsLangDisplayFront) {
+                    displayer.textContent = `🔊 ${finalLang}`;
+                } else {
+                    displayer.textContent = finalLang;
+                }
             };
 
             // If we are showing the back, delay the update to sync with the animation
