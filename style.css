@@ -30,7 +30,7 @@ body.is-flipping {
     align-items: center;
     gap: 15px;
     flex-grow: 1;
-    overflow: hidden;
+    overflow-x: auto;
 }
 
 #settings-button, #help-button, #history-button {
@@ -109,11 +109,32 @@ body.desktop .desktop-only-buttons {
     display: block;
     margin-bottom: 10px;
 }
-#mobile-skill-selector-checkboxes,
-#mobile-skill-selector-filter {
+#mobile-skill-selector-checkboxes div,
+#mobile-skill-selector-filter div {
     display: flex;
-    flex-direction: column;
-    gap: 10px;
+    align-items: center;
+}
+
+#mobile-skill-selector-checkboxes label,
+#mobile-skill-selector-filter label {
+    display: block;
+    width: 100%;
+    padding: 10px;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+    cursor: pointer;
+}
+
+#mobile-skill-selector-checkboxes input[type="checkbox"],
+#mobile-skill-selector-filter input[type="checkbox"] {
+    margin-right: 10px;
+}
+
+#mobile-skill-selector-checkboxes input[type="checkbox"]:checked + label,
+#mobile-skill-selector-filter input[type="checkbox"]:checked + label {
+    background-color: #007bff;
+    color: white;
+    border-color: #007bff;
 }
 
 
@@ -294,14 +315,13 @@ body.desktop .btn-text {
 }
 
 #card {
-  width: 95%;
-  height: 95%;
+  width: 100%;
+  height: 100%;
   max-width: 1400px;
   max-height: 800px;
   position: relative;
   transform-style: preserve-3d;
   transition: transform 0.6s;
-  position: relative;
 }
 
 #card.no-animation {
@@ -320,6 +340,7 @@ body.desktop .btn-text {
     color: #888;
     font-weight: bold;
     text-transform: uppercase;
+    z-index: 10;
 }
 
 #last-seen {
@@ -522,7 +543,7 @@ button.danger:hover {
     display: flex;
     justify-content: center;
     gap: 5px; /* Reduced gap for smaller space */
-    z-index: 5; /* Ensure it's above the card face */
+    z-index: 10; /* Ensure it's above the card face */
 }
 
 .skill-mastery-item {
@@ -754,6 +775,7 @@ button.danger:hover {
     width: 100%;
     padding: 0 20px;
     box-sizing: border-box;
+    z-index: 10;
 }
 
 #writing-practice-container.audio-only-writing {
@@ -980,6 +1002,7 @@ button.danger:hover {
     max-width: 800px; /* Prevents it from getting too wide on large screens */
     padding: 0;
     box-sizing: border-box;
+    z-index: 10;
 }
 
 #multiple-choice-container.hidden {
