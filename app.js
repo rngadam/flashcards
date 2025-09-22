@@ -1586,9 +1586,17 @@ document.addEventListener('DOMContentLoaded', () => {
             const backRoles = skillConfig.back || [];
             textForFrontDisplay = getTextForRoles(frontRoles, currentRandomBaseIndex);
             textForBackDisplay = getTextForRoles(backRoles, currentRandomBaseIndex);
-            cardFrontContent.innerHTML = `<span>${textForFrontDisplay.replace(/\n/g, '<br>')}</span>`;
+
+            const isAudioOnly = skillConfig && skillConfig.front.length === 0 && skillConfig.ttsFrontColumn && skillConfig.ttsFrontColumn !== 'none';
+
+            if (isAudioOnly) {
+                cardFrontContent.innerHTML = '<span class="speech-icon">🔊</span>';
+            } else {
+                cardFrontContent.innerHTML = `<span>${textForFrontDisplay.replace(/\n/g, '<br>')}</span>`;
+                adjustFontSize(cardFrontContent.querySelector('span'), true);
+            }
+
             cardBackContent.innerHTML = `<span>${textForBackDisplay.replace(/\n/g, '<br>')}</span>`;
-            adjustFontSize(cardFrontContent.querySelector('span'), true);
             adjustFontSize(cardBackContent.querySelector('span'), false);
         }
 
