@@ -85,6 +85,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const multipleChoiceCount = document.getElementById('multiple-choice-count');
     const configNameInput = document.getElementById('config-name');
     const skillSelectorCheckboxes = document.getElementById('skill-selector-checkboxes');
+    const mobileSkillSelectorCheckboxes = document.getElementById('mobile-skill-selector-checkboxes');
     const repetitionIntervalsTextarea = document.getElementById('repetition-intervals');
     const configSelector = document.getElementById('config-selector');
     const cardContainer = document.getElementById('card-container');
@@ -106,6 +107,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const filterTextarea = document.getElementById('filter-text');
     const filterAllowOverflowCheckbox = document.getElementById('filter-allow-overflow');
     const enableFilterCheckbox = document.getElementById('enable-filter-checkbox');
+    const mobileEnableFilterCheckbox = document.getElementById('mobile-enable-filter-checkbox');
     const enableFilterSettingsCheckbox = document.getElementById('enable-filter-settings-checkbox');
     const filterIntersectionInfo = document.getElementById('filter-intersection-info');
     const filterHighlightLayer = document.getElementById('filter-highlight-layer');
@@ -284,22 +286,50 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    if (skillSelectorCheckboxes) {
-        skillSelectorCheckboxes.addEventListener('change', async (e) => {
-            if (e.target.matches('input[type="checkbox"]')) {
-                const currentConfigName = configSelector.value;
-                const currentConfig = configs[currentConfigName];
-                if (currentConfig) {
-                    // This correctly reads all checked boxes and updates the array
-                    currentConfig.activeSkills = getSelectedSkills();
-                    handleSettingsChange();
-                    // Re-render the mastery dashboard to update the active skill highlighting
+    function syncCheckboxes(source, destination) {
+        const sourceCheckboxes = source.querySelectorAll('input[type="checkbox"]');
+        const destCheckboxes = destination.querySelectorAll('input[type="checkbox"]');
+
+        // Create a map of destination checkboxes by their value for O(1) lookup.
+        const destMap = new Map();
+        destCheckboxes.forEach(cb => destMap.set(cb.value, cb));
+
+        sourceCheckboxes.forEach(sourceCb => {
+            const destCb = destMap.get(sourceCb.value);
+            if (destCb && destCb.checked !== sourceCb.checked) {
+                destCb.checked = sourceCb.checked;
+            }
+        });
+    }
+
+    async function handleSkillSelectionChange(e) {
+        if (e.target.matches('input[type="checkbox"]')) {
+            // Sync the other set of checkboxes
+            if (e.currentTarget === mobileSkillSelectorCheckboxes) {
+                syncCheckboxes(mobileSkillSelectorCheckboxes, skillSelectorCheckboxes);
+            } else {
+                syncCheckboxes(skillSelectorCheckboxes, mobileSkillSelectorCheckboxes);
+            }
+
+            const currentConfigName = configSelector.value;
+            const currentConfig = configs[currentConfigName];
+            if (currentConfig) {
+                currentConfig.activeSkills = getSelectedSkills();
+                handleSettingsChange();
+                if (cardData.length > 0 && currentCardIndex < cardData.length) {
                     const cardKey = getCardKey(cardData[currentCardIndex]);
                     const stats = await getSanitizedStats(cardKey);
                     renderSkillMastery(stats);
                 }
             }
-        });
+        }
+    }
+
+    if (skillSelectorCheckboxes) {
+        skillSelectorCheckboxes.addEventListener('change', handleSkillSelectionChange);
+    }
+    if (mobileSkillSelectorCheckboxes) {
+        mobileSkillSelectorCheckboxes.addEventListener('change', handleSkillSelectionChange);
     }
 
     if (writingSubmit) writingSubmit.addEventListener('click', checkWritingAnswer);
@@ -321,11 +351,13 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
     function handleFilterToggle(event) {
-        setFilterEnabled(event.target.checked);
+        const isChecked = event.target.checked;
+        setFilterEnabled(isChecked);
         showNextCard();
     }
 
     if (enableFilterCheckbox) enableFilterCheckbox.addEventListener('change', handleFilterToggle);
+    if (mobileEnableFilterCheckbox) mobileEnableFilterCheckbox.addEventListener('change', handleFilterToggle);
     if (enableFilterSettingsCheckbox) enableFilterSettingsCheckbox.addEventListener('change', handleFilterToggle);
 
     const handleSlowReplay = () => {
@@ -411,7 +443,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 // Mark the configuration as changed and refresh UI that depends on skill order
                 handleSettingsChange();
-                populateSkillSelector();
+                populateAllSkillSelectors();
             }
         });
     }
@@ -626,6 +658,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function setFilterEnabled(isEnabled) {
         if (enableFilterCheckbox) enableFilterCheckbox.checked = isEnabled;
+        if (mobileEnableFilterCheckbox) mobileEnableFilterCheckbox.checked = isEnabled;
         if (enableFilterSettingsCheckbox) enableFilterSettingsCheckbox.checked = isEnabled;
         // The actual filtering logic is now tied to showNextCard, which respects the checkbox state.
     }
@@ -1233,7 +1266,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Refresh UI and mark config as dirty
         renderSkillsList();
-        populateSkillSelector();
+        populateAllSkillSelectors();
         handleSettingsChange();
         modal.classList.add('hidden');
         showTopNotification(`Skill '${skill.name}' saved.`, 'success');
@@ -1255,7 +1288,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             renderSkillsList();
-            populateSkillSelector();
+            populateAllSkillSelectors();
             handleSettingsChange();
             showTopNotification(`Skill "${skillToDelete.name}" deleted.`, 'success');
         }
@@ -1271,7 +1304,7 @@ document.addEventListener('DOMContentLoaded', () => {
             currentConfig.activeSkills = [];
 
             renderSkillsList();
-            populateSkillSelector();
+            populateAllSkillSelectors();
             handleSettingsChange();
             showTopNotification('All skills have been deleted.', 'success');
         }
@@ -1345,7 +1378,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             renderSkillsList();
-            populateSkillSelector();
+            populateAllSkillSelectors();
             handleSettingsChange();
             showTopNotification('Preset skills added.', 'success');
 
@@ -2618,7 +2651,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         renderSkillsList();
-        populateSkillSelector();
+        populateAllSkillSelectors();
 
         // Load Column Roles
         if (config.columnRoleAssignments) {
@@ -2998,43 +3031,47 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
 
-    function populateSkillSelector() {
-        if (!skillSelectorCheckboxes) return;
-        skillSelectorCheckboxes.innerHTML = '';
+    function populateSkillSelector(container, isMobile = false) {
+        if (!container) return;
+        container.innerHTML = '';
         const currentConfigName = configSelector.value;
         const currentConfig = configs[currentConfigName];
         if (!currentConfig || !currentConfig.skills) return;
 
         currentConfig.skills.forEach(skill => {
-            const container = document.createElement('div');
-
+            const div = document.createElement('div');
             const input = document.createElement('input');
             input.type = 'checkbox';
-            input.id = `skill-checkbox-${skill.id}`;
+            const idSuffix = isMobile ? `-mobile-${skill.id}` : `-${skill.id}`;
+            input.id = `skill-checkbox${idSuffix}`;
             input.value = skill.id;
 
             const label = document.createElement('label');
             label.htmlFor = input.id;
-            label.title = skill.name; // SAFE: title attribute is not vulnerable to XSS in this context
-            label.textContent = skill.name; // SAFE
+            label.title = skill.name;
+            label.textContent = skill.name;
 
-            container.appendChild(input);
-            container.appendChild(label);
-            skillSelectorCheckboxes.appendChild(container);
+            div.appendChild(input);
+            div.appendChild(label);
+            container.appendChild(div);
         });
 
-        // After populating, re-apply the checked status from the config
         if (currentConfig.activeSkills) {
             currentConfig.activeSkills.forEach(skillId => {
-                const cb = skillSelectorCheckboxes.querySelector(`input[value="${skillId}"]`);
+                const cb = container.querySelector(`input[value="${skillId}"]`);
                 if (cb) cb.checked = true;
             });
         }
     }
 
+    function populateAllSkillSelectors() {
+        populateSkillSelector(skillSelectorCheckboxes, false);
+        populateSkillSelector(mobileSkillSelectorCheckboxes, true);
+    }
+
     // Initial load
     loadVoices();
-    populateSkillSelector();
+    populateAllSkillSelectors();
     loadInitialConfigs();
 
     // --- Service Worker Registration ---

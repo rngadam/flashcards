@@ -2,11 +2,11 @@ body {
   font-family: Arial, sans-serif;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  justify-content: center;
   height: 100vh;
   margin: 0;
   background-color: #f0f0f0;
+  padding: 10px;
+  box-sizing: border-box;
 }
 
 body.is-flipping {
@@ -14,24 +14,23 @@ body.is-flipping {
 }
 
 #top-bar {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 10px;
+  width: 100%;
+  padding-bottom: 10px; /* Space between bar and card */
+  height: 50px; /* Fixed height */
   box-sizing: border-box;
+  gap: 20px;
+  flex-shrink: 0; /* Prevent the top bar from shrinking */
 }
 
-#config-title {
-  margin: 0;
-  font-size: 2em;
-  font-weight: bold;
-  text-transform: uppercase;
-  flex-grow: 1;
-  text-align: center;
+#top-left-controls {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    flex-grow: 1;
+    overflow-x: auto;
 }
 
 #settings-button, #help-button, #history-button {
@@ -92,14 +91,57 @@ body.desktop .desktop-only-buttons {
     align-items: center;
 }
 /* Mobile First (Default) */
-.desktop-only-buttons {
+.desktop-only-buttons,
+#top-left-controls {
     display: none;
 }
 #hamburger-menu {
     display: block;
 }
+#mobile-skill-selector-container {
+    display: block;
+    padding-bottom: 15px;
+    border-bottom: 1px solid #eee;
+    margin-bottom: 15px;
+}
+#mobile-skill-selector-container label {
+    font-weight: bold;
+    display: block;
+    margin-bottom: 10px;
+}
+#mobile-skill-selector-checkboxes div,
+#mobile-skill-selector-filter div {
+    display: flex;
+    align-items: center;
+}
+
+#mobile-skill-selector-checkboxes label,
+#mobile-skill-selector-filter label {
+    display: block;
+    width: 100%;
+    padding: 10px;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+    cursor: pointer;
+}
+
+#mobile-skill-selector-checkboxes input[type="checkbox"],
+#mobile-skill-selector-filter input[type="checkbox"] {
+    margin-right: 10px;
+}
+
+#mobile-skill-selector-checkboxes input[type="checkbox"]:checked + label,
+#mobile-skill-selector-filter input[type="checkbox"]:checked + label {
+    background-color: #007bff;
+    color: white;
+    border-color: #007bff;
+}
+
 
 /* Desktop Overrides */
+body.desktop #top-left-controls {
+    display: flex;
+}
 body.desktop .desktop-only-buttons {
     display: flex;
     align-items: center;
@@ -107,11 +149,8 @@ body.desktop .desktop-only-buttons {
 body.desktop #hamburger-menu {
     display: none;
 }
-body.desktop #config-title {
-    display: block;
-}
-body.desktop #skill-selector-bar {
-    display: flex;
+body.desktop #mobile-skill-selector-container {
+    display: none;
 }
 body.desktop .btn-text {
     display: inline;
@@ -265,9 +304,21 @@ body.desktop .btn-text {
 }
 
 #card-container {
-  width: 80%;
-  height: 60%;
+  width: 100%;
+  flex-grow: 1; /* Allow card container to take up available space */
   perspective: 1000px;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 0; /* Important for flex-grow in a flex column */
+}
+
+#card-wrapper {
+  width: 100%;
+  height: 100%;
+  max-width: 1400px;
+  max-height: 800px;
   position: relative;
 }
 
@@ -277,7 +328,6 @@ body.desktop .btn-text {
   position: relative;
   transform-style: preserve-3d;
   transition: transform 0.6s;
-  position: relative;
 }
 
 #card.no-animation {
@@ -288,6 +338,19 @@ body.desktop .btn-text {
   transform: rotateY(180deg);
 }
 
+.card-overlays {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none; /* Pass clicks through the container */
+}
+
+.card-overlays > * {
+    pointer-events: auto; /* Re-enable clicks on the children */
+}
+
 #deck-title {
     position: absolute;
     top: 10px;
@@ -296,6 +359,7 @@ body.desktop .btn-text {
     color: #888;
     font-weight: bold;
     text-transform: uppercase;
+    z-index: 10;
 }
 
 #last-seen {
@@ -346,7 +410,8 @@ body.desktop .btn-text {
 
 
 #controls {
-  margin-top: 20px;
+  flex-shrink: 0; /* Prevent controls from shrinking */
+  padding-top: 10px;
 }
 
 button {
@@ -497,7 +562,7 @@ button.danger:hover {
     display: flex;
     justify-content: center;
     gap: 5px; /* Reduced gap for smaller space */
-    z-index: 5; /* Ensure it's above the card face */
+    z-index: 10; /* Ensure it's above the card face */
 }
 
 .skill-mastery-item {
@@ -658,30 +723,14 @@ button.danger:hover {
     font-weight: bold;
 }
 
-#skill-selector-bar {
-    margin-bottom: 15px;
-    padding: 10px;
-    background-color: #fff;
-    border-radius: 8px;
-    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-    width: 80%;
-    max-width: 1400px;
-}
-
 #skill-selector-checkboxes {
     display: flex;
-    flex-wrap: nowrap;
+    flex-wrap: nowrap; /* Prevent wrapping */
     justify-content: flex-start;
     gap: 15px;
-    overflow-x: auto;
-    padding-bottom: 5px;
+    overflow-x: auto; /* Allow horizontal scrolling */
+    padding-bottom: 5px; /* For scrollbar visibility */
     flex-grow: 1;
-}
-
-#skill-selector-bar {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
 }
 
 #skill-selector-filter {
@@ -745,13 +794,9 @@ button.danger:hover {
     width: 100%;
     padding: 0 20px;
     box-sizing: border-box;
+    z-index: 10;
 }
 
-#writing-practice-container.audio-only-writing {
-    align-items: center; /* Center vertically for audio-only */
-    height: 100%;
-    bottom: 0;
-}
 
 #writing-practice-container.hidden {
     display: none;
@@ -971,6 +1016,7 @@ button.danger:hover {
     max-width: 800px; /* Prevents it from getting too wide on large screens */
     padding: 0;
     box-sizing: border-box;
+    z-index: 10;
 }
 
 #multiple-choice-container.hidden {

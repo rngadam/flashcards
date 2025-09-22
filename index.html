@@ -9,7 +9,15 @@
   <body>
     <div id="top-bar">
       <div id="top-notification" class="hidden"></div>
-      <h1 id="config-title"></h1>
+      <div id="top-left-controls">
+        <div id="skill-selector-checkboxes" class="column-checkbox-group">
+            <!-- Skill checkboxes will be populated here by JS -->
+        </div>
+        <div id="skill-selector-filter" class="column-checkbox-group">
+            <input type="checkbox" id="enable-filter-checkbox" value="filter">
+            <label for="enable-filter-checkbox" title="Enable/Disable Word Filter">Filter</label>
+        </div>
+      </div>
       <div class="desktop-only-buttons">
         <button id="history-button">📜</button>
         <button id="settings-button">⚙️</button>
@@ -21,6 +29,16 @@
 
     <div id="mobile-menu-overlay" class="modal-overlay hidden">
         <div id="mobile-menu-panel">
+            <div id="mobile-skill-selector-container">
+                <label>Skills:</label>
+                <div id="mobile-skill-selector-checkboxes" class="column-checkbox-group">
+                    <!-- Mobile skill checkboxes will be populated here -->
+                </div>
+                <div id="mobile-skill-selector-filter" class="column-checkbox-group">
+                    <input type="checkbox" id="mobile-enable-filter-checkbox" value="filter">
+                    <label for="mobile-enable-filter-checkbox" title="Enable/Disable Word Filter">Filter</label>
+                </div>
+            </div>
             <button id="mobile-history-button">📜 History</button>
             <button id="mobile-settings-button">⚙️ Settings</button>
             <button id="mobile-help-button">? Help</button>
@@ -276,38 +294,33 @@
         </div>
     </div>
 
-    <div id="skill-selector-bar">
-        <div id="skill-selector-checkboxes" class="column-checkbox-group">
-            <!-- Skill checkboxes will be populated here by JS -->
-        </div>
-        <div id="skill-selector-filter" class="column-checkbox-group">
-            <input type="checkbox" id="enable-filter-checkbox" value="filter">
-            <label for="enable-filter-checkbox" title="Enable/Disable Word Filter">Filter</label>
-        </div>
-    </div>
 
     <div id="card-container">
-      <div id="card">
-        <div class="card-face card-front" id="card-front">
-            <div class="tts-lang-display" id="tts-lang-display-front"></div>
-            <div id="card-front-content"></div>
-        </div>
-        <div class="card-face card-back">
-            <div class="tts-lang-display" id="tts-lang-display-back"></div>
-            <div id="card-back-content"></div>
-            <div id="comparison-container" class="hidden"></div>
-        </div>
-      </div>
-      <div id="deck-title"></div>
-      <div id="last-seen"></div>
-      <div id="skill-mastery-dashboard"></div>
-      <div id="writing-practice-container" class="hidden">
-        <button id="slow-replay-button">🔊</button>
-        <input type="text" id="writing-input" placeholder="Type the answer...">
-        <button id="writing-submit">Submit</button>
-      </div>
-      <div id="multiple-choice-container" class="hidden">
-        <!-- buttons will be dynamically generated here -->
+      <div id="card-wrapper">
+          <div id="card">
+            <div class="card-face card-front" id="card-front">
+                <div class="tts-lang-display" id="tts-lang-display-front"></div>
+                <div id="card-front-content"></div>
+            </div>
+            <div class="card-face card-back">
+                <div class="tts-lang-display" id="tts-lang-display-back"></div>
+                <div id="card-back-content"></div>
+                <div id="comparison-container" class="hidden"></div>
+            </div>
+          </div>
+          <div class="card-overlays">
+              <div id="deck-title"></div>
+              <div id="last-seen"></div>
+              <div id="skill-mastery-dashboard"></div>
+              <div id="writing-practice-container" class="hidden">
+                <button id="slow-replay-button">🔊</button>
+                <input type="text" id="writing-input" placeholder="Type the answer...">
+                <button id="writing-submit">Submit</button>
+              </div>
+              <div id="multiple-choice-container" class="hidden">
+                <!-- buttons will be dynamically generated here -->
+              </div>
+          </div>
       </div>
       <div id="explanation-message"></div>
     </div>
