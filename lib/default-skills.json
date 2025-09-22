@@ -1,9 +1,57 @@
 [
-  {"name": "Reading & Listening", "front": ["TARGET_LANGUAGE"], "back": ["BASE_LANGUAGE", "PRONUNCIATION", "GRAMMATICAL_TYPE"], "verificationMethod": "none", "ttsFrontColumn": "TARGET_LANGUAGE", "ttsBackColumn": "BASE_LANGUAGE", "alternateUppercase": true, "ttsOnHotkeyOnly": true},
-  {"name": "Reading Comprehension", "front": ["TARGET_LANGUAGE"], "back": ["BASE_LANGUAGE", "PRONUNCIATION"], "verificationMethod": "none", "ttsFrontColumn": "none", "ttsBackColumn": "BASE_LANGUAGE", "alternateUppercase": false, "ttsOnHotkeyOnly": false},
-  {"name": "Listening Comprehension", "front": [], "back": ["BASE_LANGUAGE", "PRONUNCIATION", "TARGET_LANGUAGE"], "verificationMethod": "none", "ttsFrontColumn": "TARGET_LANGUAGE", "ttsBackColumn": "BASE_LANGUAGE", "alternateUppercase": false, "ttsOnHotkeyOnly": true},
-  {"name": "Validated Writing Practice", "front": ["BASE_LANGUAGE"], "back": ["TARGET_LANGUAGE"], "verificationMethod": "text", "validationColumn": "TARGET_LANGUAGE", "ttsFrontColumn": "BASE_LANGUAGE", "ttsBackColumn": "TARGET_LANGUAGE", "alternateUppercase": false, "ttsOnHotkeyOnly": false},
-  {"name": "Spoken Production", "front": ["BASE_LANGUAGE"], "back": ["TARGET_LANGUAGE"], "verificationMethod": "none", "ttsFrontColumn": "BASE_LANGUAGE", "ttsBackColumn": "TARGET_LANGUAGE", "alternateUppercase": false, "ttsOnHotkeyOnly": false},
-  {"name": "Pronunciation Practice", "front": ["TARGET_LANGUAGE", "PRONUNCIATION"], "back": ["BASE_LANGUAGE"], "verificationMethod": "none", "ttsFrontColumn": "TARGET_LANGUAGE", "ttsBackColumn": "BASE_LANGUAGE", "alternateUppercase": false, "ttsOnHotkeyOnly": false},
-  {"name": "Translation Practice", "verificationMethod": "multipleChoice", "front": ["BASE_LANGUAGE"], "back": ["TARGET_LANGUAGE"], "validationColumn": "TARGET_LANGUAGE", "ttsFrontColumn": "BASE_LANGUAGE", "ttsBackColumn": "TARGET_LANGUAGE", "alternateUppercase": false, "ttsOnHotkeyOnly": false}
+  {
+    "name": "Reading & Listening",
+    "verificationMethod": "none",
+    "front": [ "TARGET_LANGUAGE" ],
+    "back": [ "TARGET_LANGUAGE", "BASE_LANGUAGE", "PRONUNCIATION", "GRAMMATICAL_TYPE" ],
+    "validationColumn": "none",
+    "ttsFrontColumn": "TARGET_LANGUAGE",
+    "ttsBackColumn": "BASE_LANGUAGE",
+    "alternateUppercase": true,
+    "ttsOnHotkeyOnly": false
+  },
+  {
+    "name": "Reading Comprehension",
+    "verificationMethod": "none",
+    "front": [ "TARGET_LANGUAGE" ],
+    "back": [ "TARGET_LANGUAGE", "BASE_LANGUAGE", "PRONUNCIATION", "EXAMPLE_SENTENCE" ],
+    "validationColumn": "none",
+    "ttsFrontColumn": "none",
+    "ttsBackColumn": "EXAMPLE_SENTENCE",
+    "alternateUppercase": false,
+    "ttsOnHotkeyOnly": false
+  },
+  {
+    "name": "Listening Comprehension",
+    "verificationMethod": "none",
+    "front": [],
+    "back": [ "TARGET_LANGUAGE", "BASE_LANGUAGE", "PRONUNCIATION", "COMMON_COLLOCATION" ],
+    "validationColumn": "none",
+    "ttsFrontColumn": "TARGET_LANGUAGE",
+    "ttsBackColumn": "COMMON_COLLOCATION",
+    "alternateUppercase": false,
+    "ttsOnHotkeyOnly": false
+  },
+  {
+    "name": "Translation Practice",
+    "verificationMethod": "multipleChoice",
+    "front": [ "BASE_LANGUAGE" ],
+    "back": [ "TARGET_LANGUAGE" ],
+    "validationColumn": "TARGET_LANGUAGE",
+    "ttsFrontColumn": "BASE_LANGUAGE",
+    "ttsBackColumn": "TARGET_LANGUAGE",
+    "alternateUppercase": false,
+    "ttsOnHotkeyOnly": false
+  },
+  {
+    "name": "Validated Writing Practice",
+    "verificationMethod": "text",
+    "front": [ "BASE_LANGUAGE" ],
+    "back": [ "TARGET_LANGUAGE", "RELATED_WORD", "RELATION_TYPE", "GRAMMATICAL_TYPE" ],
+    "validationColumn": "TARGET_LANGUAGE",
+    "ttsFrontColumn": "BASE_LANGUAGE",
+    "ttsBackColumn": "TARGET_LANGUAGE",
+    "alternateUppercase": false,
+    "ttsOnHotkeyOnly": false
+  }
 ]
