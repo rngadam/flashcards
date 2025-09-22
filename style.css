@@ -314,11 +314,17 @@ body.desktop .btn-text {
   min-height: 0; /* Important for flex-grow in a flex column */
 }
 
-#card {
+#card-wrapper {
   width: 100%;
   height: 100%;
   max-width: 1400px;
   max-height: 800px;
+  position: relative;
+}
+
+#card {
+  width: 100%;
+  height: 100%;
   position: relative;
   transform-style: preserve-3d;
   transition: transform 0.6s;
@@ -338,16 +344,11 @@ body.desktop .btn-text {
     left: 0;
     width: 100%;
     height: 100%;
-    transform-style: preserve-3d;
     pointer-events: none; /* Pass clicks through the container */
 }
 
 .card-overlays > * {
     pointer-events: auto; /* Re-enable clicks on the children */
-}
-
-.card.flipped .card-overlays {
-    transform: rotateY(-180deg);
 }
 
 #deck-title {

@@ -296,29 +296,31 @@
 
 
     <div id="card-container">
-      <div id="card">
-        <div class="card-face card-front" id="card-front">
-            <div class="tts-lang-display" id="tts-lang-display-front"></div>
-            <div id="card-front-content"></div>
-        </div>
-        <div class="card-face card-back">
-            <div class="tts-lang-display" id="tts-lang-display-back"></div>
-            <div id="card-back-content"></div>
-            <div id="comparison-container" class="hidden"></div>
-        </div>
-        <div class="card-overlays">
-            <div id="deck-title"></div>
-            <div id="last-seen"></div>
-            <div id="skill-mastery-dashboard"></div>
-            <div id="writing-practice-container" class="hidden">
-              <button id="slow-replay-button">🔊</button>
-              <input type="text" id="writing-input" placeholder="Type the answer...">
-              <button id="writing-submit">Submit</button>
+      <div id="card-wrapper">
+          <div id="card">
+            <div class="card-face card-front" id="card-front">
+                <div class="tts-lang-display" id="tts-lang-display-front"></div>
+                <div id="card-front-content"></div>
             </div>
-            <div id="multiple-choice-container" class="hidden">
-              <!-- buttons will be dynamically generated here -->
+            <div class="card-face card-back">
+                <div class="tts-lang-display" id="tts-lang-display-back"></div>
+                <div id="card-back-content"></div>
+                <div id="comparison-container" class="hidden"></div>
             </div>
-        </div>
+          </div>
+          <div class="card-overlays">
+              <div id="deck-title"></div>
+              <div id="last-seen"></div>
+              <div id="skill-mastery-dashboard"></div>
+              <div id="writing-practice-container" class="hidden">
+                <button id="slow-replay-button">🔊</button>
+                <input type="text" id="writing-input" placeholder="Type the answer...">
+                <button id="writing-submit">Submit</button>
+              </div>
+              <div id="multiple-choice-container" class="hidden">
+                <!-- buttons will be dynamically generated here -->
+              </div>
+          </div>
       </div>
       <div id="explanation-message"></div>
     </div>
