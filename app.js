@@ -2180,7 +2180,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // 2. Determine the list of items to select from (filtered or all)
         let itemsToSelectFrom = allReviewableItems;
-        const currentConfig = configs[configSelector.value] || {};
         let isFiltered = currentConfig.filterIsEnabled && activeFilterWords.size > 0;
         let filteredItems = [];
 
