@@ -4,7 +4,7 @@ import { get, set, del, keys } from './lib/idb-keyval-wrapper.js';
 import { getLenientString, transformSlashText } from './lib/string-utils.js';
 import { Skill, createSkillId, createSkill, VERIFICATION_METHODS } from './lib/skill-utils.js';
 import { getDeckWords, getHighlightHTML } from './lib/filter-utils.js';
-
+import { detectColumnLanguages } from './lib/detect-column-languages.js';
 
 /**
  * @file Main application logic for the Flashcards web app.
