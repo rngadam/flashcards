@@ -1,10 +1,30 @@
+:root {
+    --primary-color: #007bff;
+    --success-color: #28a745;
+    --danger-color: #dc3545;
+    --info-color: #17a2b8;
+    --light-gray: #f0f0f0;
+    --medium-gray: #ccc;
+    --dark-gray: #6c757d;
+    --text-color-dark: #333;
+    --text-color-light: #fff;
+    --background-color: #fff;
+    --success-notification-bg: #2ecc71;
+    --success-message-bg: #d4edda;
+    --success-message-text: #155724;
+    --danger-message-bg: #f8d7da;
+    --danger-message-text: #721c24;
+    --danger-hover-color: #c0392b;
+    --primary-hover-color: #0056b3;
+}
+
 body {
   font-family: Arial, sans-serif;
   display: flex;
   flex-direction: column;
   height: 100vh;
   margin: 0;
-  background-color: #f0f0f0;
+  background-color: var(--light-gray);
   padding: 10px;
   box-sizing: border-box;
 }
@@ -49,7 +69,7 @@ body.is-flipping {
 }
 
 #mobile-menu-panel {
-    background: white;
+    background: var(--background-color);
     padding: 20px;
     border-radius: 8px;
     box-shadow: 0 4px 15px rgba(0,0,0,0.2);
@@ -79,7 +99,7 @@ body.is-flipping {
 }
 
 .lang-hint {
-    color: #888;
+    color: var(--dark-gray);
     font-style: italic;
     margin-left: 4px;
 }
@@ -115,25 +135,23 @@ body.desktop .desktop-only-buttons {
     align-items: center;
 }
 
-#mobile-skill-selector-checkboxes label,
-#mobile-skill-selector-filter label {
+#mobile-skill-selector-checkboxes label {
     display: block;
     width: 100%;
     padding: 10px;
-    border: 1px solid #ccc;
+    border: 1px solid var(--medium-gray);
     border-radius: 5px;
     cursor: pointer;
 }
 
-#mobile-skill-selector-checkboxes input[type="checkbox"],
-#mobile-skill-selector-filter input[type="checkbox"] {
+#mobile-skill-selector-checkboxes input[type="checkbox"] {
     margin-right: 10px;
 }
 
 #mobile-skill-selector-checkboxes input[type="checkbox"]:checked + label {
-    background-color: #007bff;
-    color: white;
-    border-color: #007bff;
+    background-color: var(--primary-color);
+    color: var(--text-color-light);
+    border-color: var(--primary-color);
 }
 
 
@@ -173,7 +191,7 @@ body.desktop .btn-text {
 }
 
 #help-panel {
-    background: white;
+    background: var(--background-color);
     padding: 20px 40px;
     border-radius: 8px;
     box-shadow: 0 4px 15px rgba(0,0,0,0.2);
@@ -187,7 +205,7 @@ body.desktop .btn-text {
 
 #help-panel h2 {
     margin-top: 0;
-    color: #333;
+    color: var(--text-color-dark);
     border-bottom: 1px solid #eee;
     padding-bottom: 10px;
 }
@@ -207,7 +225,7 @@ body.desktop .btn-text {
 }
 
 #help-panel strong {
-    color: #0056b3;
+    color: var(--primary-hover-color);
 }
 
 #close-help-button {
@@ -218,15 +236,15 @@ body.desktop .btn-text {
   border: none;
   font-size: 1.8em;
   cursor: pointer;
-  color: #888;
+  color: var(--dark-gray);
   line-height: 1;
 }
 #close-help-button:hover {
-    color: #333;
+    color: var(--text-color-dark);
 }
 
 #dashboard-panel {
-  background: white;
+  background: var(--background-color);
   padding: 20px;
   border-radius: 5px;
   box-shadow: 0 0 10px rgba(0,0,0,0.1);
@@ -265,7 +283,7 @@ body.desktop .btn-text {
 }
 
 #history-panel {
-  background: white;
+  background: var(--background-color);
   padding: 20px;
   border-radius: 5px;
   box-shadow: 0 0 10px rgba(0,0,0,0.1);
@@ -286,13 +304,13 @@ body.desktop .btn-text {
 }
 
 #history-panel th, #history-panel td {
-  border: 1px solid #ccc;
+  border: 1px solid var(--medium-gray);
   padding: 8px;
   text-align: left;
 }
 
 #history-panel th {
-  background-color: #f2f2f2;
+  background-color: var(--light-gray);
   position: sticky;
   top: 0;
 }
@@ -308,7 +326,7 @@ body.desktop .btn-text {
 }
 
 #settings {
-  background: white;
+  background: var(--background-color);
   padding: 20px;
   border-radius: 5px;
   box-shadow: 0 0 10px rgba(0,0,0,0.1);
@@ -394,7 +412,7 @@ body.desktop .btn-text {
     top: 10px;
     left: 15px;
     font-size: 0.8em;
-    color: #888;
+    color: var(--dark-gray);
     font-weight: bold;
     text-transform: uppercase;
     z-index: 10;
@@ -405,7 +423,7 @@ body.desktop .btn-text {
     bottom: 10px;
     left: 15px;
     font-size: 0.8em;
-    color: #888;
+    color: var(--dark-gray);
     z-index: 6; /* Higher than skill-mastery-dashboard */
 }
 
@@ -418,9 +436,9 @@ body.desktop .btn-text {
   flex-direction: column; /* Changed to column for better control */
   align-items: center;
   justify-content: center;
-  border: 2px solid #ccc;
+  border: 2px solid var(--medium-gray);
   border-radius: 10px;
-  background-color: white;
+  background-color: var(--background-color);
   padding: 40px 20px; /* Increased top/bottom padding for corner elements */
   box-sizing: border-box;
   word-wrap: break-word;
@@ -460,8 +478,8 @@ button {
   margin: 0 15px;
   cursor: pointer;
   border-radius: 10px;
-  border: 1px solid #ccc;
-  background-color: #fff;
+  border: 1px solid var(--medium-gray);
+  background-color: var(--background-color);
 }
 
 .hotkey-hint {
@@ -520,7 +538,7 @@ th.sortable.desc::after {
     left: 50%;
     transform: translateX(-50%);
     background: rgba(0,0,0,0.8);
-    color: white;
+    color: var(--text-color-light);
     padding: 12px 18px;
     border-radius: 10px;
     font-size: 1em;
@@ -538,8 +556,8 @@ th.sortable.desc::after {
 }
 
 #explanation-message.deck-learned-message {
-    background-color: #d4edda; /* A light green color */
-    color: #155724; /* A dark green color for text */
+    background-color: var(--success-message-bg); /* A light green color */
+    color: var(--success-message-text); /* A dark green color for text */
     border: 1px solid #c3e6cb;
 }
 
@@ -547,7 +565,7 @@ th.sortable.desc::after {
 .tabs {
     display: flex;
     margin-bottom: 15px;
-    border-bottom: 1px solid #ccc;
+    border-bottom: 1px solid var(--medium-gray);
 }
 .tab-button {
     padding: 10px 15px;
@@ -558,14 +576,14 @@ th.sortable.desc::after {
     margin: 0;
     border-radius: 0;
     border-bottom: 3px solid transparent;
-    color: #007bff;
+    color: var(--primary-color);
 }
 .tab-button:hover {
-    background-color: #f0f0f0;
+    background-color: var(--light-gray);
 }
 .tab-button.active {
     font-weight: bold;
-    border-bottom: 3px solid #007bff;
+    border-bottom: 3px solid var(--primary-color);
 }
 .tab-panel {
     display: none;
@@ -585,14 +603,14 @@ th.sortable.desc::after {
 }
 
 button.danger {
-    background-color: #e74c3c;
-    color: white;
-    border-color: #e74c3c;
+    background-color: var(--danger-color);
+    color: var(--text-color-light);
+    border-color: var(--danger-color);
 }
 
 button.danger:hover {
-    background-color: #c0392b;
-    border-color: #c0392b;
+    background-color: var(--danger-hover-color);
+    border-color: var(--danger-hover-color);
 }
 
 #skill-mastery-dashboard {
@@ -610,21 +628,21 @@ button.danger:hover {
     flex-direction: column;
     align-items: center;
     padding: 5px 10px;
-    border: 1px solid #ccc;
+    border: 1px solid var(--medium-gray);
     border-radius: 5px;
-    background-color: #f9f9f9;
+    background-color: var(--light-gray);
     transition: all 0.3s ease;
     cursor: default;
 }
 
 .skill-mastery-item.active-session {
-    border-color: #007bff;
+    border-color: var(--primary-color);
     background-color: #e7f3ff;
 }
 
 .skill-mastery-item.active {
-    background-color: #d4edda; /* Light green */
-    border-color: #28a745;
+    background-color: var(--success-message-bg); /* Light green */
+    border-color: var(--success-color);
     transform: translateY(-2px);
     box-shadow: 0 2px 4px rgba(0,0,0,0.1);
 }
@@ -632,7 +650,7 @@ button.danger:hover {
 .skill-name {
     font-size: 0.8em;
     font-weight: bold;
-    color: #555;
+    color: var(--text-color-dark);
 }
 
 .skill-score {
@@ -653,7 +671,7 @@ button.danger:hover {
 
 /* Styles for the nested skill-column configuration tabs */
 #skill-column-config-container {
-    border-top: 1px solid #ccc;
+    border-top: 1px solid var(--medium-gray);
     margin-top: 15px;
     padding-top: 10px;
 }
@@ -665,12 +683,12 @@ button.danger:hover {
 #skill-column-config-container .tab-button {
     font-size: 0.9em;
     padding: 8px 12px;
-    color: #333;
+    color: var(--text-color-dark);
 }
 
 #skill-column-config-container .tab-button.active {
-    border-bottom: 3px solid #28a745; /* Green to distinguish from main tabs */
-    color: #000;
+    border-bottom: 3px solid var(--success-color); /* Green to distinguish from main tabs */
+    color: var(--text-color-dark);
 }
 
 #skill-column-config-container .tab-panel {
@@ -736,9 +754,9 @@ button.danger:hover {
 
 #filter-intersection-info {
     font-style: italic;
-    color: #666;
+    color: var(--dark-gray);
     padding: 8px;
-    background-color: #f9f9f9;
+    background-color: var(--light-gray);
     border-radius: 4px;
     border: 1px solid #eee;
 }
@@ -775,7 +793,7 @@ button.danger:hover {
 
 #skill-selector-filter {
     padding-left: 15px;
-    border-left: 2px solid #ccc;
+    border-left: 2px solid var(--medium-gray);
     margin-left: 15px;
 }
 
@@ -788,7 +806,7 @@ button.danger:hover {
 #skill-selector-checkboxes label {
     cursor: pointer;
     padding: 5px 10px;
-    border: 1px solid #ccc;
+    border: 1px solid var(--medium-gray);
     border-radius: 20px;
     transition: all 0.2s ease-in-out;
 }
@@ -798,17 +816,17 @@ button.danger:hover {
 }
 
 #skill-selector-checkboxes input[type="checkbox"]:checked + label {
-    background-color: #007bff;
-    color: white;
-    border-color: #007bff;
+    background-color: var(--primary-color);
+    color: var(--text-color-light);
+    border-color: var(--primary-color);
 }
 
 #skill-selector-checkboxes label:hover {
-    background-color: #f0f0f0;
+    background-color: var(--light-gray);
 }
 
 #skill-selector-checkboxes input[type="checkbox"]:checked + label:hover {
-    background-color: #0056b3;
+    background-color: var(--primary-hover-color);
 }
 
 
@@ -837,7 +855,7 @@ button.danger:hover {
     max-width: 500px;
     padding: 20px;
     font-size: 1.5em;
-    border: 2px solid #ccc;
+    border: 2px solid var(--medium-gray);
     border-radius: 10px;
 }
 
@@ -846,9 +864,9 @@ button.danger:hover {
     font-size: 1.5em;
     cursor: pointer;
     border-radius: 10px;
-    border: 1px solid #ccc;
-    background-color: #007bff;
-    color: white;
+    border: 1px solid var(--medium-gray);
+    background-color: var(--primary-color);
+    color: var(--text-color-light);
 }
 
 #slow-replay-button {
@@ -873,19 +891,19 @@ button.danger:hover {
 }
 
 #comparison-container .diff-added {
-    background-color: #a6f3a6;
-    color: #006400;
+    background-color: var(--success-message-bg);
+    color: var(--success-message-text);
     text-decoration: none;
 }
 
 #comparison-container .diff-removed {
-    background-color: #f8d7da;
-    color: #721c24;
+    background-color: var(--danger-message-bg);
+    color: var(--danger-message-text);
     text-decoration: line-through;
 }
 
 #comparison-container .diff-common {
-    color: #6c757d;
+    color: var(--dark-gray);
 }
 
 .tts-lang-display {
@@ -893,9 +911,9 @@ button.danger:hover {
     top: 10px;
     right: 15px;
     font-size: 0.8em;
-    color: #aaa;
+    color: var(--dark-gray);
     font-family: 'Courier New', Courier, monospace;
-    background-color: #f0f0f0;
+    background-color: var(--light-gray);
     padding: 2px 5px;
     border-radius: 3px;
     z-index: 10;
@@ -909,7 +927,7 @@ button.danger:hover {
     transform: translateX(-50%);
     padding: 12px 25px;
     border-radius: 25px;
-    color: white;
+    color: var(--text-color-light);
     font-size: 1.1em;
     font-weight: bold;
     z-index: 200;
@@ -926,11 +944,11 @@ button.danger:hover {
 }
 
 #top-notification.error {
-    background-color: #e74c3c; /* Red */
+    background-color: var(--danger-color); /* Red */
 }
 
 #top-notification.success {
-    background-color: #2ecc71; /* Green */
+    background-color: var(--success-notification-bg); /* Green */
 }
 
 #top-notification.hidden {
@@ -968,7 +986,7 @@ button.danger:hover {
     border: 1px solid #ddd;
     border-radius: 5px;
     margin-bottom: 10px;
-    background-color: #f9f9f9;
+    background-color: var(--light-gray);
 }
 
 #skills-list .skill-item-name {
@@ -978,7 +996,7 @@ button.danger:hover {
 
 #skills-list .skill-item-details {
     font-size: 0.9em;
-    color: #666;
+    color: var(--dark-gray);
 }
 
 #skills-list .skill-item-actions button {
@@ -988,7 +1006,7 @@ button.danger:hover {
 }
 
 #skill-config-panel {
-    background: white;
+    background: var(--background-color);
     padding: 30px;
     border-radius: 8px;
     box-shadow: 0 4px 15px rgba(0,0,0,0.2);
@@ -1007,7 +1025,7 @@ button.danger:hover {
     border: none;
     font-size: 1.8em;
     cursor: pointer;
-    color: #888;
+    color: var(--dark-gray);
 }
 
 #skill-config-panel .setting-grid {
@@ -1019,18 +1037,18 @@ button.danger:hover {
 #skill-config-panel .column-checkbox-group {
     max-height: 200px;
     overflow-y: auto;
-    border: 1px solid #ccc;
+    border: 1px solid var(--medium-gray);
     padding: 10px;
     border-radius: 4px;
 }
 
 #skill-validation-column:disabled {
-    background-color: #eee;
+    background-color: var(--light-gray);
 }
 
 .speech-icon {
     font-size: 10em; /* Make the icon large */
-    color: #888;
+    color: var(--dark-gray);
 }
 
 #multiple-choice-container {
@@ -1088,13 +1106,13 @@ button.danger:hover {
 
 
 #multiple-choice-container button.correct {
-    background-color: #28a745;
-    color: white;
+    background-color: var(--success-color);
+    color: var(--text-color-light);
 }
 
 #multiple-choice-container button.incorrect {
-    background-color: #dc3545;
-    color: white;
+    background-color: var(--danger-color);
+    color: var(--text-color-light);
 }
 
 .filter-status {
@@ -1108,19 +1126,19 @@ button.danger:hover {
 }
 
 .filter-status.learning {
-  background-color: #007bff; /* Blue */
+  background-color: var(--primary-color); /* Blue */
 }
 
 .filter-status.learned {
-  background-color: #28a745; /* Green */
+  background-color: var(--success-color); /* Green */
 }
 
 .filter-toggle-button {
     cursor: pointer;
-    border: 1px solid #6c757d;
+    border: 1px solid var(--dark-gray);
     transition: all 0.2s ease-in-out;
-    color: #6c757d;
-    background-color: white;
+    color: var(--dark-gray);
+    background-color: var(--background-color);
     font-family: inherit; /* Ensure consistent font */
 }
 
@@ -1133,9 +1151,9 @@ button.danger:hover {
 }
 
 .filter-toggle-button.active {
-    background-color: #17a2b8;
-    border-color: #17a2b8;
-    color: white;
+    background-color: var(--info-color);
+    border-color: var(--info-color);
+    color: var(--text-color-light);
 }
 
 /* Mobile-specific styles */
