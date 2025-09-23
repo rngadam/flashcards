@@ -1,7 +1,7 @@
 /* global Sortable */
 
 import { get, set, del, keys } from './lib/idb-keyval-wrapper.js';
-import { getLenientString, transformSlashText } from './lib/string-utils.js';
+import { getLenientString, transformSlashText, stripParentheses } from './lib/string-utils.js';
 import { Skill, createSkillId, createSkill, VERIFICATION_METHODS } from './lib/skill-utils.js';
 import { getDeckWords, getHighlightHTML } from './lib/filter-utils.js';
 import { detectColumnLanguages } from './lib/detect-column-languages.js';
@@ -629,12 +629,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const numChoices = parseInt((configs[configSelector.value] || {}).multipleChoiceCount || 4, 10);
 
+        // Get the target language word to exclude it from distractors
+        const targetLangColumnIndices = roleToColumnMap['TARGET_LANGUAGE'] || [];
+        const targetWord = targetLangColumnIndices.length > 0 ? cardData[currentCardIndex][targetLangColumnIndices[0]] : null;
+
         // Create a pool of unique distractors from all other cards.
         const distractorPool = [...new Set(
             cardData
                 .filter((_, index) => index !== currentCardIndex)
                 .map(card => card[validationColumnIndices[0]])
                 .filter(Boolean) // Filter out empty/null/undefined values
+                .filter(word => word !== targetWord && word !== correctAnswer) // Exclude the word being presented and the correct answer
         )];
 
         shuffleArray(distractorPool);
@@ -658,7 +663,7 @@ document.addEventListener('DOMContentLoaded', () => {
             numberSpan.textContent = index + 1;
 
             button.appendChild(numberSpan);
-            button.appendChild(document.createTextNode(` ${option}`)); // Append the option as a text node
+            button.appendChild(document.createTextNode(` ${stripParentheses(option)}`)); // Use the new function here
 
             button.addEventListener('click', () => checkMultipleChoiceAnswer(option, correctAnswer));
             multipleChoiceContainer.appendChild(button);
@@ -1410,11 +1415,17 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    function exportSkills() {
+    async function exportSkills() {
+        const success = await saveCurrentConfig();
+        if (!success) {
+            showTopNotification('Could not save configuration. Skills not exported.', 'error');
+            return;
+        }
+
         const currentConfigName = configSelector.value;
         const currentConfig = configs[currentConfigName];
 
-        if (!currentConfig || !currentConfig.skills || currentConfig.skills.length === 0) {
+        if (!currentConfig || !currentConfig.skills || !currentConfig.skills.length === 0) {
             showTopNotification('No skills to export in the current configuration.', 'error');
             return;
         }
@@ -1668,13 +1679,11 @@ document.addEventListener('DOMContentLoaded', () => {
         if (card.classList.contains('flipped')) {
             const ttsRole = skillConfig.ttsBackColumn;
             const lang = getLanguageForTts(ttsRole);
-            const ttsText = getTextForRoles(ttsRole ? [ttsRole] : [], currentRandomBaseIndex);
-            speak(ttsText, { ttsRole: ttsRole, lang: lang });
+            speak(textForBackTTS, { ttsRole: ttsRole, lang: lang });
         } else {
             const ttsRole = skillConfig.ttsFrontColumn;
             const lang = getLanguageForTts(ttsRole);
-            const ttsText = getTextForRoles(ttsRole ? [ttsRole] : [], currentRandomBaseIndex);
-            speak(ttsText, { ttsRole: ttsRole, lang: lang });
+            speak(textForFrontTTS, { ttsRole: ttsRole, lang: lang });
         }
     }
 
@@ -1795,6 +1804,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 // If a specific base language has been chosen for this card view, use it
                 if (baseLanguageIndex !== -1) {
                     indices.push(baseLanguageIndex);
+            } else {
+                // Otherwise, fall back to the first configured base language column
+                indices.push(...(roleToColumnMap[roleKey] || []));
                 }
             } else {
                 // For all other roles, get all associated columns
@@ -1810,7 +1822,7 @@ document.addEventListener('DOMContentLoaded', () => {
             const cellText = cardData[currentCardIndex][colIndex];
             // Apply the slash transformation at the source.
             return cellText ? transformSlashText(cellText) : cellText;
-        }).filter(Boolean).join('\n');
+        }).filter(Boolean).join(' ');
     }
 
     function getRetentionScore(skillStats) {
@@ -1961,8 +1973,8 @@ document.addEventListener('DOMContentLoaded', () => {
             useUppercase = !useUppercase;
         }
 
-        cardFrontContent.innerHTML = isAudioOnly(skillConfig) ? '<span class="speech-icon">🔊</span>' : `<span>${displayText.replace(/\n/g, '<br>')}</span>`;
-        cardBackContent.innerHTML = `<span>${textForBackDisplay.replace(/\n/g, '<br>')}</span>`;
+        cardFrontContent.innerHTML = isAudioOnly(skillConfig) ? '<span class="speech-icon">🔊</span>' : `<span>${displayText.replace(/ /g, '<br>')}</span>`;
+        cardBackContent.innerHTML = `<span>${textForBackDisplay.replace(/ /g, '<br>')}</span>`;
 
         cardFront.style.fontSize = '';
         cardBackContent.style.fontSize = '';
@@ -2929,7 +2941,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         // Sanitize text for TTS: remove content in parentheses
-        const sanitizedText = text.replace(/\s?\(.*\)\s?/g, ' ').trim();
+    const sanitizedText = stripParentheses(text);
         if (!sanitizedText) return;
 
         const utterance = new SpeechSynthesisUtterance(sanitizedText);

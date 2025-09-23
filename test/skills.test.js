@@ -21,7 +21,8 @@ describe('Default Skills Configuration', () => {
             'Validated Writing Practice': '840c4cbbeb3b4dd2f708f1f943498a60cf442b214b2005348b22427977a8107d',
             'Spoken Production': '8f1b2ba12dc45f1c5f38efa7ca2a401ebb480c04d39a1f523bcfb9ae7f6a1c7d',
             'Pronunciation Practice': 'af1c9447bb36faadb8d5af1118a55a43d3237ec3faf6d1f5aecc3de54f96dd7c',
-            'Translation Practice': 'ffac7e8a2968d929e1fbe4abda98788ed7fb07634590664b82de70ce7db29f89'
+            'Translation Practice': 'ffac7e8a2968d929e1fbe4abda98788ed7fb07634590664b82de70ce7db29f89',
+            'Related Words': 'bca6f1f962fa4d6398fcc26ca4dc738bd69c45fdb41be242bd2f3789f2266a64'
         };
 
         for (const skill of defaultSkills) {
