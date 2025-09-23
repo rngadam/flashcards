@@ -2180,7 +2180,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // 2. Determine the list of items to select from (filtered or all)
         let itemsToSelectFrom = allReviewableItems;
-        let isFiltered = enableFilterCheckbox.checked && activeFilterWords.size > 0;
+        const currentConfig = configs[configSelector.value] || {};
+        let isFiltered = currentConfig.filterIsEnabled && activeFilterWords.size > 0;
         let filteredItems = [];
 
         if (isFiltered) {
