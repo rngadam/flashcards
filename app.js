@@ -1,6 +1,5 @@
-import { franc } from 'https://cdn.jsdelivr.net/npm/franc@6.2.0/+esm';
-import { eld } from 'https://cdn.jsdelivr.net/npm/efficient-language-detector-no-dynamic-import@1.0.3/+esm';
-import { get, set, del, keys } from 'https://cdn.jsdelivr.net/npm/idb-keyval/+esm';
+import { eld } from './lib/eld-wrapper.js';
+import { get, set, del, keys } from './lib/idb-keyval-wrapper.js';
 import { getLenientString, transformSlashText } from './lib/string-utils.js';
 import { Skill, createSkillId, createSkill, VERIFICATION_METHODS } from './lib/skill-utils.js';
 import { getDeckWords, getHighlightHTML } from './lib/filter-utils.js';
@@ -853,9 +852,8 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             const result = await eld.detect(sampleText);
-            // Use franc as a fallback for short or ambiguous text
-            const finalLang = result.language || franc(sampleText);
-
+            // Utilise uniquement eld, fallback sur 'en' si non détecté
+            const finalLang = result.language;
             return finalLang && finalLang !== 'und' ? finalLang : 'en'; // Default to 'en'
         });
 
