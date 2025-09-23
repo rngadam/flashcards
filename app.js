@@ -1804,9 +1804,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 // If a specific base language has been chosen for this card view, use it
                 if (baseLanguageIndex !== -1) {
                     indices.push(baseLanguageIndex);
-            } else {
-                // Otherwise, fall back to the first configured base language column
-                indices.push(...(roleToColumnMap[roleKey] || []));
+                } else {
+                    // Otherwise, fall back to the first configured base language column
+                    indices.push(...(roleToColumnMap[roleKey] || []));
                 }
             } else {
                 // For all other roles, get all associated columns
@@ -2941,7 +2941,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         // Sanitize text for TTS: remove content in parentheses
-    const sanitizedText = stripParentheses(text);
+        const sanitizedText = stripParentheses(text);
         if (!sanitizedText) return;
 
         const utterance = new SpeechSynthesisUtterance(sanitizedText);
