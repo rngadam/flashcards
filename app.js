@@ -107,11 +107,13 @@ document.addEventListener('DOMContentLoaded', () => {
     const clearFilterButton = document.getElementById('clear-filter-button');
     const filterTextarea = document.getElementById('filter-text');
     const filterAllowOverflowCheckbox = document.getElementById('filter-allow-overflow');
-    const enableFilterCheckbox = document.getElementById('enable-filter-checkbox');
-    const mobileEnableFilterCheckbox = document.getElementById('mobile-enable-filter-checkbox');
+    const filterToggleButton = document.getElementById('filter-toggle-button');
+    const mobileFilterToggleButton = document.getElementById('mobile-filter-toggle-button');
     const enableFilterSettingsCheckbox = document.getElementById('enable-filter-settings-checkbox');
     const filterIntersectionInfo = document.getElementById('filter-intersection-info');
     const filterHighlightLayer = document.getElementById('filter-highlight-layer');
+    const filterStatusIndicator = document.getElementById('filter-status-indicator');
+    const mobileFilterStatusIndicator = document.getElementById('mobile-filter-status-indicator');
     const writingPracticeContainer = document.getElementById('writing-practice-container');
     const writingInput = document.getElementById('writing-input');
     const writingSubmit = document.getElementById('writing-submit');
@@ -365,16 +367,26 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
     }
-    async function handleFilterToggle(event) {
+    function toggleFilter() {
+        const currentConfig = configs[configSelector.value];
+        if (!currentConfig) return;
+
+        const isEnabled = !currentConfig.filterIsEnabled; // Toggle the state
+        setFilterEnabled(isEnabled);
+        saveCurrentConfig();
+        showNextCard();
+    }
+
+    if (filterToggleButton) filterToggleButton.addEventListener('click', toggleFilter);
+    if (mobileFilterToggleButton) mobileFilterToggleButton.addEventListener('click', toggleFilter);
+
+    async function handleSettingsFilterToggle(event) {
         const isChecked = event.target.checked;
         setFilterEnabled(isChecked);
         await saveCurrentConfig(); // Persist the change
         showNextCard();
     }
-
-    if (enableFilterCheckbox) enableFilterCheckbox.addEventListener('change', handleFilterToggle);
-    if (mobileEnableFilterCheckbox) mobileEnableFilterCheckbox.addEventListener('change', handleFilterToggle);
-    if (enableFilterSettingsCheckbox) enableFilterSettingsCheckbox.addEventListener('change', handleFilterToggle);
+    if (enableFilterSettingsCheckbox) enableFilterSettingsCheckbox.addEventListener('change', handleSettingsFilterToggle);
 
     const handleSlowReplay = () => {
         const skillConfig = getCurrentSkillConfig();
@@ -679,10 +691,25 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function setFilterEnabled(isEnabled) {
-        if (enableFilterCheckbox) enableFilterCheckbox.checked = isEnabled;
-        if (mobileEnableFilterCheckbox) mobileEnableFilterCheckbox.checked = isEnabled;
+        const currentConfig = configs[configSelector.value];
+        if (currentConfig) {
+            currentConfig.filterIsEnabled = isEnabled;
+        }
+
+        if (filterToggleButton) filterToggleButton.classList.toggle('active', isEnabled);
+        if (mobileFilterToggleButton) mobileFilterToggleButton.classList.toggle('active', isEnabled);
         if (enableFilterSettingsCheckbox) enableFilterSettingsCheckbox.checked = isEnabled;
-        // The actual filtering logic is now tied to showNextCard, which respects the checkbox state.
+    }
+
+    function updateFilterState(state) { // 'off', 'learning', 'learned'
+        const indicators = [filterStatusIndicator, mobileFilterStatusIndicator];
+        indicators.forEach(indicator => {
+            if (!indicator) return;
+            indicator.classList.remove('learning', 'learned');
+            if (state === 'learning' || state === 'learned') {
+                indicator.classList.add(state);
+            }
+        });
     }
 
     function updateFilterHighlights() {
@@ -729,6 +756,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const words = new Set(wordsArray.map(w => w.toLowerCase()));
         activeFilterWords = words;
         setFilterEnabled(true); // Applying a filter should enable it.
+        updateFilterState('learning');
 
         await saveCurrentConfig(); // Persist the filter text and state
         showTopNotification(`Filter applied and saved. Found ${words.size} unique words.`, 'success');
@@ -740,6 +768,7 @@ document.addEventListener('DOMContentLoaded', () => {
         activeFilterWords.clear();
         setFilterEnabled(false);
         if (filterTextarea) filterTextarea.value = '';
+        updateFilterState('off');
 
         await saveCurrentConfig(); // Persist the cleared filter
         showTopNotification('Filter cleared and saved.', 'success');
@@ -2151,7 +2180,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // 2. Determine the list of items to select from (filtered or all)
         let itemsToSelectFrom = allReviewableItems;
-        let isFiltered = enableFilterCheckbox.checked && activeFilterWords.size > 0;
+        let isFiltered = currentConfig.filterIsEnabled && activeFilterWords.size > 0;
         let filteredItems = [];
 
         if (isFiltered) {
@@ -2184,14 +2213,16 @@ document.addEventListener('DOMContentLoaded', () => {
         // 4. Handle overflow if the filtered set is learned
         const filteredDeckIsLearned = isFiltered && result && result.reason.type === 'deck_learned';
 
+        if (isFiltered) {
+            updateFilterState(filteredDeckIsLearned ? 'learned' : 'learning');
+        } else {
+            updateFilterState('off');
+        }
+
         if (filteredDeckIsLearned && filterAllowOverflowCheckbox.checked) {
-            // The bug is here: `findNextCardFromList` is called again on the *entire* deck.
-            // This is correct, but we need to pass `isFiltered: false` to the next call
-            // so the explanation message is correct.
             const overflowResult = findNextCardFromList(allReviewableItems, { ...findNextCardOptions, isFiltered: false });
             if (overflowResult) {
-                // We show a special message for this case.
-                overflowResult.reason = { type: 'deck_learned', isFiltered: true }; // This triggers "Filtered deck learned!"
+                // By not overwriting the reason, the explanation message for the new card will be correct.
                 result = overflowResult;
             }
         } else if (!result && isFiltered && filterAllowOverflowCheckbox.checked) {
@@ -2775,6 +2806,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (filterTextarea) filterTextarea.value = config.filterText || '';
         if (filterAllowOverflowCheckbox) filterAllowOverflowCheckbox.checked = config.filterAllowOverflow !== false; // default to true
         setFilterEnabled(config.filterIsEnabled || false);
+        updateFilterState(config.filterIsEnabled ? 'learning' : 'off');
         updateFilterHighlights(); // Update highlights based on loaded text
         const wordsArray = (config.filterText || '').match(/[\p{L}\p{N}]+/gu) || [];
         activeFilterWords = new Set(wordsArray.map(w => w.toLowerCase()));
