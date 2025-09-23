@@ -226,6 +226,45 @@ body.desktop .btn-text {
     color: #333;
 }
 
+#dashboard-panel {
+  background: white;
+  padding: 20px;
+  border-radius: 5px;
+  box-shadow: 0 0 10px rgba(0,0,0,0.1);
+  position: relative;
+  width: 80%;
+  max-width: 800px;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+}
+
+#dashboard-panel h2 {
+  margin-top: 0;
+  border-bottom: 1px solid #eee;
+  padding-bottom: 10px;
+}
+
+.dashboard-section {
+  margin-top: 15px;
+  flex: 1; /* Allow sections to grow */
+  overflow-y: auto; /* Add scroll to each list */
+}
+
+.dashboard-section h3 {
+  margin-top: 0;
+}
+
+#close-dashboard-button {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  background: none;
+  border: none;
+  font-size: 1.5em;
+  cursor: pointer;
+}
+
 #history-panel {
   background: white;
   padding: 20px;
@@ -410,6 +449,8 @@ body.desktop .btn-text {
 
 
 #controls {
+  display: flex;
+  justify-content: center;
   flex-shrink: 0; /* Prevent controls from shrinking */
   padding-top: 10px;
 }

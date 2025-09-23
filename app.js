@@ -124,6 +124,12 @@ document.addEventListener('DOMContentLoaded', () => {
     const topNotification = document.getElementById('top-notification');
     const ttsLangDisplayFront = document.getElementById('tts-lang-display-front');
     const ttsLangDisplayBack = document.getElementById('tts-lang-display-back');
+    const dashboardButton = document.getElementById('dashboard-button');
+    const mobileDashboardButton = document.getElementById('mobile-dashboard-button');
+    const dashboardModal = document.getElementById('dashboard-modal');
+    const closeDashboardButton = document.getElementById('close-dashboard-button');
+    const masteredWordsList = document.getElementById('mastered-words-list');
+    const difficultWordsList = document.getElementById('difficult-words-list');
 
 
     // --- Top Notification Function ---
@@ -218,6 +224,13 @@ document.addEventListener('DOMContentLoaded', () => {
         helpModal.classList.remove('hidden');
     });
     if (closeHelpButton) closeHelpButton.addEventListener('click', () => helpModal.classList.add('hidden'));
+
+    if (dashboardButton) dashboardButton.addEventListener('click', renderDashboard);
+    if (mobileDashboardButton) mobileDashboardButton.addEventListener('click', () => {
+        mobileMenuOverlay.classList.add('hidden');
+        renderDashboard();
+    });
+    if (closeDashboardButton) closeDashboardButton.addEventListener('click', () => dashboardModal.classList.add('hidden'));
 
     function toggleFullscreen() {
         if (!document.fullscreenElement) {
@@ -536,7 +549,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
     async function checkWritingAnswer() {
         const userAnswer = writingInput.value.trim();
-        if (userAnswer === '') return;
+        if (userAnswer === '') {
+            await markCardAsKnown(false);
+            await showNextCard({ forceNew: true });
+            return;
+        }
 
         const skillConfig = getCurrentSkillConfig();
         if (!skillConfig || skillConfig.verificationMethod !== VERIFICATION_METHODS.TEXT) {
@@ -2258,6 +2275,66 @@ document.addEventListener('DOMContentLoaded', () => {
         });
         tbodyHtml += '</tbody>';
         return tbodyHtml;
+    }
+
+    /**
+     * Renders the complete history of all cards and their statistics into a table
+     * and displays it in the history modal.
+     */
+    async function renderDashboard() {
+        if (cardData.length === 0) {
+            showTopNotification('No deck loaded. Please load a deck to analyze.', 'error');
+            return;
+        }
+
+        const allCardStats = await getAllCardStats();
+        const masteredWords = [];
+        const difficultWords = [];
+        const keyIndex = (configs[configSelector.value]?.roleToColumnMap?.TARGET_LANGUAGE || [])[0];
+
+        if (keyIndex === undefined) {
+            showTopNotification('Cannot generate report: Target Language column not set.', 'error');
+            return;
+        }
+
+        allCardStats.forEach((cardStats, index) => {
+            const cardKey = cardData[index][keyIndex];
+            if (!cardKey) return;
+
+            let totalScore = 0;
+            let skillCount = 0;
+            for (const skillId in cardStats.skills) {
+                totalScore += getRetentionScore(cardStats.skills[skillId]);
+                skillCount++;
+            }
+
+            const avgScore = skillCount > 0 ? totalScore / skillCount : 0;
+
+            if (avgScore > 5) {
+                masteredWords.push({ word: cardKey, score: avgScore.toFixed(1) });
+            } else if (avgScore < 0) {
+                difficultWords.push({ word: cardKey, score: avgScore.toFixed(1) });
+            }
+        });
+
+        const populateList = (listElement, words) => {
+            listElement.innerHTML = '';
+            if (words.length === 0) {
+                listElement.innerHTML = '<li>None yet. Keep practicing!</li>';
+                return;
+            }
+            words.sort((a, b) => b.score - a.score); // Sort by score
+            words.forEach(item => {
+                const li = document.createElement('li');
+                li.textContent = `${item.word} (Score: ${item.score})`;
+                listElement.appendChild(li);
+            });
+        };
+
+        populateList(masteredWordsList, masteredWords);
+        populateList(difficultWordsList, difficultWords.sort((a,b) => a.score - b.score)); // sort difficult words ascending
+
+        dashboardModal.classList.remove('hidden');
     }
 
     /**

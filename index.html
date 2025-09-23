@@ -19,6 +19,7 @@
         </div>
       </div>
       <div class="desktop-only-buttons">
+        <button id="dashboard-button">📊</button>
         <button id="history-button">📜</button>
         <button id="settings-button">⚙️</button>
         <button id="help-button">?</button>
@@ -39,12 +40,28 @@
                     <label for="mobile-enable-filter-checkbox" title="Enable/Disable Word Filter">Filter</label>
                 </div>
             </div>
+            <button id="mobile-dashboard-button">📊 Dashboard</button>
             <button id="mobile-history-button">📜 History</button>
             <button id="mobile-settings-button">⚙️ Settings</button>
             <button id="mobile-help-button">? Help</button>
             <button id="mobile-fullscreen-button">⛶ Fullscreen</button>
             <button id="close-mobile-menu-button">Close</button>
         </div>
+    </div>
+
+    <div id="dashboard-modal" class="modal-overlay hidden">
+      <div id="dashboard-panel">
+        <button id="close-dashboard-button">X</button>
+        <h2>Word Mastery Dashboard</h2>
+        <div class="dashboard-section">
+          <h3>Mastered Words (Score > 5)</h3>
+          <ul id="mastered-words-list"></ul>
+        </div>
+        <div class="dashboard-section">
+          <h3>Difficult Words (Score < 0)</h3>
+          <ul id="difficult-words-list"></ul>
+        </div>
+      </div>
     </div>
 
     <div id="help-modal" class="modal-overlay hidden">
