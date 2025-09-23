@@ -1,9 +1,10 @@
 /* global Sortable */
-import { eld } from './lib/eld-wrapper.js';
+
 import { get, set, del, keys } from './lib/idb-keyval-wrapper.js';
 import { getLenientString, transformSlashText } from './lib/string-utils.js';
 import { Skill, createSkillId, createSkill, VERIFICATION_METHODS } from './lib/skill-utils.js';
 import { getDeckWords, getHighlightHTML } from './lib/filter-utils.js';
+
 
 /**
  * @file Main application logic for the Flashcards web app.
@@ -827,41 +828,10 @@ document.addEventListener('DOMContentLoaded', () => {
      * It also initializes the statistics for each card.
      * @param {string} text - The raw string data from the fetched file.
      */
-    async function detectColumnLanguages() {
-        if (cardData.length === 0) {
-            columnLanguages = [];
-            return;
-        }
 
-        const languagePromises = headers.map(async (header, colIndex) => {
-            // Concatenate up to 50 random sample cells from the column for detection
-            let sampleText = '';
-            const sampleSize = Math.min(cardData.length, 50);
-            // Create a shallow shuffled copy to not modify the original cardData order
-            const shuffledData = [...cardData].sort(() => 0.5 - Math.random());
-
-            for (let i = 0; i < sampleSize; i++) {
-                const cell = shuffledData[i][colIndex];
-                if (cell) {
-                    // Important: Sanitize here to remove pinyin etc. before detection
-                    sampleText += cell.replace(/\s?\(.*\)\s?/g, ' ').trim() + ' ';
-                }
-            }
-
-            if (sampleText.trim() === '') {
-                return 'N/A'; // Not enough data to detect
-            }
-
-            const result = await eld.detect(sampleText);
-            // Utilise uniquement eld, fallback sur 'en' si non détecté
-            const finalLang = result.language;
-            return finalLang && finalLang !== 'und' ? finalLang : 'en'; // Default to 'en'
-        });
-
-        columnLanguages = await Promise.all(languagePromises);
+    async function updateColumnLanguages() {
+        columnLanguages = await detectColumnLanguages(cardData, headers);
         console.log('Detected column languages:', columnLanguages);
-
-        // This function is now responsible for populating the roles UI since the UI needs the language info
         populateColumnRolesUI();
     }
 
@@ -893,7 +863,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // Stats are no longer loaded in bulk here.
 
         viewHistory = [];
-        await detectColumnLanguages(); // This populates columnLanguages and then calls populateColumnRolesUI
+        await updateColumnLanguages(); // Cette fonction met à jour columnLanguages et l'UI
         if (repetitionIntervalsTextarea) repetitionIntervalsTextarea.value = repetitionIntervals.join(', ');
     }
 

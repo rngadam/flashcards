@@ -3,33 +3,8 @@
 
 import { expect } from 'chai';
 import sinon from 'sinon';
-import { eld, __setMock } from '../lib/eld-wrapper.js';
-
-// On va simuler la fonction detectColumnLanguages telle qu'elle existe dans app.js
-async function detectColumnLanguages(cardData, headers) {
-    if (cardData.length === 0) {
-        return [];
-    }
-    // On simule la logique de sampleText
-    const languagePromises = headers.map(async (header, colIndex) => {
-        let sampleText = '';
-        const sampleSize = Math.min(cardData.length, 50);
-        const shuffledData = [...cardData];
-        for (let i = 0; i < sampleSize; i++) {
-            const cell = shuffledData[i][colIndex];
-            if (cell) {
-                sampleText += cell.replace(/\s?\(.*\)\s?/g, ' ').trim() + ' ';
-            }
-        }
-        if (sampleText.trim() === '') {
-            return 'N/A';
-        }
-        const result = await eld.detect(sampleText);
-        const finalLang = result.language;
-        return finalLang && finalLang !== 'und' ? finalLang : 'en';
-    });
-    return await Promise.all(languagePromises);
-}
+import { __setMock } from '../lib/eld-wrapper.js';
+import { detectColumnLanguages } from '../lib/detect-column-languages.js';
 
 describe('detectColumnLanguages', function () {
     let eldMock;
