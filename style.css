@@ -1107,3 +1107,21 @@ button.danger:hover {
     background-color: #dc3545;
     color: white;
 }
+
+.filter-status {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  margin-left: 8px;
+  vertical-align: middle;
+  transition: background-color 0.3s ease;
+}
+
+.filter-status.learning {
+  background-color: #007bff; /* Blue */
+}
+
+.filter-status.learned {
+  background-color: #28a745; /* Green */
+}
