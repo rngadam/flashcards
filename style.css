@@ -130,8 +130,7 @@ body.desktop .desktop-only-buttons {
     margin-right: 10px;
 }
 
-#mobile-skill-selector-checkboxes input[type="checkbox"]:checked + label,
-#mobile-skill-selector-filter input[type="checkbox"]:checked + label {
+#mobile-skill-selector-checkboxes input[type="checkbox"]:checked + label {
     background-color: #007bff;
     color: white;
     border-color: #007bff;
@@ -780,16 +779,6 @@ button.danger:hover {
     margin-left: 15px;
 }
 
-#skill-selector-filter label {
-    border: 1px solid #6c757d; /* A neutral gray */
-    color: #6c757d;
-}
-
-#skill-selector-filter input[type="checkbox"]:checked + label {
-    background-color: #17a2b8; /* A teal/info color */
-    border-color: #17a2b8;
-    color: white;
-}
 
 #skill-selector-checkboxes div {
     display: flex;
@@ -1124,4 +1113,38 @@ button.danger:hover {
 
 .filter-status.learned {
   background-color: #28a745; /* Green */
+}
+
+.filter-toggle-button {
+    cursor: pointer;
+    border: 1px solid #6c757d;
+    transition: all 0.2s ease-in-out;
+    color: #6c757d;
+    background-color: white;
+    font-family: inherit; /* Ensure consistent font */
+}
+
+/* Desktop-specific styles */
+#filter-toggle-button {
+    padding: 5px 10px;
+    border-radius: 20px;
+    font-size: 1em;
+    margin: 0; /* Override default button margin */
+}
+
+.filter-toggle-button.active {
+    background-color: #17a2b8;
+    border-color: #17a2b8;
+    color: white;
+}
+
+/* Mobile-specific styles */
+#mobile-filter-toggle-button {
+    display: block;
+    width: 100%;
+    padding: 10px;
+    border-radius: 5px;
+    font-size: 1em;
+    text-align: center;
+    margin: 0;
 }

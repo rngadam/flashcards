@@ -107,8 +107,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const clearFilterButton = document.getElementById('clear-filter-button');
     const filterTextarea = document.getElementById('filter-text');
     const filterAllowOverflowCheckbox = document.getElementById('filter-allow-overflow');
-    const enableFilterCheckbox = document.getElementById('enable-filter-checkbox');
-    const mobileEnableFilterCheckbox = document.getElementById('mobile-enable-filter-checkbox');
+    const filterToggleButton = document.getElementById('filter-toggle-button');
+    const mobileFilterToggleButton = document.getElementById('mobile-filter-toggle-button');
     const enableFilterSettingsCheckbox = document.getElementById('enable-filter-settings-checkbox');
     const filterIntersectionInfo = document.getElementById('filter-intersection-info');
     const filterHighlightLayer = document.getElementById('filter-highlight-layer');
@@ -367,16 +367,26 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
     }
-    async function handleFilterToggle(event) {
+    function toggleFilter() {
+        const currentConfig = configs[configSelector.value];
+        if (!currentConfig) return;
+
+        const isEnabled = !currentConfig.filterIsEnabled; // Toggle the state
+        setFilterEnabled(isEnabled);
+        saveCurrentConfig();
+        showNextCard();
+    }
+
+    if (filterToggleButton) filterToggleButton.addEventListener('click', toggleFilter);
+    if (mobileFilterToggleButton) mobileFilterToggleButton.addEventListener('click', toggleFilter);
+
+    async function handleSettingsFilterToggle(event) {
         const isChecked = event.target.checked;
         setFilterEnabled(isChecked);
         await saveCurrentConfig(); // Persist the change
         showNextCard();
     }
-
-    if (enableFilterCheckbox) enableFilterCheckbox.addEventListener('change', handleFilterToggle);
-    if (mobileEnableFilterCheckbox) mobileEnableFilterCheckbox.addEventListener('change', handleFilterToggle);
-    if (enableFilterSettingsCheckbox) enableFilterSettingsCheckbox.addEventListener('change', handleFilterToggle);
+    if (enableFilterSettingsCheckbox) enableFilterSettingsCheckbox.addEventListener('change', handleSettingsFilterToggle);
 
     const handleSlowReplay = () => {
         const skillConfig = getCurrentSkillConfig();
@@ -681,10 +691,14 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function setFilterEnabled(isEnabled) {
-        if (enableFilterCheckbox) enableFilterCheckbox.checked = isEnabled;
-        if (mobileEnableFilterCheckbox) mobileEnableFilterCheckbox.checked = isEnabled;
+        const currentConfig = configs[configSelector.value];
+        if (currentConfig) {
+            currentConfig.filterIsEnabled = isEnabled;
+        }
+
+        if (filterToggleButton) filterToggleButton.classList.toggle('active', isEnabled);
+        if (mobileFilterToggleButton) mobileFilterToggleButton.classList.toggle('active', isEnabled);
         if (enableFilterSettingsCheckbox) enableFilterSettingsCheckbox.checked = isEnabled;
-        // The actual filtering logic is now tied to showNextCard, which respects the checkbox state.
     }
 
     function updateFilterState(state) { // 'off', 'learning', 'learned'
