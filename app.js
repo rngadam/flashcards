@@ -1,3 +1,4 @@
+/* global Sortable */
 import { eld } from './lib/eld-wrapper.js';
 import { get, set, del, keys } from './lib/idb-keyval-wrapper.js';
 import { getLenientString, transformSlashText } from './lib/string-utils.js';
