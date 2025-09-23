@@ -551,7 +551,9 @@ document.addEventListener('DOMContentLoaded', () => {
         const userAnswer = writingInput.value.trim();
         if (userAnswer === '') {
             await markCardAsKnown(false);
-            await showNextCard({ forceNew: true });
+            // The user wants to see the answer on an empty submission.
+            // Unlike the "I don't know" button, we flip the card and wait for manual progression.
+            flipCard();
             return;
         }
 
@@ -2282,6 +2284,9 @@ document.addEventListener('DOMContentLoaded', () => {
      * and displays it in the history modal.
      */
     async function renderDashboard() {
+        const MASTERED_THRESHOLD = 5;
+        const DIFFICULT_THRESHOLD = 0;
+
         if (cardData.length === 0) {
             showTopNotification('No deck loaded. Please load a deck to analyze.', 'error');
             return;
@@ -2310,20 +2315,20 @@ document.addEventListener('DOMContentLoaded', () => {
 
             const avgScore = skillCount > 0 ? totalScore / skillCount : 0;
 
-            if (avgScore > 5) {
+            if (avgScore > MASTERED_THRESHOLD) {
                 masteredWords.push({ word: cardKey, score: avgScore.toFixed(1) });
-            } else if (avgScore < 0) {
+            } else if (avgScore < DIFFICULT_THRESHOLD) {
                 difficultWords.push({ word: cardKey, score: avgScore.toFixed(1) });
             }
         });
 
-        const populateList = (listElement, words) => {
+        const populateList = (listElement, words, sortFn) => {
             listElement.innerHTML = '';
             if (words.length === 0) {
                 listElement.innerHTML = '<li>None yet. Keep practicing!</li>';
                 return;
             }
-            words.sort((a, b) => b.score - a.score); // Sort by score
+            words.sort(sortFn); // Sort by score using the provided function
             words.forEach(item => {
                 const li = document.createElement('li');
                 li.textContent = `${item.word} (Score: ${item.score})`;
@@ -2331,8 +2336,8 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         };
 
-        populateList(masteredWordsList, masteredWords);
-        populateList(difficultWordsList, difficultWords.sort((a,b) => a.score - b.score)); // sort difficult words ascending
+        populateList(masteredWordsList, masteredWords, (a, b) => parseFloat(b.score) - parseFloat(a.score));
+        populateList(difficultWordsList, difficultWords, (a, b) => parseFloat(a.score) - parseFloat(b.score));
 
         dashboardModal.classList.remove('hidden');
     }
