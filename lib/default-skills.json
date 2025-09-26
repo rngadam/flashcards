@@ -53,16 +53,5 @@
     "ttsBackColumn": "TARGET_LANGUAGE",
     "alternateUppercase": false,
     "ttsOnHotkeyOnly": false
-  },
-  {
-    "name": "Related Words",
-    "verificationMethod": "multipleChoice",
-    "front": [ "TARGET_LANGUAGE", "RELATION_TYPE" ],
-    "back": [ "RELATED_WORD", "BASE_LANGUAGE" ],
-    "validationColumn": "RELATED_WORD",
-    "ttsFrontColumn": "TARGET_LANGUAGE",
-    "ttsBackColumn": "RELATED_WORD",
-    "alternateUppercase": false,
-    "ttsOnHotkeyOnly": false
   }
 ]
