@@ -84,6 +84,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const disableAnimationCheckbox = document.getElementById('disable-animation');
     const audioOnlyFrontCheckbox = document.getElementById('audio-only-front');
     const multipleChoiceCount = document.getElementById('multiple-choice-count');
+    const voiceCorrectDelayInput = document.getElementById('voice-correct-delay');
     const configNameInput = document.getElementById('config-name');
     const skillSelectorCheckboxes = document.getElementById('skill-selector-checkboxes');
     const mobileSkillSelectorCheckboxes = document.getElementById('mobile-skill-selector-checkboxes');
@@ -118,6 +119,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const writingInput = document.getElementById('writing-input');
     const writingSubmit = document.getElementById('writing-submit');
     const multipleChoiceContainer = document.getElementById('multiple-choice-container');
+    const voiceInputContainer = document.getElementById('voice-input-container');
+    const voiceInputButton = document.getElementById('voice-input-button');
+    const voiceInputFeedback = document.getElementById('voice-input-feedback');
     const comparisonContainer = document.getElementById('comparison-container');
     const slowReplayButton = document.getElementById('slow-replay-button');
     const slowReplayHotkey = document.getElementById('slow-replay-hotkey');
@@ -187,6 +191,9 @@ document.addEventListener('DOMContentLoaded', () => {
     let isCurrentCardDue = false; // Tracks if the current card was shown because it was due for review.
     let columnLanguages = []; // Holds the detected language for each column.
     let activeFilterWords = new Set(); // Holds the words for the current filter.
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    let recognitionInstance = null;
+    let recognitionActive = false; // Use a flag to control the recognition loop
 
     // History table sort state
     let historySortColumn = -1;
@@ -266,7 +273,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (nextCardButton) nextCardButton.addEventListener('click', () => showNextCard());
     if (prevCardButton) prevCardButton.addEventListener('click', showPrevCard);
     if (iKnowButton) iKnowButton.addEventListener('click', async () => { await markCardAsKnown(true); await showNextCard(); });
-    if (iDontKnowButton) iDontKnowButton.addEventListener('click', async () => { await markCardAsKnown(false); await showNextCard({ forceNew: true }); });
+    if (iDontKnowButton) iDontKnowButton.addEventListener('click', handleIDontKnow);
     if (fontSelector) fontSelector.addEventListener('change', () => {
         if (cardContainer) cardContainer.style.fontFamily = fontSelector.value;
     });
@@ -357,6 +364,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
+    if (voiceInputButton) voiceInputButton.addEventListener('click', toggleVoiceRecognition);
     if (applyFilterButton) applyFilterButton.addEventListener('click', applyFilter);
     if (clearFilterButton) clearFilterButton.addEventListener('click', clearFilter);
     if (filterTextarea) {
@@ -390,13 +398,36 @@ document.addEventListener('DOMContentLoaded', () => {
     if (enableFilterSettingsCheckbox) enableFilterSettingsCheckbox.addEventListener('change', handleSettingsFilterToggle);
 
     const handleSlowReplay = () => {
+        // Always stop recognition if it's currently active.
+        if (recognitionActive) {
+            stopVoiceRecognition();
+        }
+
         const skillConfig = getCurrentSkillConfig();
-        const ttsFrontRole = skillConfig.ttsFrontColumn;
-        if (ttsFrontRole) {
-            const ttsText = getTextForRoles([ttsFrontRole]);
+
+        const onEndCallback = () => {
+            // After TTS, check the CURRENT state to see if we should restart recognition.
+            const currentSkillConfig = getCurrentSkillConfig();
+            if (currentSkillConfig &&
+                currentSkillConfig.verificationMethod === VERIFICATION_METHODS.VOICE &&
+                !card.classList.contains('flipped')) {
+                startVoiceRecognition();
+            }
+        };
+
+        if (skillConfig && skillConfig.ttsFrontColumn) {
+            const ttsFrontRole = skillConfig.ttsFrontColumn;
+            const textParts = getTextForRoles([ttsFrontRole]);
+            const ttsText = textParts.map(p => p.text).join(' ');
             const lang = getLanguageForTts(ttsFrontRole);
-            // Speak at a fixed slow rate, but still pass the role and language
-            speak(ttsText, { rate: 0.7, ttsRole: ttsFrontRole, lang: lang });
+
+            if (ttsText) {
+                speak(ttsText, { rate: 0.7, ttsRole: ttsFrontRole, lang: lang, onEndCallback });
+            } else {
+                onEndCallback(); // If no text, run callback immediately.
+            }
+        } else {
+            onEndCallback(); // If no TTS role, run callback immediately.
         }
     };
 
@@ -690,6 +721,165 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         // The main control buttons are now always visible during MC, so no need to show/hide them.
     }
+
+    function toggleVoiceRecognition() {
+        if (recognitionActive) {
+            stopVoiceRecognition();
+        } else {
+            startVoiceRecognition();
+        }
+    }
+
+    function startVoiceRecognition() {
+        if (!SpeechRecognition || recognitionActive) {
+            return;
+        }
+
+        const skillConfig = getCurrentSkillConfig();
+        const validationRole = skillConfig.validationColumn;
+        const lang = getLanguageForRole(validationRole);
+
+        if (!validationRole || validationRole === 'none' || !lang) {
+            showTopNotification('Voice input requires a Validation Column with a detectable language.', 'error');
+            return;
+        }
+
+        recognitionActive = true;
+        recognitionInstance = new SpeechRecognition();
+        recognitionInstance.lang = lang;
+        recognitionInstance.continuous = false;
+        recognitionInstance.interimResults = true;
+
+        recognitionInstance.onstart = () => {
+            voiceInputButton.classList.add('listening');
+            voiceInputFeedback.textContent = 'Listening...';
+            voiceInputFeedback.classList.remove('correct', 'incorrect');
+        };
+
+        recognitionInstance.onresult = (event) => {
+            let interimTranscript = '';
+            let finalTranscript = '';
+
+            for (let i = event.resultIndex; i < event.results.length; ++i) {
+                if (event.results[i].isFinal) {
+                    finalTranscript += event.results[i][0].transcript;
+                } else {
+                    interimTranscript += event.results[i][0].transcript;
+                }
+            }
+
+            if (interimTranscript) {
+                voiceInputFeedback.textContent = `"${interimTranscript}"`;
+                voiceInputFeedback.classList.remove('correct', 'incorrect');
+            }
+
+            if (finalTranscript) {
+                checkVoiceAnswer(finalTranscript.trim());
+            }
+        };
+
+        recognitionInstance.onerror = (event) => {
+            if (event.error === 'aborted') return;
+            console.error('Speech recognition error:', event.error);
+            let errorMessage = 'An error occurred.';
+            if (event.error === 'no-speech') {
+                errorMessage = 'No speech was detected.';
+            } else if (event.error === 'not-allowed') {
+                errorMessage = 'Microphone access was denied.';
+            }
+            voiceInputFeedback.textContent = errorMessage;
+            voiceInputFeedback.classList.add('incorrect');
+            stopVoiceRecognition();
+        };
+
+        recognitionInstance.onend = () => {
+            // If recognition ends for any reason, but our state says we should be active, restart it.
+            // This handles cases like 'no-speech' timeouts.
+            if (recognitionActive) {
+                recognitionInstance.start();
+            } else {
+                // If we are supposed to be stopped, ensure UI is clean and null out the instance.
+                voiceInputButton.classList.remove('listening');
+                recognitionInstance = null;
+            }
+        };
+
+        recognitionInstance.start();
+    }
+
+    function stopVoiceRecognition() {
+        recognitionActive = false;
+        if (recognitionInstance) {
+            // Unhook the onend handler to prevent it from restarting after a manual stop.
+            recognitionInstance.onend = null;
+            recognitionInstance.stop();
+            recognitionInstance = null;
+        }
+        // Directly remove the class for a snappier UI response.
+        voiceInputButton.classList.remove('listening');
+    }
+
+    async function checkVoiceAnswer(transcript) {
+        const skillConfig = getCurrentSkillConfig();
+        const validationRole = skillConfig.validationColumn;
+        const roleToColumnMap = (configs[configSelector.value] || {}).roleToColumnMap || {};
+        const validationColumnIndices = roleToColumnMap[validationRole] || [];
+
+        // Validate that a column is assigned to the role
+        if (validationColumnIndices.length === 0) {
+            const message = `Cannot validate: No column is assigned the "${COLUMN_ROLES[validationRole]}" role.`;
+            showTopNotification(message, 'error');
+            stopVoiceRecognition(); // Stop listening if the config is bad
+            return;
+        }
+
+        const correctAnswers = validationColumnIndices.map(index => cardData[currentCardIndex][index]);
+
+        const isCorrect = correctAnswers.some(correctAnswer => getLenientString(transcript) === getLenientString(correctAnswer));
+
+        if (isCorrect) {
+            await markCardAsKnown(true);
+        }
+        // Incorrect attempts are no longer penalized. Only giving up ("I don't know") marks it as incorrect.
+
+        voiceInputFeedback.textContent = `"${transcript}"`;
+        voiceInputFeedback.classList.remove('correct', 'incorrect');
+
+        if (isCorrect) {
+            voiceInputFeedback.classList.add('correct');
+            stopVoiceRecognition();
+            if (!card.classList.contains('flipped')) {
+                flipCard();
+            }
+            const delay = parseInt(voiceCorrectDelayInput.value, 10) || 1000;
+            setTimeout(() => showNextCard(), delay); // Move to next card after a configurable delay
+        } else {
+            voiceInputFeedback.classList.add('incorrect');
+            // The 'onend' event will automatically restart recognition for another try
+        }
+    }
+
+    async function handleIDontKnow() {
+        const skillConfig = getCurrentSkillConfig();
+
+        // For voice input, the user wants to see the answer and practice.
+        if (skillConfig && skillConfig.verificationMethod === VERIFICATION_METHODS.VOICE) {
+            await markCardAsKnown(false);
+            stopVoiceRecognition(); // Stop listening
+            if (!card.classList.contains('flipped')) {
+                flipCard();
+            }
+            // Show the main controls again so they can navigate away when ready.
+            iKnowButton.classList.remove('hidden');
+            iDontKnowButton.classList.remove('hidden');
+            nextCardButton.classList.remove('hidden');
+        } else {
+            // Default behavior for other skills
+            await markCardAsKnown(false);
+            await showNextCard({ forceNew: true });
+        }
+    }
+
 
     function setFilterEnabled(isEnabled) {
         const currentConfig = configs[configSelector.value];
@@ -1150,7 +1340,8 @@ document.addEventListener('DOMContentLoaded', () => {
             const displayTexts = {
                 [VERIFICATION_METHODS.NONE]: 'None (Self-Assessed)',
                 [VERIFICATION_METHODS.TEXT]: 'Text Input',
-                [VERIFICATION_METHODS.MULTIPLE_CHOICE]: 'Multiple Choice'
+                [VERIFICATION_METHODS.MULTIPLE_CHOICE]: 'Multiple Choice',
+                [VERIFICATION_METHODS.VOICE]: 'Voice Input'
             };
             for (const method of Object.values(VERIFICATION_METHODS)) {
                 select.add(new Option(displayTexts[method], method));
@@ -2016,11 +2207,25 @@ document.addEventListener('DOMContentLoaded', () => {
         }, 50);
 
         card.classList.remove('flipped');
-        if (!skillConfig.ttsOnHotkeyOnly) {
-            const ttsRole = skillConfig.ttsFrontColumn;
-            const lang = getLanguageForTts(ttsRole);
-            const textToSpeak = ttsFrontParts.map(p => p.text).join(' ');
-            speak(textToSpeak, { ttsRole: ttsRole, lang: lang });
+
+        // Determine if TTS should play automatically and handle voice recognition start.
+        const autoPlayTts = !skillConfig.ttsOnHotkeyOnly;
+        const ttsRole = skillConfig.ttsFrontColumn;
+        const lang = getLanguageForTts(ttsRole);
+        const textToSpeak = ttsFrontParts.map(p => p.text).join(' ');
+
+        const startRecognitionCallback = () => {
+            if (skillConfig.verificationMethod === VERIFICATION_METHODS.VOICE) {
+                startVoiceRecognition();
+            }
+        };
+
+        if (autoPlayTts && textToSpeak) {
+            // If TTS is supposed to play, start voice recognition after it finishes.
+            speak(textToSpeak, { ttsRole: ttsRole, lang: lang, onEndCallback: startRecognitionCallback });
+        } else {
+            // Otherwise, start voice recognition immediately (if applicable).
+            startRecognitionCallback();
         }
 
         renderSkillMastery(stats);
@@ -2061,10 +2266,20 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         // Handle UI for different verification methods
+        stopVoiceRecognition(); // Stop any active recognition from the previous card.
+
+        // Reset all verification UI to a default state
+        writingPracticeContainer.classList.add('hidden');
+        multipleChoiceContainer.classList.add('hidden');
+        voiceInputContainer.classList.add('hidden');
+        iKnowButton.classList.remove('hidden');
+        iDontKnowButton.classList.remove('hidden');
+        nextCardButton.classList.remove('hidden');
+
+
         if (skillConfig.verificationMethod === VERIFICATION_METHODS.TEXT) {
             writingPracticeContainer.classList.remove('hidden');
             writingPracticeContainer.classList.toggle('audio-only-writing', isAudioOnly);
-            multipleChoiceContainer.classList.add('hidden');
             iKnowButton.classList.add('hidden');
             iDontKnowButton.classList.add('hidden');
             nextCardButton.classList.add('hidden');
@@ -2072,21 +2287,16 @@ document.addEventListener('DOMContentLoaded', () => {
             writingInput.disabled = false;
             writingInput.focus();
         } else if (skillConfig.verificationMethod === VERIFICATION_METHODS.MULTIPLE_CHOICE) {
-            writingPracticeContainer.classList.add('hidden');
             multipleChoiceContainer.classList.remove('hidden');
-            // Ensure main control buttons are visible during multiple choice.
-            iKnowButton.classList.remove('hidden');
-            iDontKnowButton.classList.remove('hidden');
-            nextCardButton.classList.remove('hidden');
             generateMultipleChoiceOptions();
-        } else {
-            // This now handles 'none'
-            writingPracticeContainer.classList.add('hidden');
-            multipleChoiceContainer.classList.add('hidden');
-            iKnowButton.classList.remove('hidden');
-            iDontKnowButton.classList.remove('hidden');
-            nextCardButton.classList.remove('hidden');
+        } else if (skillConfig.verificationMethod === VERIFICATION_METHODS.VOICE) {
+            voiceInputContainer.classList.remove('hidden');
+            voiceInputFeedback.textContent = ''; // Explicitly clear previous recognition text
+            iKnowButton.classList.add('hidden');
+            iDontKnowButton.classList.remove('hidden'); // Re-enable "I don't know"
+            nextCardButton.classList.add('hidden');
         }
+        // The 'none' case is now handled by the default state set above.
         comparisonContainer.classList.add('hidden');
         comparisonContainer.innerHTML = '';
 
@@ -2689,6 +2899,7 @@ document.addEventListener('DOMContentLoaded', () => {
             ttsRateBase: ttsRateBaseSlider.value,
             disableAnimation: disableAnimationCheckbox.checked,
             multipleChoiceCount: multipleChoiceCount.value,
+            voiceCorrectDelay: voiceCorrectDelayInput.value,
             // Add filter settings
             filterIsEnabled: enableFilterSettingsCheckbox.checked,
             filterText: filterTextarea.value,
@@ -2826,6 +3037,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (ttsRateBaseSlider) ttsRateBaseSlider.value = config.ttsRateBase || 1.5;
         if (disableAnimationCheckbox) disableAnimationCheckbox.checked = config.disableAnimation || false;
         if (multipleChoiceCount) multipleChoiceCount.value = config.multipleChoiceCount || 4;
+        if (voiceCorrectDelayInput) voiceCorrectDelayInput.value = config.voiceCorrectDelay || 1000;
 
         if (repetitionIntervalsTextarea) {
             const configIntervalsString = config.repetitionIntervals;
@@ -2967,16 +3179,23 @@ document.addEventListener('DOMContentLoaded', () => {
      * @param {string} [options.lang] - The BCP 47 language code.
      * @param {string} [options.ttsRole] - The role of the content being spoken (e.g., 'BASE_LANGUAGE').
      */
-    function speak(text, { rate, lang, ttsRole } = {}) {
-        if (!('speechSynthesis' in window) || speechSynthesis.speaking || !text) {
+    function speak(text, { rate, lang, ttsRole, onEndCallback } = {}) {
+        if (!('speechSynthesis' in window) || !text) {
+            if (onEndCallback) onEndCallback();
             return;
         }
 
         // Sanitize text for TTS: remove content in parentheses
         const sanitizedText = stripParentheses(text);
-        if (!sanitizedText) return;
+        if (!sanitizedText) {
+            if (onEndCallback) onEndCallback();
+            return;
+        }
 
         const utterance = new SpeechSynthesisUtterance(sanitizedText);
+        if (onEndCallback) {
+            utterance.onend = onEndCallback;
+        }
 
         // The language is now passed in directly.
         const finalLang = lang || 'en'; // Default to English if not provided
@@ -3108,8 +3327,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 break;
             case 'KeyJ':
                 // Allow 'j' to work anytime.
-                markCardAsKnown(false);
-                showNextCard({forceNew: true});
+                handleIDontKnow();
                 break;
             case 'KeyF': {
                 const skillConfig = getCurrentSkillConfig();

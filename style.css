@@ -1205,3 +1205,81 @@ button.danger:hover {
     text-align: center;
     margin: 0;
 }
+
+/* --- Voice Input --- */
+#voice-input-container {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    position: absolute;
+    bottom: 20px;
+    left: 0;
+    width: 100%;
+    padding: 0 20px;
+    box-sizing: border-box;
+    z-index: 10;
+}
+
+#voice-input-container.hidden {
+    display: none;
+}
+
+#voice-input-button {
+    font-size: 2em;
+    width: 68px;
+    height: 68px;
+    border-radius: 50%;
+    border: 3px solid var(--medium-gray);
+    background-color: var(--light-gray);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    flex-shrink: 0; /* Prevent button from shrinking */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+#voice-input-button.listening {
+    background-color: var(--danger-color);
+    border-color: var(--danger-hover-color);
+    color: white;
+    animation: pulse 1.5s infinite;
+}
+
+#voice-input-feedback {
+    font-size: 1.5em;
+    font-weight: bold;
+    padding: 15px 20px;
+    border-radius: 10px;
+    background-color: var(--background-color);
+    text-align: center;
+    color: var(--text-color-dark);
+    flex-grow: 1;
+    max-width: 500px;
+    border: 2px solid var(--medium-gray);
+    line-height: 1.2;
+}
+
+#voice-input-feedback.correct {
+    color: var(--success-color);
+    background-color: var(--success-message-bg);
+}
+
+#voice-input-feedback.incorrect {
+    color: var(--danger-message-text);
+    background-color: var(--danger-message-bg);
+}
+
+@keyframes pulse {
+    0% {
+        box-shadow: 0 0 0 0 rgba(220, 53, 69, 0.7);
+    }
+    70% {
+        box-shadow: 0 0 0 20px rgba(220, 53, 69, 0);
+    }
+    100% {
+        box-shadow: 0 0 0 0 rgba(220, 53, 69, 0);
+    }
+}
