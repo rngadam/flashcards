@@ -84,6 +84,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const disableAnimationCheckbox = document.getElementById('disable-animation');
     const audioOnlyFrontCheckbox = document.getElementById('audio-only-front');
     const multipleChoiceCount = document.getElementById('multiple-choice-count');
+    const voiceCorrectDelayInput = document.getElementById('voice-correct-delay');
     const configNameInput = document.getElementById('config-name');
     const skillSelectorCheckboxes = document.getElementById('skill-selector-checkboxes');
     const mobileSkillSelectorCheckboxes = document.getElementById('mobile-skill-selector-checkboxes');
@@ -730,8 +731,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function startVoiceRecognition() {
-        if (!SpeechRecognition) {
-            showTopNotification('Speech recognition is not supported in this browser.', 'error');
+        if (!SpeechRecognition || recognitionActive) {
             return;
         }
 
@@ -745,20 +745,21 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         recognitionActive = true;
-        voiceInputButton.classList.add('listening');
-        voiceInputFeedback.textContent = 'Listening...';
-        voiceInputFeedback.classList.remove('correct', 'incorrect');
-
         recognitionInstance = new SpeechRecognition();
         recognitionInstance.lang = lang;
         recognitionInstance.continuous = false;
-        recognitionInstance.interimResults = true; // Enable interim results for live feedback
+        recognitionInstance.interimResults = true;
+
+        recognitionInstance.onstart = () => {
+            voiceInputButton.classList.add('listening');
+            voiceInputFeedback.textContent = 'Listening...';
+            voiceInputFeedback.classList.remove('correct', 'incorrect');
+        };
 
         recognitionInstance.onresult = (event) => {
             let interimTranscript = '';
             let finalTranscript = '';
 
-            // Iterate through all results from the current recognition event
             for (let i = event.resultIndex; i < event.results.length; ++i) {
                 if (event.results[i].isFinal) {
                     finalTranscript += event.results[i][0].transcript;
@@ -767,23 +768,18 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             }
 
-            // Update the UI with the interim transcript for immediate feedback
             if (interimTranscript) {
                 voiceInputFeedback.textContent = `"${interimTranscript}"`;
                 voiceInputFeedback.classList.remove('correct', 'incorrect');
             }
 
-            // If we have a final transcript, process the answer
             if (finalTranscript) {
                 checkVoiceAnswer(finalTranscript.trim());
             }
         };
 
         recognitionInstance.onerror = (event) => {
-            // Ignore the 'aborted' error, which is expected when we programmatically stop recognition.
-            if (event.error === 'aborted') {
-                return;
-            }
+            if (event.error === 'aborted') return;
             console.error('Speech recognition error:', event.error);
             let errorMessage = 'An error occurred.';
             if (event.error === 'no-speech') {
@@ -793,12 +789,18 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             voiceInputFeedback.textContent = errorMessage;
             voiceInputFeedback.classList.add('incorrect');
-            stopVoiceRecognition(); // Stop on actual errors.
+            stopVoiceRecognition();
         };
 
         recognitionInstance.onend = () => {
+            // If recognition ends for any reason, but our state says we should be active, restart it.
+            // This handles cases like 'no-speech' timeouts.
             if (recognitionActive) {
-                recognitionInstance.start(); // Keep listening
+                recognitionInstance.start();
+            } else {
+                // If we are supposed to be stopped, ensure UI is clean and null out the instance.
+                voiceInputButton.classList.remove('listening');
+                recognitionInstance = null;
             }
         };
 
@@ -808,9 +810,12 @@ document.addEventListener('DOMContentLoaded', () => {
     function stopVoiceRecognition() {
         recognitionActive = false;
         if (recognitionInstance) {
+            // Unhook the onend handler to prevent it from restarting after a manual stop.
+            recognitionInstance.onend = null;
             recognitionInstance.stop();
             recognitionInstance = null;
         }
+        // Directly remove the class for a snappier UI response.
         voiceInputButton.classList.remove('listening');
     }
 
@@ -832,7 +837,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const isCorrect = correctAnswers.some(correctAnswer => getLenientString(transcript) === getLenientString(correctAnswer));
 
-        await markCardAsKnown(isCorrect);
+        if (isCorrect) {
+            await markCardAsKnown(true);
+        }
+        // Incorrect attempts are no longer penalized. Only giving up ("I don't know") marks it as incorrect.
 
         voiceInputFeedback.textContent = `"${transcript}"`;
         voiceInputFeedback.classList.remove('correct', 'incorrect');
@@ -843,7 +851,8 @@ document.addEventListener('DOMContentLoaded', () => {
             if (!card.classList.contains('flipped')) {
                 flipCard();
             }
-            setTimeout(() => showNextCard(), 1000); // Move to next card after a short delay
+            const delay = parseInt(voiceCorrectDelayInput.value, 10) || 1000;
+            setTimeout(() => showNextCard(), delay); // Move to next card after a configurable delay
         } else {
             voiceInputFeedback.classList.add('incorrect');
             // The 'onend' event will automatically restart recognition for another try
@@ -2889,6 +2898,7 @@ document.addEventListener('DOMContentLoaded', () => {
             ttsRateBase: ttsRateBaseSlider.value,
             disableAnimation: disableAnimationCheckbox.checked,
             multipleChoiceCount: multipleChoiceCount.value,
+            voiceCorrectDelay: voiceCorrectDelayInput.value,
             // Add filter settings
             filterIsEnabled: enableFilterSettingsCheckbox.checked,
             filterText: filterTextarea.value,
@@ -3026,6 +3036,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (ttsRateBaseSlider) ttsRateBaseSlider.value = config.ttsRateBase || 1.5;
         if (disableAnimationCheckbox) disableAnimationCheckbox.checked = config.disableAnimation || false;
         if (multipleChoiceCount) multipleChoiceCount.value = config.multipleChoiceCount || 4;
+        if (voiceCorrectDelayInput) voiceCorrectDelayInput.value = config.voiceCorrectDelay || 1000;
 
         if (repetitionIntervalsTextarea) {
             const configIntervalsString = config.repetitionIntervals;
