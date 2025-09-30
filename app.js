@@ -6,6 +6,7 @@ import { Skill, createSkillId, createSkill, VERIFICATION_METHODS } from './lib/s
 import { getDeckWords, getHighlightHTML } from './lib/filter-utils.js';
 import { detectColumnLanguages } from './lib/detect-column-languages.js';
 import { createDatabase } from './lib/db-export.js';
+import { TEST_DATA } from './lib/test-data.js';
 
 /**
  * @file Main application logic for the Flashcards web app.
@@ -400,6 +401,18 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
     }
+
+    function openFilterSettings() {
+        settingsModal.classList.remove('hidden');
+        const filterTabButton = document.getElementById('filter-tab');
+        if (filterTabButton) {
+            filterTabButton.click();
+        }
+    }
+
+    if (filterStatusIndicator) filterStatusIndicator.addEventListener('click', openFilterSettings);
+    if (mobileFilterStatusIndicator) mobileFilterStatusIndicator.addEventListener('click', openFilterSettings);
+
     function toggleFilter() {
         const currentConfig = configs[configSelector.value];
         if (!currentConfig) return;
@@ -2238,6 +2251,11 @@ document.addEventListener('DOMContentLoaded', () => {
         ttsBackParts = await getTextForRoles(ttsBackRole, currentRandomBaseIndex);
 
         // --- UI Update ---
+        if (!cardFrontContent || !cardBackContent) {
+            console.error('Critical error: card content elements not found in the DOM.');
+            showTopNotification('Critical error: UI components are missing.', 'error');
+            return;
+        }
         cardFrontContent.innerHTML = '';
         cardBackContent.innerHTML = '';
 
@@ -2361,6 +2379,7 @@ document.addEventListener('DOMContentLoaded', () => {
             } else {
                 writingInput.removeAttribute('lang');
             }
+            writingInput.setAttribute('autocomplete', 'off');
             writingInput.focus();
         } else if (skillConfig.verificationMethod === VERIFICATION_METHODS.MULTIPLE_CHOICE) {
             multipleChoiceContainer.classList.remove('hidden');
@@ -3266,6 +3285,59 @@ document.addEventListener('DOMContentLoaded', () => {
      * Otherwise, the settings modal is shown.
      */
     async function loadInitialConfigs() {
+        const urlParams = new URLSearchParams(window.location.search);
+        const isTestMode = urlParams.get('test') === 'true';
+
+        if (isTestMode) {
+            console.log('TEST MODE: Bypassing IndexedDB and loading local test data.');
+            // 1. Parse the local data
+            await parseData(TEST_DATA);
+
+            // 2. Create a default, temporary config
+            const testConfigName = 'test-config';
+            const testConfig = { name: testConfigName, skills: [], activeSkills: [] };
+            configs = { [testConfigName]: testConfig };
+            await addDefaultSkill(testConfig);
+
+            // 3. Populate UI elements that depend on the config
+            populateConfigSelector();
+            configSelector.value = testConfigName;
+            configNameInput.value = testConfigName;
+            if (deckTitle) deckTitle.textContent = testConfigName;
+
+            // 4. Set default values for other settings
+            if (fontSelector) fontSelector.value = 'Arial';
+            if (cardContainer) cardContainer.style.fontFamily = 'Arial';
+            if (ttsRateSlider) ttsRateSlider.value = 1;
+            if (ttsRateBaseSlider) ttsRateBaseSlider.value = 1.5;
+            if (disableAnimationCheckbox) disableAnimationCheckbox.checked = false;
+            if (multipleChoiceCount) multipleChoiceCount.value = 4;
+            if (voiceCorrectDelayInput) voiceCorrectDelayInput.value = 1000;
+            if (repetitionIntervalsTextarea) {
+                repetitionIntervals = [...defaultIntervals];
+                repetitionIntervalsTextarea.value = repetitionIntervals.join(', ');
+            }
+
+            // 5. Populate skill selectors now that skills exist
+            renderSkillsList();
+            populateAllSkillSelectors();
+
+            // 6. Signal that data is loaded and hide the settings modal
+            document.body.classList.add('debug-data-loaded');
+            if (settingsModal) settingsModal.classList.add('hidden');
+            if (cacheStatus) {
+                cacheStatus.textContent = 'Using local test data.';
+                cacheStatus.classList.add('cached');
+            }
+
+            // 7. Display the first card
+            if (cardData.length > 0) {
+                await showNextCard();
+            }
+            return;
+        }
+
+        // --- Regular Startup Logic ---
         try {
             const savedConfigs = await get('flashcard-configs');
             if (savedConfigs) {
