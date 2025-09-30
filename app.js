@@ -272,7 +272,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (nextCardButton) nextCardButton.addEventListener('click', () => showNextCard());
     if (prevCardButton) prevCardButton.addEventListener('click', showPrevCard);
     if (iKnowButton) iKnowButton.addEventListener('click', async () => { await markCardAsKnown(true); await showNextCard(); });
-    if (iDontKnowButton) iDontKnowButton.addEventListener('click', async () => { await markCardAsKnown(false); await showNextCard({ forceNew: true }); });
+    if (iDontKnowButton) iDontKnowButton.addEventListener('click', handleIDontKnow);
     if (fontSelector) fontSelector.addEventListener('change', () => {
         if (cardContainer) cardContainer.style.fontFamily = fontSelector.value;
     });
@@ -724,19 +724,43 @@ document.addEventListener('DOMContentLoaded', () => {
         recognitionActive = true;
         voiceInputButton.classList.add('listening');
         voiceInputFeedback.textContent = 'Listening...';
-        voiceInputFeedback.className = 'voice-input-feedback';
+        voiceInputFeedback.classList.remove('correct', 'incorrect');
 
         recognitionInstance = new SpeechRecognition();
         recognitionInstance.lang = lang;
         recognitionInstance.continuous = false;
-        recognitionInstance.interimResults = false;
+        recognitionInstance.interimResults = true; // Enable interim results for live feedback
 
         recognitionInstance.onresult = (event) => {
-            const transcript = event.results[0][0].transcript;
-            checkVoiceAnswer(transcript);
+            let interimTranscript = '';
+            let finalTranscript = '';
+
+            // Iterate through all results from the current recognition event
+            for (let i = event.resultIndex; i < event.results.length; ++i) {
+                if (event.results[i].isFinal) {
+                    finalTranscript += event.results[i][0].transcript;
+                } else {
+                    interimTranscript += event.results[i][0].transcript;
+                }
+            }
+
+            // Update the UI with the interim transcript for immediate feedback
+            if (interimTranscript) {
+                voiceInputFeedback.textContent = `"${interimTranscript}"`;
+                voiceInputFeedback.classList.remove('correct', 'incorrect');
+            }
+
+            // If we have a final transcript, process the answer
+            if (finalTranscript) {
+                checkVoiceAnswer(finalTranscript.trim());
+            }
         };
 
         recognitionInstance.onerror = (event) => {
+            // Ignore the 'aborted' error, which is expected when we programmatically stop recognition.
+            if (event.error === 'aborted') {
+                return;
+            }
             console.error('Speech recognition error:', event.error);
             let errorMessage = 'An error occurred.';
             if (event.error === 'no-speech') {
@@ -745,8 +769,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 errorMessage = 'Microphone access was denied.';
             }
             voiceInputFeedback.textContent = errorMessage;
-            voiceInputFeedback.className = 'voice-input-feedback incorrect';
-            stopVoiceRecognition();
+            voiceInputFeedback.classList.add('incorrect');
+            stopVoiceRecognition(); // Stop on actual errors.
         };
 
         recognitionInstance.onend = () => {
@@ -772,6 +796,15 @@ document.addEventListener('DOMContentLoaded', () => {
         const validationRole = skillConfig.validationColumn;
         const roleToColumnMap = (configs[configSelector.value] || {}).roleToColumnMap || {};
         const validationColumnIndices = roleToColumnMap[validationRole] || [];
+
+        // Validate that a column is assigned to the role
+        if (validationColumnIndices.length === 0) {
+            const message = `Cannot validate: No column is assigned the "${COLUMN_ROLES[validationRole]}" role.`;
+            showTopNotification(message, 'error');
+            stopVoiceRecognition(); // Stop listening if the config is bad
+            return;
+        }
+
         const correctAnswers = validationColumnIndices.map(index => cardData[currentCardIndex][index]);
 
         const isCorrect = correctAnswers.some(correctAnswer => getLenientString(transcript) === getLenientString(correctAnswer));
@@ -779,6 +812,8 @@ document.addEventListener('DOMContentLoaded', () => {
         await markCardAsKnown(isCorrect);
 
         voiceInputFeedback.textContent = `"${transcript}"`;
+        voiceInputFeedback.classList.remove('correct', 'incorrect');
+
         if (isCorrect) {
             voiceInputFeedback.classList.add('correct');
             stopVoiceRecognition();
@@ -789,6 +824,27 @@ document.addEventListener('DOMContentLoaded', () => {
         } else {
             voiceInputFeedback.classList.add('incorrect');
             // The 'onend' event will automatically restart recognition for another try
+        }
+    }
+
+    async function handleIDontKnow() {
+        const skillConfig = getCurrentSkillConfig();
+
+        // For voice input, the user wants to see the answer and practice.
+        if (skillConfig && skillConfig.verificationMethod === VERIFICATION_METHODS.VOICE) {
+            await markCardAsKnown(false);
+            stopVoiceRecognition(); // Stop listening
+            if (!card.classList.contains('flipped')) {
+                flipCard();
+            }
+            // Show the main controls again so they can navigate away when ready.
+            iKnowButton.classList.remove('hidden');
+            iDontKnowButton.classList.remove('hidden');
+            nextCardButton.classList.remove('hidden');
+        } else {
+            // Default behavior for other skills
+            await markCardAsKnown(false);
+            await showNextCard({ forceNew: true });
         }
     }
 
@@ -2189,11 +2245,11 @@ document.addEventListener('DOMContentLoaded', () => {
             generateMultipleChoiceOptions();
         } else if (skillConfig.verificationMethod === VERIFICATION_METHODS.VOICE) {
             voiceInputContainer.classList.remove('hidden');
-            voiceInputFeedback.textContent = 'Click the mic to start';
-            voiceInputFeedback.className = 'voice-input-feedback';
             iKnowButton.classList.add('hidden');
-            iDontKnowButton.classList.add('hidden');
+            iDontKnowButton.classList.remove('hidden'); // Re-enable "I don't know"
             nextCardButton.classList.add('hidden');
+            // Automatically start listening
+            startVoiceRecognition();
         }
         // The 'none' case is now handled by the default state set above.
         comparisonContainer.classList.add('hidden');
@@ -3217,8 +3273,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 break;
             case 'KeyJ':
                 // Allow 'j' to work anytime.
-                markCardAsKnown(false);
-                showNextCard({forceNew: true});
+                handleIDontKnow();
                 break;
             case 'KeyF': {
                 const skillConfig = getCurrentSkillConfig();
