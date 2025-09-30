@@ -491,12 +491,13 @@ body.desktop .btn-text {
 
 .card-back {
   transform: rotateY(180deg);
-  justify-content: space-around;
+  justify-content: flex-start; /* Aligns content to the top */
 }
 
 #card-back-content {
     flex-grow: 1;
     display: flex;
+    flex-direction: column; /* Stack items vertically */
     align-items: center;
     justify-content: center;
     width: 100%;
