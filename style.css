@@ -1209,16 +1209,16 @@ button.danger:hover {
 /* --- Voice Input --- */
 #voice-input-container {
     display: flex;
-    flex-direction: column;
+    flex-direction: row;
     align-items: center;
     justify-content: center;
-    gap: 15px;
+    gap: 10px;
     position: absolute;
     bottom: 20px;
-    left: 50%;
-    transform: translateX(-50%);
-    width: 90%;
-    max-width: 800px;
+    left: 0;
+    width: 100%;
+    padding: 0 20px;
+    box-sizing: border-box;
     z-index: 10;
 }
 
@@ -1227,14 +1227,18 @@ button.danger:hover {
 }
 
 #voice-input-button {
-    font-size: 3em;
-    width: 100px;
-    height: 100px;
+    font-size: 2em;
+    width: 68px;
+    height: 68px;
     border-radius: 50%;
     border: 3px solid var(--medium-gray);
     background-color: var(--light-gray);
     cursor: pointer;
     transition: all 0.2s ease;
+    flex-shrink: 0; /* Prevent button from shrinking */
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
 #voice-input-button.listening {
@@ -1247,12 +1251,15 @@ button.danger:hover {
 #voice-input-feedback {
     font-size: 1.5em;
     font-weight: bold;
-    min-height: 2.5em;
-    padding: 10px 20px;
+    padding: 15px 20px;
     border-radius: 10px;
-    background-color: rgba(255, 255, 255, 0.9);
+    background-color: var(--background-color);
     text-align: center;
     color: var(--text-color-dark);
+    flex-grow: 1;
+    max-width: 500px;
+    border: 2px solid var(--medium-gray);
+    line-height: 1.2;
 }
 
 #voice-input-feedback.correct {

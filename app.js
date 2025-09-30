@@ -397,13 +397,36 @@ document.addEventListener('DOMContentLoaded', () => {
     if (enableFilterSettingsCheckbox) enableFilterSettingsCheckbox.addEventListener('change', handleSettingsFilterToggle);
 
     const handleSlowReplay = () => {
+        const wasRecognitionActive = recognitionActive;
+        if (wasRecognitionActive) {
+            stopVoiceRecognition();
+        }
+
         const skillConfig = getCurrentSkillConfig();
         const ttsFrontRole = skillConfig.ttsFrontColumn;
+
+        const onEndCallback = () => {
+            // Only restart if the user is on the front of a voice card
+            const currentSkillConfig = getCurrentSkillConfig();
+            if (wasRecognitionActive &&
+                !card.classList.contains('flipped') &&
+                currentSkillConfig.verificationMethod === VERIFICATION_METHODS.VOICE) {
+                startVoiceRecognition();
+            }
+        };
+
         if (ttsFrontRole) {
-            const ttsText = getTextForRoles([ttsFrontRole]);
+            const textParts = getTextForRoles([ttsFrontRole]);
+            const ttsText = textParts.map(p => p.text).join(' ');
             const lang = getLanguageForTts(ttsFrontRole);
-            // Speak at a fixed slow rate, but still pass the role and language
-            speak(ttsText, { rate: 0.7, ttsRole: ttsFrontRole, lang: lang });
+
+            if (ttsText) {
+                speak(ttsText, { rate: 0.7, ttsRole: ttsFrontRole, lang: lang, onEndCallback });
+            } else {
+                onEndCallback();
+            }
+        } else {
+            onEndCallback();
         }
     };
 
@@ -2175,11 +2198,25 @@ document.addEventListener('DOMContentLoaded', () => {
         }, 50);
 
         card.classList.remove('flipped');
-        if (!skillConfig.ttsOnHotkeyOnly) {
-            const ttsRole = skillConfig.ttsFrontColumn;
-            const lang = getLanguageForTts(ttsRole);
-            const textToSpeak = ttsFrontParts.map(p => p.text).join(' ');
-            speak(textToSpeak, { ttsRole: ttsRole, lang: lang });
+
+        // Determine if TTS should play automatically and handle voice recognition start.
+        const autoPlayTts = !skillConfig.ttsOnHotkeyOnly;
+        const ttsRole = skillConfig.ttsFrontColumn;
+        const lang = getLanguageForTts(ttsRole);
+        const textToSpeak = ttsFrontParts.map(p => p.text).join(' ');
+
+        const startRecognitionCallback = () => {
+            if (skillConfig.verificationMethod === VERIFICATION_METHODS.VOICE) {
+                startVoiceRecognition();
+            }
+        };
+
+        if (autoPlayTts && textToSpeak) {
+            // If TTS is supposed to play, start voice recognition after it finishes.
+            speak(textToSpeak, { ttsRole: ttsRole, lang: lang, onEndCallback: startRecognitionCallback });
+        } else {
+            // Otherwise, start voice recognition immediately (if applicable).
+            startRecognitionCallback();
         }
 
         renderSkillMastery(stats);
@@ -2248,8 +2285,6 @@ document.addEventListener('DOMContentLoaded', () => {
             iKnowButton.classList.add('hidden');
             iDontKnowButton.classList.remove('hidden'); // Re-enable "I don't know"
             nextCardButton.classList.add('hidden');
-            // Automatically start listening
-            startVoiceRecognition();
         }
         // The 'none' case is now handled by the default state set above.
         comparisonContainer.classList.add('hidden');
@@ -3132,16 +3167,23 @@ document.addEventListener('DOMContentLoaded', () => {
      * @param {string} [options.lang] - The BCP 47 language code.
      * @param {string} [options.ttsRole] - The role of the content being spoken (e.g., 'BASE_LANGUAGE').
      */
-    function speak(text, { rate, lang, ttsRole } = {}) {
-        if (!('speechSynthesis' in window) || speechSynthesis.speaking || !text) {
+    function speak(text, { rate, lang, ttsRole, onEndCallback } = {}) {
+        if (!('speechSynthesis' in window) || !text) {
+            if (onEndCallback) onEndCallback();
             return;
         }
 
         // Sanitize text for TTS: remove content in parentheses
         const sanitizedText = stripParentheses(text);
-        if (!sanitizedText) return;
+        if (!sanitizedText) {
+            if (onEndCallback) onEndCallback();
+            return;
+        }
 
         const utterance = new SpeechSynthesisUtterance(sanitizedText);
+        if (onEndCallback) {
+            utterance.onend = onEndCallback;
+        }
 
         // The language is now passed in directly.
         const finalLang = lang || 'en'; // Default to English if not provided
