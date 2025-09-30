@@ -1,7 +1,7 @@
 /* global Sortable */
 
 import { get, set, del, keys } from './lib/idb-keyval-wrapper.js';
-import { getLenientString, transformSlashText } from './lib/string-utils.js';
+import { getLenientString, transformSlashText, stripParentheses } from './lib/string-utils.js';
 import { Skill, createSkillId, createSkill, VERIFICATION_METHODS } from './lib/skill-utils.js';
 import { getDeckWords, getHighlightHTML } from './lib/filter-utils.js';
 import { detectColumnLanguages } from './lib/detect-column-languages.js';
@@ -176,10 +176,11 @@ document.addEventListener('DOMContentLoaded', () => {
     let viewHistory = []; // A stack to keep track of the sequence of viewed cards for the "previous" button.
     let currentRandomBaseIndex = -1; // The randomly selected index for the base language for the current card view.
     let baseLanguageRotationIndex = 0; // For sequential rotation of base languages.
-    let textForFrontDisplay = ''; // Text for the front of the card (visual)
-    let textForBackDisplay = '';  // Text for the back of the card (visual)
-    let textForFrontTTS = '';     // Text for TTS on the front
-    let textForBackTTS = '';      // Text for TTS on the back
+    // These will now hold the structured data [{text, role}, ...]
+    let frontParts = [];
+    let backParts = [];
+    let ttsFrontParts = [];
+    let ttsBackParts = [];
     let useUppercase = false; // A flag for the "Alternate Uppercase" feature.
     let replayRate = 1.0; // Tracks the current playback rate for the 'f' key replay feature.
     let cardShownTimestamp = null; // Tracks when the card was shown to calculate response delay.
@@ -658,7 +659,7 @@ document.addEventListener('DOMContentLoaded', () => {
             numberSpan.textContent = index + 1;
 
             button.appendChild(numberSpan);
-            button.appendChild(document.createTextNode(` ${option}`)); // Append the option as a text node
+            button.appendChild(document.createTextNode(` ${stripParentheses(option)}`)); // Use the new function here
 
             button.addEventListener('click', () => checkMultipleChoiceAnswer(option, correctAnswer));
             multipleChoiceContainer.appendChild(button);
@@ -1410,7 +1411,13 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    function exportSkills() {
+    async function exportSkills() {
+        const success = await saveCurrentConfig();
+        if (!success) {
+            showTopNotification('Could not save configuration. Skills not exported.', 'error');
+            return;
+        }
+
         const currentConfigName = configSelector.value;
         const currentConfig = configs[currentConfigName];
 
@@ -1643,18 +1650,31 @@ document.addEventListener('DOMContentLoaded', () => {
             // Regenerate and update text for both faces since the base language might have changed
             const frontRoles = skillConfig.front || [];
             const backRoles = skillConfig.back || [];
-            textForFrontDisplay = getTextForRoles(frontRoles, currentRandomBaseIndex);
-            textForBackDisplay = getTextForRoles(backRoles, currentRandomBaseIndex);
+            frontParts = getTextForRoles(frontRoles, currentRandomBaseIndex);
+            backParts = getTextForRoles(backRoles, currentRandomBaseIndex);
 
-            if (isAudioOnly(skillConfig)) {
-                cardFrontContent.innerHTML = '<span class="speech-icon">🔊</span>';
-            } else {
-                cardFrontContent.innerHTML = `<span>${textForFrontDisplay.replace(/\n/g, '<br>')}</span>`;
-                adjustFontSize(cardFrontContent.querySelector('span'), true);
-            }
+            // This is a simplified redraw. The main redraw logic is in displayCard.
+            // When flipping back to the front, we need to ensure the content is updated
+            // in case the base language has rotated.
+            cardFrontContent.innerHTML = ''; // Clear existing content
+            frontParts.forEach(part => {
+                const partDiv = document.createElement('div');
+                partDiv.className = `card-role-${part.role.toLowerCase()}`;
+                partDiv.textContent = part.text;
+                cardFrontContent.appendChild(partDiv);
+            });
 
-            cardBackContent.innerHTML = `<span>${textForBackDisplay.replace(/\n/g, '<br>')}</span>`;
-            adjustFontSize(cardBackContent.querySelector('span'), false);
+            cardBackContent.innerHTML = ''; // Clear existing content
+            backParts.forEach(part => {
+                const partDiv = document.createElement('div');
+                partDiv.className = `card-role-${part.role.toLowerCase()}`;
+                partDiv.textContent = part.text;
+                cardBackContent.appendChild(partDiv);
+            });
+
+            // Re-apply font size adjustments after content update
+            adjustFontSize(cardFrontContent, true);
+            adjustFontSize(cardBackContent, false);
         }
 
         document.body.classList.add('is-flipping');
@@ -1668,13 +1688,13 @@ document.addEventListener('DOMContentLoaded', () => {
         if (card.classList.contains('flipped')) {
             const ttsRole = skillConfig.ttsBackColumn;
             const lang = getLanguageForTts(ttsRole);
-            const ttsText = getTextForRoles(ttsRole ? [ttsRole] : [], currentRandomBaseIndex);
-            speak(ttsText, { ttsRole: ttsRole, lang: lang });
+            const textToSpeak = ttsBackParts.map(p => p.text).join(' ');
+            speak(textToSpeak, { ttsRole: ttsRole, lang: lang });
         } else {
             const ttsRole = skillConfig.ttsFrontColumn;
             const lang = getLanguageForTts(ttsRole);
-            const ttsText = getTextForRoles(ttsRole ? [ttsRole] : [], currentRandomBaseIndex);
-            speak(ttsText, { ttsRole: ttsRole, lang: lang });
+            const textToSpeak = ttsFrontParts.map(p => p.text).join(' ');
+            speak(textToSpeak, { ttsRole: ttsRole, lang: lang });
         }
     }
 
@@ -1786,31 +1806,35 @@ document.addEventListener('DOMContentLoaded', () => {
      */
     function getTextForRoles(roles, baseLanguageIndex = -1) {
         const currentConfigName = configSelector.value;
-        if (!currentConfigName || !configs[currentConfigName] || !configs[currentConfigName].roleToColumnMap) return '';
+        if (!currentConfigName || !configs[currentConfigName] || !configs[currentConfigName].roleToColumnMap) return [];
         const roleToColumnMap = configs[currentConfigName].roleToColumnMap;
+        const currentCard = cardData[currentCardIndex];
 
-        let indices = [];
+        if (!currentCard) return [];
+
+        const textParts = [];
+
         roles.forEach(roleKey => {
-            if (roleKey === 'BASE_LANGUAGE') {
-                // If a specific base language has been chosen for this card view, use it
-                if (baseLanguageIndex !== -1) {
-                    indices.push(baseLanguageIndex);
-                }
+            let columnIndices = [];
+            if (roleKey === 'BASE_LANGUAGE' && baseLanguageIndex !== -1) {
+                // If a specific base language has been chosen for this card view, use its index.
+                columnIndices = [baseLanguageIndex];
             } else {
-                // For all other roles, get all associated columns
-                indices.push(...(roleToColumnMap[roleKey] || []));
+                // Otherwise, get all columns associated with the role.
+                columnIndices = roleToColumnMap[roleKey] || [];
             }
+
+            columnIndices.forEach(colIndex => {
+                const cellText = currentCard[colIndex];
+                if (cellText) {
+                    textParts.push({
+                        text: transformSlashText(cellText),
+                        role: roleKey
+                    });
+                }
+            });
         });
-
-        // Remove duplicates that might arise from multiple roles pointing to the same column
-        indices = [...new Set(indices)];
-
-        if (!indices.length || !cardData[currentCardIndex]) return '';
-        return indices.map(colIndex => {
-            const cellText = cardData[currentCardIndex][colIndex];
-            // Apply the slash transformation at the source.
-            return cellText ? transformSlashText(cellText) : cellText;
-        }).filter(Boolean).join('\n');
+        return textParts;
     }
 
     function getRetentionScore(skillStats) {
@@ -1947,36 +1971,56 @@ document.addEventListener('DOMContentLoaded', () => {
         const ttsFrontRole = skillConfig.ttsFrontColumn ? [skillConfig.ttsFrontColumn] : [];
         const ttsBackRole = skillConfig.ttsBackColumn ? [skillConfig.ttsBackColumn] : [];
 
-        textForFrontDisplay = getTextForRoles(frontRoles, currentRandomBaseIndex);
-        textForBackDisplay = getTextForRoles(backRoles, currentRandomBaseIndex);
-        textForFrontTTS = getTextForRoles(ttsFrontRole, currentRandomBaseIndex);
-        textForBackTTS = getTextForRoles(ttsBackRole, currentRandomBaseIndex);
+        frontParts = getTextForRoles(frontRoles, currentRandomBaseIndex);
+        backParts = getTextForRoles(backRoles, currentRandomBaseIndex);
+        ttsFrontParts = getTextForRoles(ttsFrontRole, currentRandomBaseIndex);
+        ttsBackParts = getTextForRoles(ttsBackRole, currentRandomBaseIndex);
 
         // --- UI Update ---
-        let displayText = textForFrontDisplay;
-        if (skillConfig.alternateUppercase) {
-            if (useUppercase) {
-                displayText = textForFrontDisplay.toUpperCase();
+        cardFrontContent.innerHTML = '';
+        cardBackContent.innerHTML = '';
+
+        if (isAudioOnly(skillConfig)) {
+            cardFrontContent.innerHTML = '<span class="speech-icon">🔊</span>';
+        } else {
+            frontParts.forEach(part => {
+                const partDiv = document.createElement('div');
+                partDiv.className = `card-role-${part.role.toLowerCase()}`;
+                let text = part.text;
+                if (skillConfig.alternateUppercase && part.role === 'TARGET_LANGUAGE') {
+                    if (useUppercase) {
+                        text = text.toUpperCase();
+                    }
+                }
+                partDiv.textContent = text;
+                cardFrontContent.appendChild(partDiv);
+            });
+            if (skillConfig.alternateUppercase) {
+                useUppercase = !useUppercase;
             }
-            useUppercase = !useUppercase;
         }
 
-        cardFrontContent.innerHTML = isAudioOnly(skillConfig) ? '<span class="speech-icon">🔊</span>' : `<span>${displayText.replace(/\n/g, '<br>')}</span>`;
-        cardBackContent.innerHTML = `<span>${textForBackDisplay.replace(/\n/g, '<br>')}</span>`;
+        backParts.forEach(part => {
+            const partDiv = document.createElement('div');
+            partDiv.className = `card-role-${part.role.toLowerCase()}`;
+            partDiv.textContent = part.text;
+            cardBackContent.appendChild(partDiv);
+        });
 
         cardFront.style.fontSize = '';
         cardBackContent.style.fontSize = '';
 
         setTimeout(() => {
-            if (!isAudioOnly(skillConfig)) adjustFontSize(cardFrontContent.querySelector('span'), true);
-            adjustFontSize(cardBackContent.querySelector('span'), false);
+            adjustFontSize(cardFrontContent, true);
+            adjustFontSize(cardBackContent, false);
         }, 50);
 
         card.classList.remove('flipped');
         if (!skillConfig.ttsOnHotkeyOnly) {
             const ttsRole = skillConfig.ttsFrontColumn;
             const lang = getLanguageForTts(ttsRole);
-            speak(textForFrontTTS, { ttsRole: ttsRole, lang: lang });
+            const textToSpeak = ttsFrontParts.map(p => p.text).join(' ');
+            speak(textToSpeak, { ttsRole: ttsRole, lang: lang });
         }
 
         renderSkillMastery(stats);
@@ -2929,7 +2973,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         // Sanitize text for TTS: remove content in parentheses
-        const sanitizedText = text.replace(/\s?\(.*\)\s?/g, ' ').trim();
+        const sanitizedText = stripParentheses(text);
         if (!sanitizedText) return;
 
         const utterance = new SpeechSynthesisUtterance(sanitizedText);
@@ -3070,7 +3114,8 @@ document.addEventListener('DOMContentLoaded', () => {
             case 'KeyF': {
                 const skillConfig = getCurrentSkillConfig();
                 if (!skillConfig) break;
-                const text = card.classList.contains('flipped') ? textForBackTTS : textForFrontTTS;
+                const parts = card.classList.contains('flipped') ? ttsBackParts : ttsFrontParts;
+                const text = parts.map(p => p.text).join(' ');
                 const role = card.classList.contains('flipped') ? skillConfig.ttsBackColumn : skillConfig.ttsFrontColumn;
                 const lang = getLanguageForTts(role);
                 replayRate = Math.max(0.1, replayRate - 0.2);
