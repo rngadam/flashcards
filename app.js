@@ -2291,6 +2291,7 @@ document.addEventListener('DOMContentLoaded', () => {
             generateMultipleChoiceOptions();
         } else if (skillConfig.verificationMethod === VERIFICATION_METHODS.VOICE) {
             voiceInputContainer.classList.remove('hidden');
+            voiceInputFeedback.textContent = ''; // Explicitly clear previous recognition text
             iKnowButton.classList.add('hidden');
             iDontKnowButton.classList.remove('hidden'); // Re-enable "I don't know"
             nextCardButton.classList.add('hidden');
