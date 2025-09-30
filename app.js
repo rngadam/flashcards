@@ -118,6 +118,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const writingInput = document.getElementById('writing-input');
     const writingSubmit = document.getElementById('writing-submit');
     const multipleChoiceContainer = document.getElementById('multiple-choice-container');
+    const voiceInputContainer = document.getElementById('voice-input-container');
+    const voiceInputButton = document.getElementById('voice-input-button');
+    const voiceInputFeedback = document.getElementById('voice-input-feedback');
     const comparisonContainer = document.getElementById('comparison-container');
     const slowReplayButton = document.getElementById('slow-replay-button');
     const slowReplayHotkey = document.getElementById('slow-replay-hotkey');
@@ -187,6 +190,9 @@ document.addEventListener('DOMContentLoaded', () => {
     let isCurrentCardDue = false; // Tracks if the current card was shown because it was due for review.
     let columnLanguages = []; // Holds the detected language for each column.
     let activeFilterWords = new Set(); // Holds the words for the current filter.
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    let recognitionInstance = null;
+    let recognitionActive = false; // Use a flag to control the recognition loop
 
     // History table sort state
     let historySortColumn = -1;
@@ -357,6 +363,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
+    if (voiceInputButton) voiceInputButton.addEventListener('click', toggleVoiceRecognition);
     if (applyFilterButton) applyFilterButton.addEventListener('click', applyFilter);
     if (clearFilterButton) clearFilterButton.addEventListener('click', clearFilter);
     if (filterTextarea) {
@@ -690,6 +697,101 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         // The main control buttons are now always visible during MC, so no need to show/hide them.
     }
+
+    function toggleVoiceRecognition() {
+        if (recognitionActive) {
+            stopVoiceRecognition();
+        } else {
+            startVoiceRecognition();
+        }
+    }
+
+    function startVoiceRecognition() {
+        if (!SpeechRecognition) {
+            showTopNotification('Speech recognition is not supported in this browser.', 'error');
+            return;
+        }
+
+        const skillConfig = getCurrentSkillConfig();
+        const validationRole = skillConfig.validationColumn;
+        const lang = getLanguageForRole(validationRole);
+
+        if (!validationRole || validationRole === 'none' || !lang) {
+            showTopNotification('Voice input requires a Validation Column with a detectable language.', 'error');
+            return;
+        }
+
+        recognitionActive = true;
+        voiceInputButton.classList.add('listening');
+        voiceInputFeedback.textContent = 'Listening...';
+        voiceInputFeedback.className = 'voice-input-feedback';
+
+        recognitionInstance = new SpeechRecognition();
+        recognitionInstance.lang = lang;
+        recognitionInstance.continuous = false;
+        recognitionInstance.interimResults = false;
+
+        recognitionInstance.onresult = (event) => {
+            const transcript = event.results[0][0].transcript;
+            checkVoiceAnswer(transcript);
+        };
+
+        recognitionInstance.onerror = (event) => {
+            console.error('Speech recognition error:', event.error);
+            let errorMessage = 'An error occurred.';
+            if (event.error === 'no-speech') {
+                errorMessage = 'No speech was detected.';
+            } else if (event.error === 'not-allowed') {
+                errorMessage = 'Microphone access was denied.';
+            }
+            voiceInputFeedback.textContent = errorMessage;
+            voiceInputFeedback.className = 'voice-input-feedback incorrect';
+            stopVoiceRecognition();
+        };
+
+        recognitionInstance.onend = () => {
+            if (recognitionActive) {
+                recognitionInstance.start(); // Keep listening
+            }
+        };
+
+        recognitionInstance.start();
+    }
+
+    function stopVoiceRecognition() {
+        recognitionActive = false;
+        if (recognitionInstance) {
+            recognitionInstance.stop();
+            recognitionInstance = null;
+        }
+        voiceInputButton.classList.remove('listening');
+    }
+
+    async function checkVoiceAnswer(transcript) {
+        const skillConfig = getCurrentSkillConfig();
+        const validationRole = skillConfig.validationColumn;
+        const roleToColumnMap = (configs[configSelector.value] || {}).roleToColumnMap || {};
+        const validationColumnIndices = roleToColumnMap[validationRole] || [];
+        const correctAnswers = validationColumnIndices.map(index => cardData[currentCardIndex][index]);
+
+        const isCorrect = correctAnswers.some(correctAnswer => getLenientString(transcript) === getLenientString(correctAnswer));
+
+        await markCardAsKnown(isCorrect);
+
+        voiceInputFeedback.textContent = `"${transcript}"`;
+        if (isCorrect) {
+            voiceInputFeedback.classList.add('correct');
+            stopVoiceRecognition();
+            if (!card.classList.contains('flipped')) {
+                flipCard();
+            }
+            setTimeout(() => showNextCard(), 1000); // Move to next card after a short delay
+        } else {
+            voiceInputFeedback.classList.add('incorrect');
+            // The 'onend' event will automatically restart recognition for another try
+        }
+    }
+
 
     function setFilterEnabled(isEnabled) {
         const currentConfig = configs[configSelector.value];
@@ -1150,7 +1252,8 @@ document.addEventListener('DOMContentLoaded', () => {
             const displayTexts = {
                 [VERIFICATION_METHODS.NONE]: 'None (Self-Assessed)',
                 [VERIFICATION_METHODS.TEXT]: 'Text Input',
-                [VERIFICATION_METHODS.MULTIPLE_CHOICE]: 'Multiple Choice'
+                [VERIFICATION_METHODS.MULTIPLE_CHOICE]: 'Multiple Choice',
+                [VERIFICATION_METHODS.VOICE]: 'Voice Input'
             };
             for (const method of Object.values(VERIFICATION_METHODS)) {
                 select.add(new Option(displayTexts[method], method));
@@ -2061,10 +2164,20 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         // Handle UI for different verification methods
+        stopVoiceRecognition(); // Stop any active recognition from the previous card.
+
+        // Reset all verification UI to a default state
+        writingPracticeContainer.classList.add('hidden');
+        multipleChoiceContainer.classList.add('hidden');
+        voiceInputContainer.classList.add('hidden');
+        iKnowButton.classList.remove('hidden');
+        iDontKnowButton.classList.remove('hidden');
+        nextCardButton.classList.remove('hidden');
+
+
         if (skillConfig.verificationMethod === VERIFICATION_METHODS.TEXT) {
             writingPracticeContainer.classList.remove('hidden');
             writingPracticeContainer.classList.toggle('audio-only-writing', isAudioOnly);
-            multipleChoiceContainer.classList.add('hidden');
             iKnowButton.classList.add('hidden');
             iDontKnowButton.classList.add('hidden');
             nextCardButton.classList.add('hidden');
@@ -2072,21 +2185,17 @@ document.addEventListener('DOMContentLoaded', () => {
             writingInput.disabled = false;
             writingInput.focus();
         } else if (skillConfig.verificationMethod === VERIFICATION_METHODS.MULTIPLE_CHOICE) {
-            writingPracticeContainer.classList.add('hidden');
             multipleChoiceContainer.classList.remove('hidden');
-            // Ensure main control buttons are visible during multiple choice.
-            iKnowButton.classList.remove('hidden');
-            iDontKnowButton.classList.remove('hidden');
-            nextCardButton.classList.remove('hidden');
             generateMultipleChoiceOptions();
-        } else {
-            // This now handles 'none'
-            writingPracticeContainer.classList.add('hidden');
-            multipleChoiceContainer.classList.add('hidden');
-            iKnowButton.classList.remove('hidden');
-            iDontKnowButton.classList.remove('hidden');
-            nextCardButton.classList.remove('hidden');
+        } else if (skillConfig.verificationMethod === VERIFICATION_METHODS.VOICE) {
+            voiceInputContainer.classList.remove('hidden');
+            voiceInputFeedback.textContent = 'Click the mic to start';
+            voiceInputFeedback.className = 'voice-input-feedback';
+            iKnowButton.classList.add('hidden');
+            iDontKnowButton.classList.add('hidden');
+            nextCardButton.classList.add('hidden');
         }
+        // The 'none' case is now handled by the default state set above.
         comparisonContainer.classList.add('hidden');
         comparisonContainer.innerHTML = '';
 
