@@ -5,6 +5,7 @@ import { getLenientString, transformSlashText, stripParentheses } from './lib/st
 import { Skill, createSkillId, createSkill, VERIFICATION_METHODS } from './lib/skill-utils.js';
 import { getDeckWords, getHighlightHTML } from './lib/filter-utils.js';
 import { detectColumnLanguages } from './lib/detect-column-languages.js';
+import { createDatabase } from './lib/db-export.js';
 
 /**
  * @file Main application logic for the Flashcards web app.
@@ -52,6 +53,17 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
     }
+
+    function openFilterSettings() {
+        settingsModal.classList.remove('hidden');
+        const filterTabButton = document.getElementById('filter-tab');
+        if (filterTabButton) {
+            filterTabButton.click();
+        }
+    }
+
+    if (filterStatusIndicator) filterStatusIndicator.addEventListener('click', openFilterSettings);
+    if (mobileFilterStatusIndicator) mobileFilterStatusIndicator.addEventListener('click', openFilterSettings);
 
     // DOM Elements
     const hamburgerMenu = document.getElementById('hamburger-menu');
@@ -242,6 +254,30 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     if (closeDashboardButton) closeDashboardButton.addEventListener('click', () => dashboardModal.classList.add('hidden'));
 
+    if (dashboardModal) {
+        dashboardModal.querySelector('.tabs')?.addEventListener('click', (e) => {
+            if (e.target.matches('.tab-button')) {
+                const button = e.target;
+                const tabsContainer = button.closest('.tabs');
+                const tabPanelContainer = button.closest('#dashboard-panel');
+
+                // Update button states
+                tabsContainer.querySelectorAll('.tab-button').forEach(btn => {
+                    btn.classList.remove('active');
+                    btn.setAttribute('aria-selected', 'false');
+                });
+                button.classList.add('active');
+                button.setAttribute('aria-selected', 'true');
+
+                // Update panel visibility
+                const tabName = button.dataset.tab;
+                tabPanelContainer.querySelectorAll('.tab-panel').forEach(panel => {
+                    panel.classList.toggle('active', panel.id === tabName);
+                });
+            }
+        });
+    }
+
     function toggleFullscreen() {
         if (!document.fullscreenElement) {
             document.documentElement.requestFullscreen();
@@ -397,7 +433,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     if (enableFilterSettingsCheckbox) enableFilterSettingsCheckbox.addEventListener('change', handleSettingsFilterToggle);
 
-    const handleSlowReplay = () => {
+    const handleSlowReplay = async () => {
         // Always stop recognition if it's currently active.
         if (recognitionActive) {
             stopVoiceRecognition();
@@ -417,7 +453,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (skillConfig && skillConfig.ttsFrontColumn) {
             const ttsFrontRole = skillConfig.ttsFrontColumn;
-            const textParts = getTextForRoles([ttsFrontRole]);
+            const textParts = await getTextForRoles([ttsFrontRole]);
             const ttsText = textParts.map(p => p.text).join(' ');
             const lang = getLanguageForTts(ttsFrontRole);
 
@@ -451,6 +487,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const exportAllDataButton = document.getElementById('export-all-data-button');
     if (exportAllDataButton) exportAllDataButton.addEventListener('click', exportAllData);
+
+    const exportSqliteButton = document.getElementById('export-sqlite-button');
+    if (exportSqliteButton) exportSqliteButton.addEventListener('click', exportSQLite);
 
     const importAllDataButton = document.getElementById('import-all-data-button');
     const importFileInput = document.getElementById('import-file-input');
@@ -1632,6 +1671,32 @@ document.addEventListener('DOMContentLoaded', () => {
         showTopNotification('Skills exported successfully.', 'success');
     }
 
+    async function exportSQLite() {
+        if (cardData.length === 0) {
+            showTopNotification('No deck loaded. Please load a deck to export.', 'error');
+            return;
+        }
+        try {
+            showTopNotification('Generating SQLite database... this may take a moment.', 'success');
+            const allCardStats = await getAllCardStats();
+            const dbData = await createDatabase(allCardStats, cardData, getCardKey, configs, configSelector.value);
+            const blob = new Blob([dbData], { type: 'application/x-sqlite3' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            const configName = configSelector.value || 'flashcards';
+            a.download = `${configName}-backup.db`;
+            a.href = url;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            showTopNotification('SQLite database exported successfully!', 'success');
+        } catch (error) {
+            console.error('Failed to export SQLite database:', error);
+            showTopNotification(`Error exporting SQLite database: ${error.message}`, 'error');
+        }
+    }
+
     async function exportAllData() {
         try {
             showTopNotification('Exporting all data... this may take a moment.', 'success');
@@ -1995,7 +2060,7 @@ document.addEventListener('DOMContentLoaded', () => {
      * @param {number[]} indices - An array of column indices.
      * @returns {string} The combined text, with each column's content on a new line.
      */
-    function getTextForRoles(roles, baseLanguageIndex = -1) {
+    async function getTextForRoles(roles, baseLanguageIndex = -1) {
         const currentConfigName = configSelector.value;
         if (!currentConfigName || !configs[currentConfigName] || !configs[currentConfigName].roleToColumnMap) return [];
         const roleToColumnMap = configs[currentConfigName].roleToColumnMap;
@@ -2005,26 +2070,42 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const textParts = [];
 
-        roles.forEach(roleKey => {
+        for (const roleKey of roles) {
             let columnIndices = [];
             if (roleKey === 'BASE_LANGUAGE' && baseLanguageIndex !== -1) {
-                // If a specific base language has been chosen for this card view, use its index.
                 columnIndices = [baseLanguageIndex];
             } else {
-                // Otherwise, get all columns associated with the role.
                 columnIndices = roleToColumnMap[roleKey] || [];
             }
 
-            columnIndices.forEach(colIndex => {
+            for (const colIndex of columnIndices) {
                 const cellText = currentCard[colIndex];
-                if (cellText) {
+                if (!cellText) continue;
+
+                if (roleKey === 'RELATED_WORD') {
+                    const relatedWords = [...new Set(cellText.split(',').map(w => w.trim()).filter(Boolean))];
+                    const studiedWords = [];
+                    for (const word of relatedWords) {
+                        const stats = await getSanitizedStats(word);
+                        const totalViews = Object.values(stats.skills).reduce((sum, s) => sum + (s.viewCount || 0), 0);
+                        if (totalViews > 0) {
+                            studiedWords.push(word);
+                        }
+                    }
+                    if (studiedWords.length > 0) {
+                        textParts.push({
+                            text: transformSlashText(studiedWords.join(', ')),
+                            role: roleKey
+                        });
+                    }
+                } else {
                     textParts.push({
                         text: transformSlashText(cellText),
                         role: roleKey
                     });
                 }
-            });
-        });
+            }
+        }
         return textParts;
     }
 
@@ -2162,10 +2243,10 @@ document.addEventListener('DOMContentLoaded', () => {
         const ttsFrontRole = skillConfig.ttsFrontColumn ? [skillConfig.ttsFrontColumn] : [];
         const ttsBackRole = skillConfig.ttsBackColumn ? [skillConfig.ttsBackColumn] : [];
 
-        frontParts = getTextForRoles(frontRoles, currentRandomBaseIndex);
-        backParts = getTextForRoles(backRoles, currentRandomBaseIndex);
-        ttsFrontParts = getTextForRoles(ttsFrontRole, currentRandomBaseIndex);
-        ttsBackParts = getTextForRoles(ttsBackRole, currentRandomBaseIndex);
+        frontParts = await getTextForRoles(frontRoles, currentRandomBaseIndex);
+        backParts = await getTextForRoles(backRoles, currentRandomBaseIndex);
+        ttsFrontParts = await getTextForRoles(ttsFrontRole, currentRandomBaseIndex);
+        ttsBackParts = await getTextForRoles(ttsBackRole, currentRandomBaseIndex);
 
         // --- UI Update ---
         cardFrontContent.innerHTML = '';
@@ -2285,6 +2366,12 @@ document.addEventListener('DOMContentLoaded', () => {
             nextCardButton.classList.add('hidden');
             writingInput.value = '';
             writingInput.disabled = false;
+            const validationLang = getLanguageForRole(skillConfig.validationColumn);
+            if (validationLang && validationLang !== 'N/A') {
+                writingInput.lang = validationLang;
+            } else {
+                writingInput.removeAttribute('lang');
+            }
             writingInput.focus();
         } else if (skillConfig.verificationMethod === VERIFICATION_METHODS.MULTIPLE_CHOICE) {
             multipleChoiceContainer.classList.remove('hidden');
@@ -2358,10 +2445,25 @@ document.addEventListener('DOMContentLoaded', () => {
             });
 
             if (bridgingItems.length > 0) {
-                const nextItem = bridgingItems[Math.floor(Math.random() * bridgingItems.length)];
+                // Sort by skill order (left-most skill first), then by the card's overall score (lowest score first)
+                bridgingItems.sort((a, b) => {
+                    const orderA = skillOrderMap.get(a.skillId);
+                    const orderB = skillOrderMap.get(b.skillId);
+                    if (orderA !== orderB) {
+                        return orderA - orderB;
+                    }
+                    // If skills are the same, prefer the card that is less learned overall
+                    const cardStatsA = allCardStats[a.cardIndex];
+                    const cardStatsB = allCardStats[b.cardIndex];
+                    const totalScoreA = Object.values(cardStatsA.skills).reduce((sum, s) => sum + getRetentionScore(s), 0);
+                    const totalScoreB = Object.values(cardStatsB.skills).reduce((sum, s) => sum + getRetentionScore(s), 0);
+                    return totalScoreA - totalScoreB;
+                });
+                const nextItem = bridgingItems[0];
                 return { nextItem, reason: { type: 'bridging_card', isFiltered } };
             }
             if (trulyNewItems.length > 0) {
+                // When introducing a truly new card, just pick one randomly.
                 const nextItem = trulyNewItems[Math.floor(Math.random() * trulyNewItems.length)];
                 return { nextItem, reason: { type: 'new_card', isFiltered } };
             }
@@ -2570,7 +2672,6 @@ document.addEventListener('DOMContentLoaded', () => {
      */
     async function renderDashboard() {
         const MASTERED_THRESHOLD = 5;
-        const DIFFICULT_THRESHOLD = 0;
 
         if (cardData.length === 0) {
             showTopNotification('No deck loaded. Please load a deck to analyze.', 'error');
@@ -2578,6 +2679,8 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         const allCardStats = await getAllCardStats();
+        if (allCardStats.length === 0) return;
+
         const masteredWords = [];
         const difficultWords = [];
         const keyIndex = (configs[configSelector.value]?.roleToColumnMap?.TARGET_LANGUAGE || [])[0];
@@ -2587,23 +2690,57 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
+        // --- Calculate Deck-Wide Averages ---
+        let totalDeckScore = 0;
+        let totalDeckViews = 0;
+        let cardsWithStats = 0;
+
+        allCardStats.forEach(cardStats => {
+            let totalCardScore = 0;
+            let totalCardViews = 0;
+            const skillIds = Object.keys(cardStats.skills);
+            if (skillIds.length > 0) {
+                skillIds.forEach(skillId => {
+                    const skill = cardStats.skills[skillId];
+                    totalCardScore += getRetentionScore(skill);
+                    totalCardViews += skill.viewCount || 0;
+                });
+                totalDeckScore += totalCardScore / skillIds.length;
+                totalDeckViews += totalCardViews;
+                cardsWithStats++;
+            }
+        });
+
+        const averageDeckScore = cardsWithStats > 0 ? totalDeckScore / cardsWithStats : 0;
+        const averageDeckViews = cardsWithStats > 0 ? totalDeckViews / cardsWithStats : 0;
+
+
+        // --- Classify Words ---
         allCardStats.forEach((cardStats, index) => {
             const cardKey = cardData[index][keyIndex];
             if (!cardKey) return;
 
-            let totalScore = 0;
-            let skillCount = 0;
-            for (const skillId in cardStats.skills) {
-                totalScore += getRetentionScore(cardStats.skills[skillId]);
-                skillCount++;
-            }
+            let totalCardScore = 0;
+            let totalCardViews = 0;
+            const skillIds = Object.keys(cardStats.skills);
 
-            const avgScore = skillCount > 0 ? totalScore / skillCount : 0;
+            if (skillIds.length > 0) {
+                skillIds.forEach(skillId => {
+                    const skill = cardStats.skills[skillId];
+                    totalCardScore += getRetentionScore(skill);
+                    totalCardViews += skill.viewCount || 0;
+                });
 
-            if (avgScore > MASTERED_THRESHOLD) {
-                masteredWords.push({ word: cardKey, score: avgScore.toFixed(1) });
-            } else if (avgScore < DIFFICULT_THRESHOLD) {
-                difficultWords.push({ word: cardKey, score: avgScore.toFixed(1) });
+                const avgCardScore = totalCardScore / skillIds.length;
+
+                if (avgCardScore > MASTERED_THRESHOLD) {
+                    masteredWords.push({ word: cardKey, score: avgCardScore.toFixed(1) });
+                }
+
+                // New "difficult" definition
+                if (totalCardViews > averageDeckViews && avgCardScore < averageDeckScore) {
+                    difficultWords.push({ word: cardKey, score: avgCardScore.toFixed(1), views: totalCardViews });
+                }
             }
         });
 
@@ -2613,16 +2750,83 @@ document.addEventListener('DOMContentLoaded', () => {
                 listElement.innerHTML = '<li>None yet. Keep practicing!</li>';
                 return;
             }
-            words.sort(sortFn); // Sort by score using the provided function
-            words.forEach(item => {
+            words.sort(sortFn).forEach(item => {
                 const li = document.createElement('li');
-                li.textContent = `${item.word} (Score: ${item.score})`;
+                li.textContent = `${item.word} (Score: ${item.score}, Views: ${item.views})`;
+
+                const stats = allCardStats.find(s => getCardKey(cardData[allCardStats.indexOf(s)]) === item.word);
+                if (stats) {
+                    let tooltipText = `Word: ${item.word}\nAvg Score: ${item.score}\nTotal Views: ${item.views}\n\nSkill Details:\n`;
+                    const userSkills = (configs[configSelector.value] || {}).skills || [];
+                    userSkills.forEach(skill => {
+                        const skillStat = stats.skills[skill.id];
+                        if (skillStat) {
+                            tooltipText += `  - ${skill.name}: Score ${getRetentionScore(skillStat)}, Views ${skillStat.viewCount}\n`;
+                        }
+                    });
+                    li.title = tooltipText;
+                }
                 listElement.appendChild(li);
             });
         };
 
-        populateList(masteredWordsList, masteredWords, (a, b) => parseFloat(b.score) - parseFloat(a.score));
-        populateList(difficultWordsList, difficultWords, (a, b) => parseFloat(a.score) - parseFloat(b.score));
+        populateList(masteredWordsList, masteredWords, (a, b) => b.score - a.score);
+        populateList(difficultWordsList, difficultWords, (a, b) => a.score - b.score);
+
+        // --- Planning Tab ---
+        const planningBuckets = document.getElementById('planning-buckets');
+        const now = Date.now();
+        const buckets = {
+            'Next Day': { count: 0, time: 24 * 3600 * 1000 },
+            'Next Week': { count: 0, time: 7 * 24 * 3600 * 1000 },
+            'Next 2 Weeks': { count: 0, time: 14 * 24 * 3600 * 1000 },
+            'Next Month': { count: 0, time: 30 * 24 * 3600 * 1000 },
+            'Next 3 Months': { count: 0, time: 90 * 24 * 3600 * 1000 },
+            'Later': { count: 0, time: Infinity }
+        };
+
+        allCardStats.forEach(cardStats => {
+            Object.values(cardStats.skills).forEach(skillStats => {
+                const { ms: timeToDue } = getTimeToDue(skillStats, now);
+                if (timeToDue > 0) {
+                    for (const bucketName in buckets) {
+                        if (timeToDue <= buckets[bucketName].time) {
+                            buckets[bucketName].count++;
+                            break;
+                        }
+                    }
+                }
+            });
+        });
+        planningBuckets.innerHTML = Object.entries(buckets).map(([name, data]) => `<div><strong>${name}:</strong> ${data.count} cards</div>`).join('');
+
+
+        // --- Learning Tab ---
+        const learningSummary = document.getElementById('learning-summary');
+        const cardTimingSummary = document.getElementById('card-timing-summary');
+        const allDelays = allCardStats.flatMap(cs => Object.values(cs.skills).flatMap(ss => ss.responseDelays || []));
+        const totalTime = allDelays.reduce((sum, delay) => sum + delay, 0);
+
+        learningSummary.innerHTML = `<div><strong>Total Time Spent Learning:</strong> ${formatDuration(Math.round(totalTime / 1000))}</div>`;
+
+        if (allDelays.length > 0) {
+            allDelays.sort((a, b) => a - b);
+            const min = allDelays[0];
+            const q1 = allDelays[Math.floor(allDelays.length / 4)];
+            const median = allDelays[Math.floor(allDelays.length / 2)];
+            const q3 = allDelays[Math.floor(allDelays.length * 3 / 4)];
+            const max = allDelays[allDelays.length - 1];
+            cardTimingSummary.innerHTML = `
+                <div>Min: ${min}ms</div>
+                <div>Q1: ${q1}ms</div>
+                <div>Median: ${median}ms</div>
+                <div>Q3: ${q3}ms</div>
+                <div>Max: ${max}ms</div>
+            `;
+        } else {
+            cardTimingSummary.innerHTML = 'No timing data yet.';
+        }
+
 
         dashboardModal.classList.remove('hidden');
     }
@@ -3427,7 +3631,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const currentConfig = configs[currentConfigName];
         if (!currentConfig || !currentConfig.skills) return;
 
-        currentConfig.skills.forEach(skill => {
+        currentConfig.skills.forEach((skill, index) => {
             const div = document.createElement('div');
             const input = document.createElement('input');
             input.type = 'checkbox';
@@ -3438,7 +3642,8 @@ document.addEventListener('DOMContentLoaded', () => {
             const label = document.createElement('label');
             label.htmlFor = input.id;
             label.title = skill.name;
-            label.textContent = skill.name;
+            const letter = String.fromCharCode(65 + index); // A, B, C...
+            label.textContent = `(${letter}) ${skill.name}`;
 
             div.appendChild(input);
             div.appendChild(label);
