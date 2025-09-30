@@ -54,17 +54,6 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    function openFilterSettings() {
-        settingsModal.classList.remove('hidden');
-        const filterTabButton = document.getElementById('filter-tab');
-        if (filterTabButton) {
-            filterTabButton.click();
-        }
-    }
-
-    if (filterStatusIndicator) filterStatusIndicator.addEventListener('click', openFilterSettings);
-    if (mobileFilterStatusIndicator) mobileFilterStatusIndicator.addEventListener('click', openFilterSettings);
-
     // DOM Elements
     const hamburgerMenu = document.getElementById('hamburger-menu');
     const mobileMenuOverlay = document.getElementById('mobile-menu-overlay');
@@ -148,7 +137,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const closeDashboardButton = document.getElementById('close-dashboard-button');
     const masteredWordsList = document.getElementById('mastered-words-list');
     const difficultWordsList = document.getElementById('difficult-words-list');
-
 
     // --- Top Notification Function ---
     let notificationTimeout;
@@ -2084,14 +2072,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 if (roleKey === 'RELATED_WORD') {
                     const relatedWords = [...new Set(cellText.split(',').map(w => w.trim()).filter(Boolean))];
-                    const studiedWords = [];
-                    for (const word of relatedWords) {
-                        const stats = await getSanitizedStats(word);
+                    const statPromises = relatedWords.map(word => getSanitizedStats(word));
+                    const statsArray = await Promise.all(statPromises);
+
+                    const studiedWords = relatedWords.filter((word, i) => {
+                        const stats = statsArray[i];
                         const totalViews = Object.values(stats.skills).reduce((sum, s) => sum + (s.viewCount || 0), 0);
-                        if (totalViews > 0) {
-                            studiedWords.push(word);
-                        }
-                    }
+                        return totalViews > 0;
+                    });
+
                     if (studiedWords.length > 0) {
                         textParts.push({
                             text: transformSlashText(studiedWords.join(', ')),
@@ -2681,21 +2670,15 @@ document.addEventListener('DOMContentLoaded', () => {
         const allCardStats = await getAllCardStats();
         if (allCardStats.length === 0) return;
 
-        const masteredWords = [];
-        const difficultWords = [];
         const keyIndex = (configs[configSelector.value]?.roleToColumnMap?.TARGET_LANGUAGE || [])[0];
-
         if (keyIndex === undefined) {
             showTopNotification('Cannot generate report: Target Language column not set.', 'error');
             return;
         }
 
-        // --- Calculate Deck-Wide Averages ---
-        let totalDeckScore = 0;
-        let totalDeckViews = 0;
-        let cardsWithStats = 0;
-
-        allCardStats.forEach(cardStats => {
+        // --- Pre-compute all card stats for efficiency ---
+        const computedStats = allCardStats.map((cardStats, index) => {
+            const cardKey = getCardKey(cardData[index]);
             let totalCardScore = 0;
             let totalCardViews = 0;
             const skillIds = Object.keys(cardStats.skills);
@@ -2705,44 +2688,28 @@ document.addEventListener('DOMContentLoaded', () => {
                     totalCardScore += getRetentionScore(skill);
                     totalCardViews += skill.viewCount || 0;
                 });
-                totalDeckScore += totalCardScore / skillIds.length;
-                totalDeckViews += totalCardViews;
-                cardsWithStats++;
             }
+            const avgCardScore = skillIds.length > 0 ? totalCardScore / skillIds.length : 0;
+            return { cardKey, cardStats, avgCardScore, totalCardViews };
         });
 
-        const averageDeckScore = cardsWithStats > 0 ? totalDeckScore / cardsWithStats : 0;
-        const averageDeckViews = cardsWithStats > 0 ? totalDeckViews / cardsWithStats : 0;
-
+        // --- Calculate Deck-Wide Averages ---
+        const cardsWithStats = computedStats.filter(s => s.totalCardViews > 0);
+        const totalDeckScore = cardsWithStats.reduce((sum, s) => sum + s.avgCardScore, 0);
+        const totalDeckViews = cardsWithStats.reduce((sum, s) => sum + s.totalCardViews, 0);
+        const averageDeckScore = cardsWithStats.length > 0 ? totalDeckScore / cardsWithStats.length : 0;
+        const averageDeckViews = cardsWithStats.length > 0 ? totalDeckViews / cardsWithStats.length : 0;
 
         // --- Classify Words ---
-        allCardStats.forEach((cardStats, index) => {
-            const cardKey = cardData[index][keyIndex];
-            if (!cardKey) return;
+        const masteredWords = computedStats
+            .filter(s => s.avgCardScore > MASTERED_THRESHOLD)
+            .map(s => ({ word: s.cardKey, score: s.avgCardScore.toFixed(1), views: s.totalCardViews }));
 
-            let totalCardScore = 0;
-            let totalCardViews = 0;
-            const skillIds = Object.keys(cardStats.skills);
+        const difficultWords = computedStats
+            .filter(s => s.totalCardViews > averageDeckViews && s.avgCardScore < averageDeckScore)
+            .map(s => ({ word: s.cardKey, score: s.avgCardScore.toFixed(1), views: s.totalCardViews }));
 
-            if (skillIds.length > 0) {
-                skillIds.forEach(skillId => {
-                    const skill = cardStats.skills[skillId];
-                    totalCardScore += getRetentionScore(skill);
-                    totalCardViews += skill.viewCount || 0;
-                });
-
-                const avgCardScore = totalCardScore / skillIds.length;
-
-                if (avgCardScore > MASTERED_THRESHOLD) {
-                    masteredWords.push({ word: cardKey, score: avgCardScore.toFixed(1) });
-                }
-
-                // New "difficult" definition
-                if (totalCardViews > averageDeckViews && avgCardScore < averageDeckScore) {
-                    difficultWords.push({ word: cardKey, score: avgCardScore.toFixed(1), views: totalCardViews });
-                }
-            }
-        });
+        const statsMap = new Map(computedStats.map(s => [s.cardKey, s]));
 
         const populateList = (listElement, words, sortFn) => {
             listElement.innerHTML = '';
@@ -2754,12 +2721,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 const li = document.createElement('li');
                 li.textContent = `${item.word} (Score: ${item.score}, Views: ${item.views})`;
 
-                const stats = allCardStats.find(s => getCardKey(cardData[allCardStats.indexOf(s)]) === item.word);
-                if (stats) {
+                const computedStat = statsMap.get(item.word);
+                if (computedStat) {
                     let tooltipText = `Word: ${item.word}\nAvg Score: ${item.score}\nTotal Views: ${item.views}\n\nSkill Details:\n`;
                     const userSkills = (configs[configSelector.value] || {}).skills || [];
                     userSkills.forEach(skill => {
-                        const skillStat = stats.skills[skill.id];
+                        const skillStat = computedStat.cardStats.skills[skill.id];
                         if (skillStat) {
                             tooltipText += `  - ${skill.name}: Score ${getRetentionScore(skillStat)}, Views ${skillStat.viewCount}\n`;
                         }

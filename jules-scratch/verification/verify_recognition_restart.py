@@ -32,9 +32,9 @@ def run_verification(page):
     page.keyboard.press('f')
     expect(voice_button).not_to_have_class("listening")
 
-    # 8. Wait for a moment (simulating TTS), then verify recognition has restarted.
-    page.wait_for_timeout(1000) # Give it time for the onEndCallback to fire.
-    expect(voice_button).to_have_class("listening")
+    # 8. Verify that recognition restarts automatically after the slow replay TTS finishes.
+    # We give it a generous timeout to account for any TTS delay.
+    expect(voice_button).to_have_class("listening", timeout=5000)
 
     # 9. Navigate away and back to test if the state is correctly managed.
     page.locator("#next-card").click()
