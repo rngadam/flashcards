@@ -397,25 +397,25 @@ document.addEventListener('DOMContentLoaded', () => {
     if (enableFilterSettingsCheckbox) enableFilterSettingsCheckbox.addEventListener('change', handleSettingsFilterToggle);
 
     const handleSlowReplay = () => {
-        const wasRecognitionActive = recognitionActive;
-        if (wasRecognitionActive) {
+        // Always stop recognition if it's currently active.
+        if (recognitionActive) {
             stopVoiceRecognition();
         }
 
         const skillConfig = getCurrentSkillConfig();
-        const ttsFrontRole = skillConfig.ttsFrontColumn;
 
         const onEndCallback = () => {
-            // Only restart if the user is on the front of a voice card
+            // After TTS, check the CURRENT state to see if we should restart recognition.
             const currentSkillConfig = getCurrentSkillConfig();
-            if (wasRecognitionActive &&
-                !card.classList.contains('flipped') &&
-                currentSkillConfig.verificationMethod === VERIFICATION_METHODS.VOICE) {
+            if (currentSkillConfig &&
+                currentSkillConfig.verificationMethod === VERIFICATION_METHODS.VOICE &&
+                !card.classList.contains('flipped')) {
                 startVoiceRecognition();
             }
         };
 
-        if (ttsFrontRole) {
+        if (skillConfig && skillConfig.ttsFrontColumn) {
+            const ttsFrontRole = skillConfig.ttsFrontColumn;
             const textParts = getTextForRoles([ttsFrontRole]);
             const ttsText = textParts.map(p => p.text).join(' ');
             const lang = getLanguageForTts(ttsFrontRole);
@@ -423,10 +423,10 @@ document.addEventListener('DOMContentLoaded', () => {
             if (ttsText) {
                 speak(ttsText, { rate: 0.7, ttsRole: ttsFrontRole, lang: lang, onEndCallback });
             } else {
-                onEndCallback();
+                onEndCallback(); // If no text, run callback immediately.
             }
         } else {
-            onEndCallback();
+            onEndCallback(); // If no TTS role, run callback immediately.
         }
     };
 
