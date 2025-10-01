@@ -758,8 +758,25 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
 
+        // Force a re-render of the back of the card with the complete data,
+        // as the initial render might not have all context.
+        const skillConfig = getCurrentSkillConfig();
+        if (skillConfig) {
+            const backRoles = skillConfig.back || [];
+            backParts = await getTextForRoles(backRoles, currentRandomBaseIndex); // Re-fetch parts
+
+            cardBackContent.innerHTML = ''; // Clear existing content
+            backParts.forEach(part => {
+                const partDiv = document.createElement('div');
+                partDiv.className = `card-role-${part.role.toLowerCase()}`;
+                partDiv.textContent = part.text;
+                cardBackContent.appendChild(partDiv);
+            });
+            adjustFontSize(cardBackContent, false);
+        }
+
         if (!card.classList.contains('flipped')) {
-            flipCard();
+            await flipCard();
         }
         // The main control buttons are now always visible during MC, so no need to show/hide them.
     }
@@ -1877,14 +1894,14 @@ document.addEventListener('DOMContentLoaded', () => {
      * Flips the current card and handles the flip animation.
      * Also triggers TTS for the revealed side if enabled.
      */
-    function flipCard() {
+    async function flipCard() {
         if (!card) return;
 
         // If flipping is attempted during an active (unanswered) multiple-choice question,
         // treat it as "I don't know" and show the next card.
         if (!multipleChoiceContainer.classList.contains('hidden') && !multipleChoiceContainer.classList.contains('answered')) {
-            markCardAsKnown(false);
-            showNextCard({ forceNew: true });
+            await markCardAsKnown(false);
+            await showNextCard({ forceNew: true });
             return;
         }
 
@@ -1909,8 +1926,8 @@ document.addEventListener('DOMContentLoaded', () => {
             // Regenerate and update text for both faces since the base language might have changed
             const frontRoles = skillConfig.front || [];
             const backRoles = skillConfig.back || [];
-            frontParts = getTextForRoles(frontRoles, currentRandomBaseIndex);
-            backParts = getTextForRoles(backRoles, currentRandomBaseIndex);
+            frontParts = await getTextForRoles(frontRoles, currentRandomBaseIndex);
+            backParts = await getTextForRoles(backRoles, currentRandomBaseIndex);
 
             // This is a simplified redraw. The main redraw logic is in displayCard.
             // When flipping back to the front, we need to ensure the content is updated
@@ -3288,58 +3305,39 @@ document.addEventListener('DOMContentLoaded', () => {
      */
     async function loadInitialConfigs() {
         const urlParams = new URLSearchParams(window.location.search);
-        const isTestMode = urlParams.get('test') === 'true';
-
-        if (isTestMode) {
+        if (urlParams.get('test') === 'true') {
             console.log('TEST MODE: Bypassing IndexedDB and loading local test data.');
-            // 1. Parse the local data
             await parseData(TEST_DATA);
 
-            // 2. Create a default, temporary config
             const testConfigName = 'test-config';
-            const testConfig = { name: testConfigName, skills: [], activeSkills: [] };
-            configs = { [testConfigName]: testConfig };
+            const testConfig = {
+                name: testConfigName,
+                skills: [],
+                activeSkills: [],
+                subsetData: cardData,
+                headers: headers,
+                font: 'Arial',
+                ttsRate: '1',
+                ttsRateBase: '1.5',
+                disableAnimation: false,
+                multipleChoiceCount: '4',
+                voiceCorrectDelay: '1000',
+                repetitionIntervals: defaultIntervals.join(','),
+                filterIsEnabled: false,
+                filterText: '',
+                filterAllowOverflow: true
+            };
+            configs[testConfigName] = testConfig;
             await addDefaultSkill(testConfig);
 
-            // 3. Populate UI elements that depend on the config
             populateConfigSelector();
             configSelector.value = testConfigName;
-            configNameInput.value = testConfigName;
-            if (deckTitle) deckTitle.textContent = testConfigName;
+            await loadSelectedConfig(testConfigName);
 
-            // 4. Set default values for other settings
-            if (fontSelector) fontSelector.value = 'Arial';
-            if (cardContainer) cardContainer.style.fontFamily = 'Arial';
-            if (ttsRateSlider) ttsRateSlider.value = 1;
-            if (ttsRateBaseSlider) ttsRateBaseSlider.value = 1.5;
-            if (disableAnimationCheckbox) disableAnimationCheckbox.checked = false;
-            if (multipleChoiceCount) multipleChoiceCount.value = 4;
-            if (voiceCorrectDelayInput) voiceCorrectDelayInput.value = 1000;
-            if (repetitionIntervalsTextarea) {
-                repetitionIntervals = [...defaultIntervals];
-                repetitionIntervalsTextarea.value = repetitionIntervals.join(', ');
-            }
-
-            // 5. Populate skill selectors now that skills exist
-            renderSkillsList();
-            populateAllSkillSelectors();
-
-            // 6. Signal that data is loaded and hide the settings modal
             document.body.classList.add('debug-data-loaded');
-            if (settingsModal) settingsModal.classList.add('hidden');
-            if (cacheStatus) {
-                cacheStatus.textContent = 'Using local test data.';
-                cacheStatus.classList.add('cached');
-            }
-
-            // 7. Display the first card
-            if (cardData.length > 0) {
-                await showNextCard();
-            }
             return;
         }
 
-        // --- Regular Startup Logic ---
         try {
             const savedConfigs = await get('flashcard-configs');
             if (savedConfigs) {
