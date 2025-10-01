@@ -29,16 +29,18 @@ document.addEventListener('DOMContentLoaded', () => {
     // And update it whenever the window is resized
     window.addEventListener('resize', updateLayout);
 
-    // Tab switching logic
-    const tabsContainer = document.querySelector('.tabs');
-    const tabPanels = document.querySelectorAll('.tab-panel');
+    // Scoped tab switching logic for multiple tab interfaces
+    document.querySelectorAll('.tabs').forEach(tabsContainer => {
+        const container = tabsContainer.parentElement; // e.g., #settings or #dashboard-panel
+        if (!container) return;
 
-    if (tabsContainer) {
-        tabsContainer.addEventListener('click', (e) => {
+        const tabPanels = container.querySelectorAll('.tab-panel');
+
+        tabsContainer.addEventListener('click', e => {
             if (e.target.matches('.tab-button')) {
                 const button = e.target;
 
-                // Update button states
+                // Update button states within this specific tab container
                 tabsContainer.querySelectorAll('.tab-button').forEach(btn => {
                     btn.classList.remove('active');
                     btn.setAttribute('aria-selected', 'false');
@@ -46,14 +48,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 button.classList.add('active');
                 button.setAttribute('aria-selected', 'true');
 
-                // Update panel visibility
+                // Update panel visibility for panels within this container
                 const tabName = button.dataset.tab;
                 tabPanels.forEach(panel => {
                     panel.classList.toggle('active', panel.id === tabName);
                 });
             }
         });
-    }
+    });
 
     // DOM Elements
     const hamburgerMenu = document.getElementById('hamburger-menu');
