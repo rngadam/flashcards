@@ -7,42 +7,31 @@
     <link rel="stylesheet" href="style.css">
   </head>
   <body>
-    <div id="login-container" class="hidden">
-      <h1>Welcome to Flashcards</h1>
-      <p>Please log in to continue</p>
-      <div class="login-buttons">
-          <a href="/auth/github" class="login-button github">Login with GitHub</a>
-          <a href="/auth/google" class="login-button google">Login with Google</a>
-          <a href="/auth/linkedin" class="login-button linkedin">Login with LinkedIn</a>
-      </div>
-    </div>
-
-    <div id="app-container" class="hidden">
-      <div id="top-bar">
-        <div id="top-notification" class="hidden"></div>
-        <div id="top-left-controls">
-          <div id="skill-selector-checkboxes" class="column-checkbox-group">
-              <!-- Skill checkboxes will be populated here by JS -->
-          </div>
-          <div id="skill-selector-filter" class="column-checkbox-group">
-              <button id="filter-toggle-button" class="filter-toggle-button" title="Enable/Disable Word Filter">Filter</button><span id="filter-status-indicator" class="filter-status"></span>
-          </div>
+    <div id="top-bar">
+      <div id="top-notification" class="hidden"></div>
+      <div id="top-left-controls">
+        <div id="skill-selector-checkboxes" class="column-checkbox-group">
+            <!-- Skill checkboxes will be populated here by JS -->
         </div>
+        <div id="skill-selector-filter" class="column-checkbox-group">
+            <button id="filter-toggle-button" class="filter-toggle-button" title="Enable/Disable Word Filter">Filter</button><span id="filter-status-indicator" class="filter-status"></span>
+        </div>
+      </div>
+      <div class="desktop-only-buttons">
         <div id="user-profile" class="hidden">
             <span id="user-display-name"></span>
             <button id="logout-button">Logout</button>
         </div>
-        <div class="desktop-only-buttons">
-          <button id="dashboard-button">📊</button>
-          <button id="history-button">📜</button>
-          <button id="settings-button">⚙️</button>
-          <button id="help-button">?</button>
-          <button id="fullscreen-button">⛶</button>
-        </div>
-        <button id="hamburger-menu" class="mobile-only-button">☰</button>
+        <button id="dashboard-button">📊</button>
+        <button id="history-button">📜</button>
+        <button id="settings-button">⚙️</button>
+        <button id="help-button">?</button>
+        <button id="fullscreen-button">⛶</button>
       </div>
+      <button id="hamburger-menu" class="mobile-only-button">☰</button>
+    </div>
 
-      <div id="mobile-menu-overlay" class="modal-overlay hidden">
+    <div id="mobile-menu-overlay" class="modal-overlay hidden">
         <div id="mobile-menu-panel">
             <div id="mobile-skill-selector-container">
                 <label>Skills:</label>
@@ -180,6 +169,7 @@
           <button class="tab-button" id="advanced-tab" data-tab="advanced-settings" role="tab" aria-controls="advanced-settings" aria-selected="false">Advanced</button>
           <button class="tab-button" id="filter-tab" data-tab="filter-settings" role="tab" aria-controls="filter-settings" aria-selected="false">Filter</button>
           <button class="tab-button" id="backup-tab" data-tab="backup-settings" role="tab" aria-controls="backup-settings" aria-selected="false">Backup</button>
+          <button class="tab-button" id="account-tab" data-tab="account-settings" role="tab" aria-controls="account-settings" aria-selected="false">Account</button>
           <button class="tab-button" id="dangerous-tab" data-tab="dangerous-settings" role="tab" aria-controls="dangerous-settings" aria-selected="false">Dangerous</button>
         </div>
 
@@ -285,11 +275,31 @@
             </div>
         </div>
 
+        <div id="account-settings" class="tab-panel" role="tabpanel" aria-labelledby="account-tab">
+            <div class="setting">
+                <p>Log in to save your progress and access it from any device.</p>
+                <button id="login-button">Login</button>
+            </div>
+        </div>
+
         <div class="button-container">
             <button id="save-config" disabled>Save Configuration</button>
         </div>
         <div id="cache-status"></div>
       </div>
+    </div>
+
+    <div id="login-modal" class="modal-overlay hidden">
+        <div id="login-panel">
+            <button id="close-login-modal-button">X</button>
+            <h2>Login</h2>
+            <p>Choose a provider to log in with:</p>
+            <div class="login-buttons">
+                <a href="/auth/github" class="login-button github">Login with GitHub</a>
+                <a href="/auth/google" class="login-button google">Login with Google</a>
+                <a href="/auth/linkedin" class="login-button linkedin">Login with LinkedIn</a>
+            </div>
+        </div>
     </div>
 
     <div id="skill-config-modal" class="modal-overlay hidden">
@@ -400,6 +410,5 @@
     <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.6/Sortable.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.10.3/sql-wasm.js"></script>
     <script type="module" src="app.js"></script>
-    </div>
   </body>
 </html>

@@ -13,43 +13,70 @@ import { TEST_DATA } from './lib/test-data.js';
  * Handles DOM interactions, data loading, card display, state management,
  * and all user-facing features like TTS, spaced repetition, and settings.
  */
-document.addEventListener('DOMContentLoaded', async () => {
-    // --- Authentication Check ---
-    const loginContainer = document.getElementById('login-container');
-    const appContainer = document.getElementById('app-container');
+document.addEventListener('DOMContentLoaded', () => {
+    initializeApp();
+    checkAuthStatus();
+});
+
+async function checkAuthStatus() {
+    const loginButton = document.getElementById('login-button');
+    const loginModal = document.getElementById('login-modal');
+    const closeLoginModalButton = document.getElementById('close-login-modal-button');
     const userProfile = document.getElementById('user-profile');
     const userDisplayName = document.getElementById('user-display-name');
     const logoutButton = document.getElementById('logout-button');
+    const accountSettingsPanel = document.getElementById('account-settings');
 
     try {
         const response = await fetch('/api/user');
+        if (!response.ok) {
+            throw new Error(`API request failed with status ${response.status}`);
+        }
         const data = await response.json();
 
         if (data.user) {
             // User is logged in
-            loginContainer.classList.add('hidden');
-            appContainer.classList.remove('hidden');
             userProfile.classList.remove('hidden');
             userDisplayName.textContent = data.user.displayName || data.user.email;
-
-            logoutButton.addEventListener('click', async () => {
-                await fetch('/api/logout', { method: 'POST' });
-                window.location.reload();
-            });
-
-            // Initialize the main app
-            initializeApp();
+            if (accountSettingsPanel) {
+                accountSettingsPanel.innerHTML = `<p>You are logged in as <strong>${data.user.displayName || data.user.email}</strong>.</p><p>Your progress is being saved to your account.</p>`;
+            }
+            if (logoutButton) {
+                logoutButton.addEventListener('click', async () => {
+                    await fetch('/api/logout', { method: 'POST' });
+                    window.location.reload();
+                });
+            }
         } else {
             // User is not logged in
-            loginContainer.classList.remove('hidden');
-            appContainer.classList.add('hidden');
+            userProfile.classList.add('hidden');
+            if (loginButton) {
+                loginButton.addEventListener('click', () => {
+                    if (loginModal) loginModal.classList.remove('hidden');
+                });
+            }
+            if (closeLoginModalButton) {
+                closeLoginModalButton.addEventListener('click', () => {
+                    if (loginModal) loginModal.classList.add('hidden');
+                });
+            }
         }
     } catch (error) {
-        console.error('Error checking auth status:', error);
-        loginContainer.classList.remove('hidden');
-        appContainer.classList.add('hidden');
+        console.error('Error checking auth status. Running in guest mode.', error);
+        userProfile.classList.add('hidden');
+        // Make sure login button is still functional in case of API error
+        if (loginButton) {
+            loginButton.addEventListener('click', () => {
+                if (loginModal) loginModal.classList.remove('hidden');
+            });
+        }
+        if (closeLoginModalButton) {
+            closeLoginModalButton.addEventListener('click', () => {
+                if (loginModal) loginModal.classList.add('hidden');
+            });
+        }
     }
-});
+}
 
 function initializeApp() {
     const updateLayout = () => {
