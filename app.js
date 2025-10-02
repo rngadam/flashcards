@@ -13,7 +13,45 @@ import { TEST_DATA } from './lib/test-data.js';
  * Handles DOM interactions, data loading, card display, state management,
  * and all user-facing features like TTS, spaced repetition, and settings.
  */
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
+    // --- Authentication Check ---
+    const loginContainer = document.getElementById('login-container');
+    const appContainer = document.getElementById('app-container');
+    const userProfile = document.getElementById('user-profile');
+    const userDisplayName = document.getElementById('user-display-name');
+    const logoutButton = document.getElementById('logout-button');
+
+    try {
+        const response = await fetch('/api/user');
+        const data = await response.json();
+
+        if (data.user) {
+            // User is logged in
+            loginContainer.classList.add('hidden');
+            appContainer.classList.remove('hidden');
+            userProfile.classList.remove('hidden');
+            userDisplayName.textContent = data.user.displayName || data.user.email;
+
+            logoutButton.addEventListener('click', async () => {
+                await fetch('/api/logout', { method: 'POST' });
+                window.location.reload();
+            });
+
+            // Initialize the main app
+            initializeApp();
+        } else {
+            // User is not logged in
+            loginContainer.classList.remove('hidden');
+            appContainer.classList.add('hidden');
+        }
+    } catch (error) {
+        console.error('Error checking auth status:', error);
+        loginContainer.classList.remove('hidden');
+        appContainer.classList.add('hidden');
+    }
+});
+
+function initializeApp() {
     const updateLayout = () => {
         // Use a media query to check for desktop-like screen widths (a common breakpoint).
         if (window.matchMedia('(min-width: 769px)').matches) {
@@ -3719,4 +3757,4 @@ document.addEventListener('DOMContentLoaded', () => {
                 });
         });
     }
-});
+}

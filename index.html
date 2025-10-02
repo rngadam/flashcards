@@ -7,27 +7,42 @@
     <link rel="stylesheet" href="style.css">
   </head>
   <body>
-    <div id="top-bar">
-      <div id="top-notification" class="hidden"></div>
-      <div id="top-left-controls">
-        <div id="skill-selector-checkboxes" class="column-checkbox-group">
-            <!-- Skill checkboxes will be populated here by JS -->
-        </div>
-        <div id="skill-selector-filter" class="column-checkbox-group">
-            <button id="filter-toggle-button" class="filter-toggle-button" title="Enable/Disable Word Filter">Filter</button><span id="filter-status-indicator" class="filter-status"></span>
-        </div>
+    <div id="login-container" class="hidden">
+      <h1>Welcome to Flashcards</h1>
+      <p>Please log in to continue</p>
+      <div class="login-buttons">
+          <a href="/auth/github" class="login-button github">Login with GitHub</a>
+          <a href="/auth/google" class="login-button google">Login with Google</a>
+          <a href="/auth/linkedin" class="login-button linkedin">Login with LinkedIn</a>
       </div>
-      <div class="desktop-only-buttons">
-        <button id="dashboard-button">📊</button>
-        <button id="history-button">📜</button>
-        <button id="settings-button">⚙️</button>
-        <button id="help-button">?</button>
-        <button id="fullscreen-button">⛶</button>
-      </div>
-      <button id="hamburger-menu" class="mobile-only-button">☰</button>
     </div>
 
-    <div id="mobile-menu-overlay" class="modal-overlay hidden">
+    <div id="app-container" class="hidden">
+      <div id="top-bar">
+        <div id="top-notification" class="hidden"></div>
+        <div id="top-left-controls">
+          <div id="skill-selector-checkboxes" class="column-checkbox-group">
+              <!-- Skill checkboxes will be populated here by JS -->
+          </div>
+          <div id="skill-selector-filter" class="column-checkbox-group">
+              <button id="filter-toggle-button" class="filter-toggle-button" title="Enable/Disable Word Filter">Filter</button><span id="filter-status-indicator" class="filter-status"></span>
+          </div>
+        </div>
+        <div id="user-profile" class="hidden">
+            <span id="user-display-name"></span>
+            <button id="logout-button">Logout</button>
+        </div>
+        <div class="desktop-only-buttons">
+          <button id="dashboard-button">📊</button>
+          <button id="history-button">📜</button>
+          <button id="settings-button">⚙️</button>
+          <button id="help-button">?</button>
+          <button id="fullscreen-button">⛶</button>
+        </div>
+        <button id="hamburger-menu" class="mobile-only-button">☰</button>
+      </div>
+
+      <div id="mobile-menu-overlay" class="modal-overlay hidden">
         <div id="mobile-menu-panel">
             <div id="mobile-skill-selector-container">
                 <label>Skills:</label>
@@ -385,5 +400,6 @@
     <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.6/Sortable.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.10.3/sql-wasm.js"></script>
     <script type="module" src="app.js"></script>
+    </div>
   </body>
 </html>

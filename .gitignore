@@ -1,1 +1,16 @@
-node_modules
+# Dependencies
+/node_modules
+
+# Environment Variables
+.env
+
+# SQLite Database
+database.db
+session.db
+
+# macOS
+.DS_Store
+
+# Build artifacts
+/dist
+/build

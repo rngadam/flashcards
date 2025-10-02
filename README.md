@@ -51,3 +51,89 @@ This web-app allows users to practice from custom data sources (TSV or CSV) with
 *   **Alternate Uppercase:** An option to alternate the casing on the front of the card between the original and all-uppercase, to help with memorization.
 *   **Audio-Only Front:** For listening comprehension practice, you can choose to hide the text on the front of the card and only hear the audio. A speech icon (🔊) will be displayed instead of the text.
 *   **On-Demand TTS:** An option to only have text-to-speech play when the 'f' hotkey is pressed.
+
+## Deployment to Render
+
+This application includes a backend server and is configured for easy deployment to [Render](https://render.com/). The existing GitHub Pages deployment for the frontend remains unaffected.
+
+### One-Click Deploy
+
+You can deploy your own instance of this application to Render by clicking the button below.
+
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/your-username/your-repo-name)
+
+*Note: You will need to replace the repository URL with your own after forking.*
+
+### Manual Deployment Steps
+
+1.  **Fork the Repository:** Start by forking this repository to your own GitHub account.
+2.  **Create a New Web Service on Render:**
+    *   Go to the [Render Dashboard](https://dashboard.render.com/).
+    *   Click **New +** and select **Web Service**.
+    *   Connect your GitHub account and select your forked repository.
+3.  **Configure the Service:**
+    *   **Name:** Give your service a name (e.g., `flashcards-app`).
+    *   **Region:** Choose a region close to you.
+    *   **Branch:** `main`.
+    *   **Build Command:** `npm install`
+    *   **Start Command:** `node server.js`
+    *   **Instance Type:** `Free` (or your preferred plan).
+4.  **Add Environment Variables:**
+    *   Before the first deploy, go to the **Environment** tab.
+    *   Add the secrets and keys you obtained from the OAuth providers (see instructions below). You must create an environment variable for each key listed in the table.
+5.  **Deploy:**
+    *   Click **Create Web Service**. Render will automatically build and deploy your application.
+
+### Environment Variables
+
+You will need to configure the following environment variables in your Render service.
+
+| Variable                 | Description                                                                  | Example                               |
+| :----------------------- | :--------------------------------------------------------------------------- | :------------------------------------ |
+| `SESSION_SECRET`         | A long, random string for securing sessions. Render can generate this for you. | `your_super_secret_session_key`       |
+| `GITHUB_CLIENT_ID`       | Your GitHub OAuth App Client ID.                                             | `iv1.1234567890abcdef`                |
+| `GITHUB_CLIENT_SECRET`   | Your GitHub OAuth App Client Secret.                                         | `a1b2c3d4e5f6...`                     |
+| `GOOGLE_CLIENT_ID`       | Your Google OAuth 2.0 Client ID.                                             | `12345...apps.googleusercontent.com`  |
+| `GOOGLE_CLIENT_SECRET`   | Your Google OAuth 2.0 Client Secret.                                         | `GOCSPX-...`                          |
+| `LINKEDIN_CLIENT_ID`     | Your LinkedIn OAuth 2.0 Client ID.                                           | `77a1b2c3d4e5`                        |
+| `LINKEDIN_CLIENT_SECRET` | Your LinkedIn OAuth 2.0 Client Secret.                                       | `XyZ123...`                           |
+| `RENDER_EXTERNAL_URL`    | The public URL of your service. **Render sets this automatically.**          | `https://flashcards-app.onrender.com` |
+
+### Obtaining OAuth Credentials
+
+You must configure at least one OAuth provider for the login system to work.
+
+#### GitHub
+
+1.  Navigate to **GitHub Settings** > **Developer settings** > **OAuth Apps**.
+2.  Click **New OAuth App**.
+3.  **Application name:** `Flashcards App` (or your choice).
+4.  **Homepage URL:** Your Render app's URL (e.g., `https://your-app-name.onrender.com`).
+5.  **Authorization callback URL:** Your Render app's URL followed by `/auth/github/callback` (e.g., `https://your-app-name.onrender.com/auth/github/callback`).
+6.  Click **Register application**.
+7.  Copy the **Client ID** and generate/copy a new **Client Secret**. Add these to your Render environment variables.
+
+#### Google
+
+1.  Go to the [Google Cloud Console](https://console.cloud.google.com/).
+2.  Create a new project or select an existing one.
+3.  Navigate to **APIs & Services** > **Credentials**.
+4.  Click **+ CREATE CREDENTIALS** > **OAuth client ID**.
+5.  If prompted, configure the **OAuth consent screen**:
+    *   **User Type:** External.
+    *   Fill in the required app name, user support email, and developer contact information.
+    *   Click **SAVE AND CONTINUE** through the Scopes and Test Users pages.
+6.  Return to the **Credentials** page to create the OAuth client ID:
+    *   **Application type:** Web application.
+    *   **Authorized JavaScript origins:** Add your Render app's URL (e.g., `https://your-app-name.onrender.com`).
+    *   **Authorized redirect URIs:** Add your Render app's URL followed by `/auth/google/callback` (e.g., `https://your-app-name.onrender.com/auth/google/callback`).
+7.  Click **CREATE** and copy the **Client ID** and **Client Secret**. Add these to your Render environment variables.
+
+#### LinkedIn
+
+1.  Go to the [LinkedIn Developer Portal](https://www.linkedin.com/developers/apps/new) and click **Create app**.
+2.  Fill in the app details. You will need to associate it with a company page.
+3.  Once created, navigate to the **Auth** tab.
+4.  Under **OAuth 2.0 settings**, add an **Authorized redirect URL**: `https://your-app-name.onrender.com/auth/linkedin/callback`.
+5.  Copy the **Client ID** and **Client Secret** from this page and add them to your Render environment variables.
+6.  Navigate to the **Products** tab and request access for `Sign In with LinkedIn using OpenID Connect`. This is required to retrieve user profile information.

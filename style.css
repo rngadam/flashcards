@@ -18,6 +18,11 @@
     --primary-hover-color: #0056b3;
 }
 
+#login-container.hidden,
+#app-container.hidden {
+    display: none;
+}
+
 body {
   font-family: Arial, sans-serif;
   display: flex;
@@ -27,6 +32,55 @@ body {
   background-color: var(--light-gray);
   padding: 10px;
   box-sizing: border-box;
+}
+
+#login-container {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    height: 100%;
+    width: 100%;
+    text-align: center;
+}
+
+.login-buttons a {
+    display: block;
+    padding: 12px 25px;
+    margin: 10px;
+    border-radius: 5px;
+    text-decoration: none;
+    color: white;
+    font-weight: bold;
+    font-size: 1.1em;
+}
+
+.login-button.github { background-color: #333; }
+.login-button.google { background-color: #db4437; }
+.login-button.linkedin { background-color: #0077b5; }
+
+#app-container {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    width: 100%;
+}
+
+#user-profile {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+#user-profile span {
+    font-weight: bold;
+}
+
+#logout-button {
+    font-size: 0.9em;
+    padding: 8px 12px;
+    margin: 0;
+    cursor: pointer;
 }
 
 body.is-flipping {
