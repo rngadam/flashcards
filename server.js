@@ -19,6 +19,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 app.enable("trust proxy");
+app.use(express.json({ limit: '50mb' })); // Middleware to parse JSON bodies
 app.use(express.static(path.join(__dirname, '/')));
 
 // --- Session Management ---
@@ -141,6 +142,25 @@ if (process.env.LINKEDIN_CLIENT_ID && process.env.LINKEDIN_CLIENT_SECRET) {
 }
 
 
+// --- API Routes ---
+
+// API endpoint to get the list of configured OAuth providers
+app.get('/api/auth/providers', (req, res) => {
+    const providers = [];
+    if (process.env.GITHUB_CLIENT_ID) providers.push('github');
+    if (process.env.GOOGLE_CLIENT_ID) providers.push('google');
+    if (process.env.LINKEDIN_CLIENT_ID) providers.push('linkedin');
+    res.json(providers);
+});
+
+// Middleware to ensure a user is authenticated
+const ensureAuthenticated = (req, res, next) => {
+    if (req.isAuthenticated()) {
+        return next();
+    }
+    res.status(401).json({ error: 'User not authenticated' });
+};
+
 // --- Authentication Routes ---
 // GitHub
 app.get('/auth/github', passport.authenticate('github', { scope: ['user:email'] }));
@@ -173,6 +193,54 @@ app.get('/api/user', (req, res) => {
         res.json({ user: null });
     }
 });
+
+// GET endpoint to retrieve all user data
+app.get('/api/sync', ensureAuthenticated, async (req, res) => {
+    try {
+        const data = await db.all('SELECT type, key, value FROM user_data WHERE user_id = ?', [req.user.id]);
+        const result = {
+            configs: {},
+            cardStats: {}
+        };
+        data.forEach(row => {
+            if (row.type === 'configs') {
+                result.configs = JSON.parse(row.value);
+            } else if (row.type === 'cardStat') {
+                result.cardStats[row.key] = JSON.parse(row.value);
+            }
+        });
+        res.json(result);
+    } catch (error) {
+        console.error('Error fetching user data:', error);
+        res.status(500).json({ error: 'Failed to retrieve data' });
+    }
+});
+
+// POST endpoint to save user data
+app.post('/api/sync', ensureAuthenticated, async (req, res) => {
+    const { type, key, value } = req.body;
+
+    if (!type || !key || value === undefined) {
+        return res.status(400).json({ error: 'Missing type, key, or value' });
+    }
+
+    try {
+        const valueJson = JSON.stringify(value);
+        await db.run(`
+      INSERT INTO user_data (user_id, type, key, value, updated_at)
+      VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+      ON CONFLICT(user_id, type, key) DO UPDATE SET
+        value = excluded.value,
+        updated_at = CURRENT_TIMESTAMP
+    `, [req.user.id, type, key, valueJson]);
+
+        res.status(200).json({ message: 'Data saved successfully' });
+    } catch (error) {
+        console.error('Error saving user data:', error);
+        res.status(500).json({ error: 'Failed to save data' });
+    }
+});
+
 
 // Logout
 app.post('/api/logout', (req, res, next) => {

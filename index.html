@@ -18,6 +18,7 @@
         </div>
       </div>
       <div class="desktop-only-buttons">
+        <button id="login-button">Login</button>
         <div id="user-profile" class="hidden">
             <span id="user-display-name"></span>
             <button id="logout-button">Logout</button>
@@ -45,6 +46,11 @@
             <button id="mobile-dashboard-button">📊 Dashboard</button>
             <button id="mobile-history-button">📜 History</button>
             <button id="mobile-settings-button">⚙️ Settings</button>
+            <div id="mobile-user-profile" class="hidden">
+                <span id="mobile-user-display-name"></span>
+                <button id="mobile-logout-button">Logout</button>
+            </div>
+            <button id="mobile-login-button">Login</button>
             <button id="mobile-help-button">? Help</button>
             <button id="mobile-fullscreen-button">⛶ Fullscreen</button>
             <button id="close-mobile-menu-button">Close</button>
@@ -158,7 +164,7 @@
         <div class="setting data-source-setting">
           <label for="data-url">Data Source URL (TSV/CSV):</label>
           <div class="input-with-button">
-            <input type="text" id="data-url" value="https://docs.google.com/spreadsheets/d/e/2PACX-1vSW_KeHCyth3-9kWtpYHXl9aPVwoOhurjGINbJ4oNHWGoQMjSHyZl0J9LeraGDt51ZUjIsqrv9DXO27/pub?gid=2060234086&single=true&output=tsv">
+            <input type="text" id="data-url" value="https://docs.google.com/spreadsheets/d/e/2PACX-1vRE9DYOw1a9S-9Q1ZMXQ7K5HynHhvq9z5KbuqbDgiDwGtV7850pLDHHcBAa-BldfbxqN8Axni0NwjEE/pub?gid=272537463&single=true&output=tsv">
             <button id="load-data">Load</button>
           </div>
         </div>
@@ -169,7 +175,6 @@
           <button class="tab-button" id="advanced-tab" data-tab="advanced-settings" role="tab" aria-controls="advanced-settings" aria-selected="false">Advanced</button>
           <button class="tab-button" id="filter-tab" data-tab="filter-settings" role="tab" aria-controls="filter-settings" aria-selected="false">Filter</button>
           <button class="tab-button" id="backup-tab" data-tab="backup-settings" role="tab" aria-controls="backup-settings" aria-selected="false">Backup</button>
-          <button class="tab-button" id="account-tab" data-tab="account-settings" role="tab" aria-controls="account-settings" aria-selected="false">Account</button>
           <button class="tab-button" id="dangerous-tab" data-tab="dangerous-settings" role="tab" aria-controls="dangerous-settings" aria-selected="false">Dangerous</button>
         </div>
 
@@ -275,13 +280,6 @@
             </div>
         </div>
 
-        <div id="account-settings" class="tab-panel" role="tabpanel" aria-labelledby="account-tab">
-            <div class="setting">
-                <p>Log in to save your progress and access it from any device.</p>
-                <button id="login-button">Login</button>
-            </div>
-        </div>
-
         <div class="button-container">
             <button id="save-config" disabled>Save Configuration</button>
         </div>
@@ -293,11 +291,10 @@
         <div id="login-panel">
             <button id="close-login-modal-button">X</button>
             <h2>Login</h2>
+            <p>Log in to keep your learning progress and settings synchronized across all your devices.</p>
             <p>Choose a provider to log in with:</p>
-            <div class="login-buttons">
-                <a href="/auth/github" class="login-button github">Login with GitHub</a>
-                <a href="/auth/google" class="login-button google">Login with Google</a>
-                <a href="/auth/linkedin" class="login-button linkedin">Login with LinkedIn</a>
+            <div id="login-provider-buttons" class="login-buttons">
+                <!-- Login buttons will be dynamically populated here by JS -->
             </div>
         </div>
     </div>
