@@ -1,0 +1,27 @@
+services:
+  web:
+    build: .
+    ports:
+      - target: 3000
+        # Defang will automatically map this to a public port (e.g., 443 for HTTPS)
+    # The start command is automatically picked up from the "start" script in package.json
+    # Healthcheck to ensure the service is running before marking it as healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    # Deploy configuration (optional, but good practice)
+    deploy:
+      replicas: 1
+      endpoint_mode: dnsrr # Use Defang's default load balancing
+      resources:
+        reservations:
+          cpus: "0.25"
+          memory: "256MiB"
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+        window: 120s

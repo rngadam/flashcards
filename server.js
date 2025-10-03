@@ -80,12 +80,16 @@ const findOrCreateUser = async (profile, done) => {
 
 
 // --- Passport.js Strategies ---
+
+// Defang provides the DEFANG_HOST environment variable with the public hostname of the service.
+const callbackBaseUrl = process.env.DEFANG_HOST ? `https://${process.env.DEFANG_HOST}` : '';
+
 // GitHub
 if (process.env.GITHUB_CLIENT_ID && process.env.GITHUB_CLIENT_SECRET) {
     passport.use(new GitHubStrategy({
         clientID: process.env.GITHUB_CLIENT_ID,
         clientSecret: process.env.GITHUB_CLIENT_SECRET,
-        callbackURL: process.env.RENDER_EXTERNAL_URL ? `${process.env.RENDER_EXTERNAL_URL}/auth/github/callback` : '/auth/github/callback'
+        callbackURL: `${callbackBaseUrl}/auth/github/callback`
     }, findOrCreateUser));
 }
 
@@ -94,7 +98,7 @@ if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
     passport.use(new GoogleStrategy({
         clientID: process.env.GOOGLE_CLIENT_ID,
         clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-        callbackURL: process.env.RENDER_EXTERNAL_URL ? `${process.env.RENDER_EXTERNAL_URL}/auth/google/callback` : '/auth/google/callback'
+        callbackURL: `${callbackBaseUrl}/auth/google/callback`
     }, findOrCreateUser));
 }
 
@@ -103,7 +107,7 @@ if (process.env.LINKEDIN_CLIENT_ID && process.env.LINKEDIN_CLIENT_SECRET) {
     passport.use(new LinkedInStrategy({
         clientID: process.env.LINKEDIN_CLIENT_ID,
         clientSecret: process.env.LINKEDIN_CLIENT_SECRET,
-        callbackURL: process.env.RENDER_EXTERNAL_URL ? `${process.env.RENDER_EXTERNAL_URL}/auth/linkedin/callback` : '/auth/linkedin/callback',
+        callbackURL: `${callbackBaseUrl}/auth/linkedin/callback`,
         scope: ['r_emailaddress', 'r_liteprofile'],
     }, findOrCreateUser));
 }
