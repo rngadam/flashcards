@@ -38,6 +38,21 @@ await db.exec(`
   )
 `);
 
-console.log('Database initialized with users and identities tables.');
+// Create the user_data table to store arbitrary user-specific data,
+// such as configurations and card statistics, as JSON.
+await db.exec(`
+  CREATE TABLE IF NOT EXISTS user_data (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    type TEXT NOT NULL,    -- e.g., 'configs', 'cardStat'
+    key TEXT NOT NULL,     -- e.g., 'flashcard-configs', 'flashcard-last-config', or a card key
+    value TEXT NOT NULL,   -- The JSON blob
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(user_id, type, key),
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+  )
+`);
+
+// console.log('Database initialized with users, identities, and user_data tables.');
 
 export default db;

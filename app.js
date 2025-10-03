@@ -15,77 +15,7 @@ import { TEST_DATA } from './lib/test-data.js';
  */
 document.addEventListener('DOMContentLoaded', () => {
     initializeApp();
-    checkAuthStatus();
 });
-
-async function checkAuthStatus() {
-    const loginButton = document.getElementById('login-button');
-    const loginModal = document.getElementById('login-modal');
-    const closeLoginModalButton = document.getElementById('close-login-modal-button');
-    const userProfile = document.getElementById('user-profile');
-    const userDisplayName = document.getElementById('user-display-name');
-    const logoutButton = document.getElementById('logout-button');
-    const accountSettingsPanel = document.getElementById('account-settings');
-
-    try {
-        const response = await fetch('/api/user');
-        if (!response.ok) {
-            throw new Error(`API request failed with status ${response.status}`);
-        }
-        const data = await response.json();
-
-        if (data.user) {
-            // User is logged in
-            userProfile.classList.remove('hidden');
-            userDisplayName.textContent = data.user.displayName || data.user.email;
-            if (accountSettingsPanel) {
-                // Use textContent to prevent XSS
-                const strong = document.createElement('strong');
-                strong.textContent = data.user.displayName || data.user.email;
-
-                const p1 = document.createElement('p');
-                p1.textContent = 'You are logged in as ';
-                p1.appendChild(strong);
-                p1.appendChild(document.createTextNode('.'));
-
-                const p2 = document.createElement('p');
-                p2.textContent = 'Your progress is being saved to your account.';
-
-                accountSettingsPanel.innerHTML = ''; // Clear previous content
-                accountSettingsPanel.appendChild(p1);
-                accountSettingsPanel.appendChild(p2);
-            }
-            if (logoutButton) {
-                logoutButton.addEventListener('click', async () => {
-                    await fetch('/api/logout', { method: 'POST' });
-                    window.location.reload();
-                });
-            }
-        } else {
-            // User is not logged in
-            userProfile.classList.add('hidden');
-            setupLoginModal(loginButton, loginModal, closeLoginModalButton);
-        }
-    } catch (error) {
-        console.error('Error checking auth status. Running in guest mode.', error);
-        userProfile.classList.add('hidden');
-        // Make sure login button is still functional in case of API error
-        setupLoginModal(loginButton, loginModal, closeLoginModalButton);
-    }
-}
-
-function setupLoginModal(loginButton, loginModal, closeLoginModalButton) {
-    if (loginButton) {
-        loginButton.addEventListener('click', () => {
-            if (loginModal) loginModal.classList.remove('hidden');
-        });
-    }
-    if (closeLoginModalButton) {
-        closeLoginModalButton.addEventListener('click', () => {
-            if (loginModal) loginModal.classList.add('hidden');
-        });
-    }
-}
 
 function initializeApp() {
     const updateLayout = () => {
@@ -286,6 +216,231 @@ function initializeApp() {
     let currentX = 0, currentY = 0; // The current X and Y coordinates during a drag.
     let dragThreshold = 100; // The pixel distance a card must be dragged to trigger a swipe action.
     let verticalDragThreshold = 50; // The pixel distance for a vertical flip.
+
+    // --- Auth & Sync Functions ---
+    let isAuthenticated = false;
+
+    /**
+     * A utility to check if an item is a non-array object.
+     * @param {*} item - The item to check.
+     * @returns {boolean} True if the item is a non-array object.
+     */
+    function isObject(item) {
+        return (item && typeof item === 'object' && !Array.isArray(item));
+    }
+
+    /**
+     * Recursively merges source objects into a target object.
+     * @param {object} target - The target object to merge into.
+     * @param  {...object} sources - The source objects to merge from.
+     * @returns {object} The merged target object.
+     */
+    function deepMerge(target, ...sources) {
+        if (!sources.length) {
+            return target;
+        }
+        const source = sources.shift();
+
+        if (isObject(target) && isObject(source)) {
+            for (const key in source) {
+                if (isObject(source[key])) {
+                    if (!target[key]) {
+                        Object.assign(target, { [key]: {} });
+                    }
+                    deepMerge(target[key], source[key]);
+                } else {
+                    Object.assign(target, { [key]: source[key] });
+                }
+            }
+        }
+
+        return deepMerge(target, ...sources);
+    }
+
+    function populateLoginButtons(providers) {
+        const loginProvidersContainer = document.getElementById('login-providers');
+        if (!loginProvidersContainer) return;
+
+        loginProvidersContainer.innerHTML = ''; // Clear existing buttons
+        providers.forEach(provider => {
+            const button = document.createElement('a');
+            button.href = `/auth/${provider}`;
+            button.className = `button login-button-${provider}`;
+            // Capitalize provider name for display
+            button.textContent = `Login with ${provider.charAt(0).toUpperCase() + provider.slice(1)}`;
+            loginProvidersContainer.appendChild(button);
+        });
+    }
+
+    async function syncToServer(data) {
+        if (!isAuthenticated || !data) return;
+
+        try {
+            const response = await fetch('/api/sync', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data) // e.g., { configs: allConfigs } or { cardStats: { cardKey: stats } }
+            });
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.error || `Server responded with ${response.status}`);
+            }
+            console.log('Sync to server successful for:', Object.keys(data));
+        } catch (error) {
+            console.error('Failed to sync to server:', error);
+            showTopNotification('Failed to sync to server. Your work is saved locally.', 'error');
+        }
+    }
+
+    async function syncFromServer() {
+        if (!isAuthenticated) return;
+
+        try {
+            const response = await fetch('/api/sync');
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.error || `Server responded with ${response.status}`);
+            }
+            const serverData = await response.json();
+            const localKeys = new Set(await keys());
+            const serverStatKeys = new Set(Object.keys(serverData.cardStats || {}));
+
+            // --- Config Merging ---
+            const localConfigs = await get('flashcard-configs') || {};
+            const mergedConfigs = deepMerge({}, localConfigs, serverData.configs || {});
+            await set('flashcard-configs', mergedConfigs);
+            configs = mergedConfigs;
+
+            // --- Card Stat Merging (Server -> Local) ---
+            for (const cardKey of serverStatKeys) {
+                const serverStats = serverData.cardStats[cardKey];
+                const localStats = await get(cardKey);
+                const mergedStats = mergeCardStats(localStats || { skills: {} }, serverStats);
+                await set(cardKey, mergedStats);
+            }
+
+            // --- Two-Way Sync (Local -> Server) ---
+            const localOnlyStats = {};
+            for (const localKey of localKeys) {
+                // Ignore config keys, only sync card stats
+                if (localKey.startsWith('flashcard-')) continue;
+                if (!serverStatKeys.has(localKey)) {
+                    localOnlyStats[localKey] = await get(localKey);
+                }
+            }
+
+            if (Object.keys(localOnlyStats).length > 0) {
+                console.log(`Found ${Object.keys(localOnlyStats).length} local-only card stats to upload.`);
+                await syncToServer({ cardStats: localOnlyStats });
+            }
+
+            showTopNotification('Data sync complete.', 'success');
+
+            // --- Refresh UI ---
+            populateConfigSelector();
+            const lastConfig = await get('flashcard-last-config');
+            if (lastConfig && configs[lastConfig]) {
+                configSelector.value = lastConfig;
+                await loadSelectedConfig(lastConfig);
+            } else if (cardData.length > 0) {
+                showNextCard();
+            }
+
+        } catch (error) {
+            console.error('Failed to sync from server:', error);
+            showTopNotification('Could not sync from server.', 'error');
+        }
+    }
+
+    async function checkAuthStatus() {
+        const loginButton = document.getElementById('login-button');
+        const loginModal = document.getElementById('login-modal');
+        const closeLoginModalButton = document.getElementById('close-login-modal-button');
+        const userProfile = document.getElementById('user-profile');
+        const userDisplayName = document.getElementById('user-display-name');
+        const logoutButton = document.getElementById('logout-button');
+        const loginBlurb = document.getElementById('login-blurb');
+
+        // Add blurb to login dialog
+        if (loginBlurb) {
+            loginBlurb.textContent = 'Log in to keep your progress and configurations synchronized across all your devices.';
+        }
+
+        try {
+            // First, check if user is logged in
+            const userResponse = await fetch('/api/user');
+            if (!userResponse.ok) throw new Error('Backend not reachable');
+            const userData = await userResponse.json();
+
+            if (userData.user) {
+                // --- User is Logged In ---
+                isAuthenticated = true;
+                if (userProfile) userProfile.classList.remove('hidden');
+                if (loginButton) loginButton.classList.add('hidden');
+                if (userDisplayName) userDisplayName.textContent = userData.user.displayName || userData.user.email;
+
+                if (logoutButton) {
+                    logoutButton.addEventListener('click', async () => {
+                        await fetch('/api/logout', { method: 'POST' });
+                        isAuthenticated = false;
+                        window.location.reload(); // Reload is acceptable on logout
+                    });
+                }
+                // Trigger a sync from server on load
+                await syncFromServer();
+
+            } else {
+                // --- User is a Guest ---
+                isAuthenticated = false;
+                if (userProfile) userProfile.classList.add('hidden');
+                if (loginButton) loginButton.classList.remove('hidden');
+
+                // Fetch available login providers
+                const providersResponse = await fetch('/api/auth/providers');
+                if (!providersResponse.ok) throw new Error('Backend not reachable');
+                const providers = await providersResponse.json();
+
+                if (providers.length > 0) {
+                    populateLoginButtons(providers);
+                    if (loginButton) {
+                        loginButton.disabled = false;
+                        loginButton.title = 'Login or create an account';
+                    }
+                } else {
+                     if (loginButton) {
+                        loginButton.disabled = true;
+                        loginButton.title = 'Login is not configured on the server.';
+                    }
+                }
+            }
+        } catch (error) {
+            // --- API Offline/Error State ---
+            console.warn('API is not reachable. Running in offline/guest mode.', error.message);
+            isAuthenticated = false;
+            if (userProfile) userProfile.classList.add('hidden');
+            if (loginButton) {
+                loginButton.classList.remove('hidden');
+                loginButton.disabled = true;
+                loginButton.title = 'Cannot connect to the server to log in.';
+            }
+        } finally {
+            // This setup should run regardless of API status
+            setupLoginModal(loginButton, loginModal, closeLoginModalButton);
+        }
+    }
+
+    function setupLoginModal(loginButton, loginModal, closeLoginModalButton) {
+        if (loginButton) {
+            loginButton.addEventListener('click', () => {
+                if (loginModal) loginModal.classList.remove('hidden');
+            });
+        }
+        if (closeLoginModalButton) {
+            closeLoginModalButton.addEventListener('click', () => {
+                if (loginModal) loginModal.classList.add('hidden');
+            });
+        }
+    }
 
     // --- Event Listeners ---
     if (hamburgerMenu) hamburgerMenu.addEventListener('click', () => mobileMenuOverlay.classList.remove('hidden'));
@@ -643,9 +798,19 @@ function initializeApp() {
     if (saveSkillButton) saveSkillButton.addEventListener('click', saveSkill);
 
     function handleSettingsChange() {
-        // This function can be called with or without an event object.
-        // If called without an event, it's a programmatic way to mark the config as dirty.
-        if (saveConfigButton) saveConfigButton.disabled = false;
+        // This function is now the auto-save trigger.
+        // It's debounced to prevent rapid-fire saves, especially from sliders.
+        clearTimeout(window.saveConfigTimeout);
+        window.saveConfigTimeout = setTimeout(async () => {
+            const success = await saveCurrentConfig();
+            if (success) {
+                console.log(`Auto-saved config '${configSelector.value}'`);
+                // Sync the entire updated config to the server
+                const configName = configSelector.value;
+                const configData = { configs: { [configName]: configs[configName] } };
+                await syncToServer(configData);
+            }
+        }, 500); // 500ms debounce interval
     }
 
 
@@ -1912,16 +2077,22 @@ function initializeApp() {
     function mergeCardStats(existing, imported) {
         // Ensure both stats objects have the 'skills' property
         if (!existing.skills) existing.skills = {};
-        if (!imported.skills) return existing; // Nothing to merge from
+        if (!imported || !imported.skills) return existing; // Nothing to merge from
 
         for (const skillId in imported.skills) {
             const importedSkill = imported.skills[skillId];
             const existingSkill = existing.skills[skillId];
 
             if (existingSkill) {
+                // Ensure arrays exist before trying to spread them
+                const existingSuccess = existingSkill.successTimestamps || [];
+                const importedSuccess = importedSkill.successTimestamps || [];
+                const existingFailure = existingSkill.failureTimestamps || [];
+                const importedFailure = importedSkill.failureTimestamps || [];
+
                 // Merge arrays, avoiding duplicates
-                existingSkill.successTimestamps = [...new Set([...existingSkill.successTimestamps, ...importedSkill.successTimestamps])].sort((a, b) => a - b);
-                existingSkill.failureTimestamps = [...new Set([...existingSkill.failureTimestamps, ...importedSkill.failureTimestamps])].sort((a, b) => a - b);
+                existingSkill.successTimestamps = [...new Set([...existingSuccess, ...importedSuccess])].sort((a, b) => a - b);
+                existingSkill.failureTimestamps = [...new Set([...existingFailure, ...importedFailure])].sort((a, b) => a - b);
                 existingSkill.responseDelays = [...(existingSkill.responseDelays || []), ...(importedSkill.responseDelays || [])];
 
                 // Sum view counts
@@ -3044,19 +3215,31 @@ function initializeApp() {
      */
     function getCardKey(card) {
         const currentConfigName = configSelector.value;
-        const currentConfig = configs[currentConfigName] || {};
-        const roleToColumnMap = currentConfig.roleToColumnMap || {};
+        const currentConfig = configs[currentConfigName];
+        if (!currentConfig) {
+            console.error('getCardKey failed: No configuration selected.');
+            return null;
+        }
+        const roleToColumnMap = currentConfig.roleToColumnMap;
+        if (!roleToColumnMap) {
+            console.error('getCardKey failed: roleToColumnMap is missing in the current configuration.');
+            return null;
+        }
         const keyIndices = roleToColumnMap['TARGET_LANGUAGE'] || [];
 
-        if (keyIndices.length === 0) {
-            // This should be prevented by validation in saveConfig, but as a fallback:
-            console.error('No Target Language column set for getCardKey!');
-            return `invalid-card-${Math.random()}`;
+        // This check is aligned with the validation in saveCurrentConfig.
+        if (keyIndices.length !== 1) {
+            // This is a configuration error, but we log it here to help debug.
+            // It should ideally be caught when the config is saved.
+            // console.error(`getCardKey failed: Expected exactly one 'Target Language' column, but found ${keyIndices.length}.`);
+            return null;
         }
-        const keyIndex = keyIndices[0]; // Use the first one
+        const keyIndex = keyIndices[0];
 
-        if (!card || keyIndex >= card.length || typeof card[keyIndex] !== 'string') {
-            return `invalid-card-${Math.random()}`;
+        if (!card || !Array.isArray(card) || keyIndex >= card.length || !card[keyIndex] || typeof card[keyIndex] !== 'string' || card[keyIndex].trim() === '') {
+            // This indicates an issue with the data row itself.
+            console.warn('getCardKey failed: Invalid card data or key is empty/not a string.', { card, keyIndex });
+            return null;
         }
         return card[keyIndex].trim();
     }
@@ -3068,6 +3251,9 @@ function initializeApp() {
     async function saveCardStats(cardKey, stats) {
         if (!cardKey || !stats) return;
         await set(cardKey, stats);
+        // Also sync this specific card's stats to the server immediately
+        const statsData = { cardStats: { [cardKey]: stats } };
+        await syncToServer(statsData);
     }
 
     /**
@@ -3196,34 +3382,49 @@ function initializeApp() {
         // Update UI elements that reflect the config name
         if (configTitle) configTitle.textContent = configName;
         if (deckTitle) deckTitle.textContent = configName;
-        if (saveConfigButton) saveConfigButton.disabled = true;
+        // The save button is now for "Save As", so it should not be disabled after an auto-save.
+        // if (saveConfigButton) saveConfigButton.disabled = true;
 
         return true;
     }
 
     /**
-     * A wrapper for saveCurrentConfig, designed to be called by the user-facing "Save" button.
-     * It handles UI feedback like notifications.
+     * Handles the "Save As New..." button click. It creates a new configuration,
+     * either by copying an existing one or by creating a new blank one, and then
+     * saves the current UI settings into it.
      */
     async function saveConfig() {
         if (!configNameInput) return;
-        const configName = configNameInput.value.trim();
-        if (!configName) {
-            showTopNotification('Please enter a configuration name.', 'error');
+        const newConfigName = configNameInput.value.trim();
+        if (!newConfigName) {
+            showTopNotification('Please enter a new configuration name.', 'error');
+            return;
+        }
+        if (configs[newConfigName]) {
+            showTopNotification(`Configuration '${newConfigName}' already exists. Please choose a different name.`, 'error');
             return;
         }
 
-        // Ensure the dropdown reflects the name being saved
-        if (configSelector.value !== configName) {
-            configs[configName] = configs[configSelector.value] || {};
-            delete configs[configSelector.value];
-            populateConfigSelector();
-            configSelector.value = configName;
-        }
+        // Determine the source for the new config. If nothing is selected, it's a new blank config.
+        // Otherwise, it's a copy of the selected one.
+        const sourceConfigName = configSelector.value;
+        const sourceConfig = sourceConfigName ? configs[sourceConfigName] : {};
 
+        // Create the new config entry. A deep copy is used to prevent reference issues.
+        configs[newConfigName] = JSON.parse(JSON.stringify(sourceConfig || {}));
+
+        // Now, select the new config name in the dropdown.
+        populateConfigSelector();
+        configSelector.value = newConfigName;
+
+        // Finally, trigger a save of the *current* UI state into this new config slot.
+        // This is the most intuitive behavior for "Save As...".
         const success = await saveCurrentConfig();
         if (success) {
-            showTopNotification(`Configuration '${configName}' saved!`, 'success');
+            showTopNotification(`Configuration '${newConfigName}' created successfully.`, 'success');
+            // Sync the newly created config to the server
+            const newConfigData = { configs: { [newConfigName]: configs[newConfigName] } };
+            await syncToServer(newConfigData);
         }
     }
 
@@ -3780,6 +3981,7 @@ function initializeApp() {
     loadVoices();
     populateAllSkillSelectors();
     loadInitialConfigs();
+    checkAuthStatus();
 
     // --- Service Worker Registration ---
     if ('serviceWorker' in navigator) {

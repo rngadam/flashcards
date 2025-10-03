@@ -19,13 +19,15 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 app.enable("trust proxy");
+app.use(express.json({ limit: '1mb' })); // Middleware to parse JSON bodies, with a reasonable limit
 app.use(express.static(path.join(__dirname, '/')));
 
 // --- Session Management ---
 
-// Enforce session secret in production
-if (process.env.NODE_ENV === 'production' && !process.env.SESSION_SECRET) {
-    throw new Error('FATAL: SESSION_SECRET environment variable is not set in production.');
+// Enforce session secret in production, provide a default for development
+const sessionSecret = process.env.SESSION_SECRET || 'dev-secret';
+if (process.env.NODE_ENV === 'production' && sessionSecret === 'dev-secret') {
+    throw new Error('FATAL: SESSION_SECRET environment variable must be set in production.');
 }
 
 app.use(session({
@@ -34,7 +36,7 @@ app.use(session({
         dir: './',
         table: 'sessions'
     }),
-    secret: process.env.SESSION_SECRET,
+    secret: sessionSecret,
     resave: false,
     saveUninitialized: false,
     cookie: {
@@ -165,12 +167,97 @@ app.get('/auth/linkedin/callback',
 
 
 // --- API Routes ---
+
+// API endpoint to get the list of configured OAuth providers
+app.get('/api/auth/providers', (req, res) => {
+    const providers = [];
+    if (process.env.GITHUB_CLIENT_ID) providers.push('github');
+    if (process.env.GOOGLE_CLIENT_ID) providers.push('google');
+    if (process.env.LINKEDIN_CLIENT_ID) providers.push('linkedin');
+    res.json(providers);
+});
+
+// Middleware to ensure a user is authenticated
+const ensureAuthenticated = (req, res, next) => {
+    if (req.isAuthenticated()) {
+        return next();
+    }
+    res.status(401).json({ error: 'User not authenticated' });
+};
+
 // Get current user
 app.get('/api/user', (req, res) => {
     if (req.isAuthenticated()) {
         res.json({ user: req.user });
     } else {
         res.json({ user: null });
+    }
+});
+
+// GET endpoint to retrieve all user data (configs and stats)
+app.get('/api/sync', ensureAuthenticated, async (req, res) => {
+    try {
+        const data = await db.all('SELECT type, key, value FROM user_data WHERE user_id = ?', [req.user.id]);
+        const result = {
+            configs: {},
+            cardStats: {}
+        };
+        data.forEach(row => {
+            if (row.type === 'configs') {
+                result.configs[row.key] = JSON.parse(row.value);
+            } else if (row.type === 'cardStat') {
+                result.cardStats[row.key] = JSON.parse(row.value);
+            }
+        });
+        res.json(result);
+    } catch (error) {
+        console.error('Error fetching user data:', error);
+        res.status(500).json({ error: 'Failed to retrieve data' });
+    }
+});
+
+// POST endpoint to bulk save user data
+app.post('/api/sync', ensureAuthenticated, async (req, res) => {
+    const { configs, cardStats } = req.body;
+
+    if (!configs && !cardStats) {
+        return res.status(400).json({ error: 'No data provided to sync' });
+    }
+
+    const userId = req.user.id;
+
+    try {
+        await db.run('BEGIN TRANSACTION');
+
+        const upsert = async (type, key, value) => {
+            const valueJson = JSON.stringify(value);
+            await db.run(`
+                INSERT INTO user_data (user_id, type, key, value, updated_at)
+                VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+                ON CONFLICT(user_id, type, key) DO UPDATE SET
+                    value = excluded.value,
+                    updated_at = CURRENT_TIMESTAMP
+            `, [userId, type, key, valueJson]);
+        };
+
+        if (configs) {
+            for (const key in configs) {
+                await upsert('configs', key, configs[key]);
+            }
+        }
+
+        if (cardStats) {
+            for (const key in cardStats) {
+                await upsert('cardStat', key, cardStats[key]);
+            }
+        }
+
+        await db.run('COMMIT');
+        res.status(200).json({ message: 'Data saved successfully' });
+    } catch (error) {
+        await db.run('ROLLBACK');
+        console.error('Error saving user data:', error);
+        res.status(500).json({ error: 'Failed to save data' });
     }
 });
 
