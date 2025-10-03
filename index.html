@@ -174,7 +174,6 @@
           <button class="tab-button" id="skills-tab" data-tab="skills-settings" role="tab" aria-controls="skills-settings" aria-selected="false">Skills</button>
           <button class="tab-button" id="advanced-tab" data-tab="advanced-settings" role="tab" aria-controls="advanced-settings" aria-selected="false">Advanced</button>
           <button class="tab-button" id="filter-tab" data-tab="filter-settings" role="tab" aria-controls="filter-settings" aria-selected="false">Filter</button>
-          <button class="tab-button" id="backup-tab" data-tab="backup-settings" role="tab" aria-controls="backup-settings" aria-selected="false">Backup</button>
           <button class="tab-button" id="dangerous-tab" data-tab="dangerous-settings" role="tab" aria-controls="dangerous-settings" aria-selected="false">Dangerous</button>
         </div>
 
@@ -232,10 +231,6 @@
                 <label for="voice-correct-delay">Correct Answer Delay (ms):</label>
                 <input type="number" id="voice-correct-delay" min="0" step="100" value="1000">
             </div>
-            <div class="setting">
-                <label for="api-url">Backend API URL:</label>
-                <input type="text" id="api-url" placeholder="e.g., http://localhost:3000">
-            </div>
         </div>
 
         <div id="filter-settings" class="tab-panel" role="tabpanel" aria-labelledby="filter-tab">
@@ -285,7 +280,7 @@
         </div>
 
         <div class="button-container">
-            <button id="save-config" disabled>Save Configuration</button>
+            <button id="save-config">Save As New...</button>
         </div>
         <div id="cache-status"></div>
       </div>
@@ -295,9 +290,9 @@
         <div id="login-panel">
             <button id="close-login-modal-button">X</button>
             <h2>Login</h2>
-            <p>Log in to keep your learning progress and settings synchronized across all your devices.</p>
+            <p id="login-blurb">Log in to keep your learning progress and settings synchronized across all your devices.</p>
             <p>Choose a provider to log in with:</p>
-            <div id="login-provider-buttons" class="login-buttons">
+            <div id="login-providers" class="login-buttons">
                 <!-- Login buttons will be dynamically populated here by JS -->
             </div>
         </div>

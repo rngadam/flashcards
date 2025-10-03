@@ -2,7 +2,7 @@
 // Tests unitaires pour la détection de langue des colonnes (mock eld)
 
 import { expect } from 'chai';
-import { stub } from 'sinon';
+import sinon from 'sinon';
 import { __setMock } from '../lib/eld-wrapper.js';
 import { detectColumnLanguages } from '../lib/detect-column-languages.js';
 
@@ -10,7 +10,7 @@ describe('detectColumnLanguages', function () {
     let eldMock;
     beforeEach(function () {
         eldMock = {
-            detect: stub()
+            detect: sinon.stub()
         };
         __setMock(eldMock);
     });

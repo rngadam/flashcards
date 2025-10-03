@@ -19,14 +19,15 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 app.enable("trust proxy");
-app.use(express.json({ limit: '5mb' })); // Middleware to parse JSON bodies, with a reasonable limit
+app.use(express.json({ limit: '1mb' })); // Middleware to parse JSON bodies, with a reasonable limit
 app.use(express.static(path.join(__dirname, '/')));
 
 // --- Session Management ---
 
-// Enforce session secret in production
-if (process.env.NODE_ENV === 'production' && !process.env.SESSION_SECRET) {
-    throw new Error('FATAL: SESSION_SECRET environment variable is not set in production.');
+// Enforce session secret in production, provide a default for development
+const sessionSecret = process.env.SESSION_SECRET || 'dev-secret';
+if (process.env.NODE_ENV === 'production' && sessionSecret === 'dev-secret') {
+    throw new Error('FATAL: SESSION_SECRET environment variable must be set in production.');
 }
 
 app.use(session({
@@ -35,7 +36,7 @@ app.use(session({
         dir: './',
         table: 'sessions'
     }),
-    secret: process.env.SESSION_SECRET,
+    secret: sessionSecret,
     resave: false,
     saveUninitialized: false,
     cookie: {
@@ -193,7 +194,7 @@ app.get('/api/user', (req, res) => {
     }
 });
 
-// GET endpoint to retrieve all user data
+// GET endpoint to retrieve all user data (configs and stats)
 app.get('/api/sync', ensureAuthenticated, async (req, res) => {
     try {
         const data = await db.all('SELECT type, key, value FROM user_data WHERE user_id = ?', [req.user.id]);
@@ -201,20 +202,13 @@ app.get('/api/sync', ensureAuthenticated, async (req, res) => {
             configs: {},
             cardStats: {}
         };
-
-        // Find and assign the main configuration object to prevent overwrite.
-        const mainConfigRow = data.find(row => row.key === 'flashcard-configs');
-        if (mainConfigRow) {
-            result.configs = JSON.parse(mainConfigRow.value);
-        }
-
-        // Process card stats.
         data.forEach(row => {
-            if (row.type === 'cardStat') {
+            if (row.type === 'configs') {
+                result.configs[row.key] = JSON.parse(row.value);
+            } else if (row.type === 'cardStat') {
                 result.cardStats[row.key] = JSON.parse(row.value);
             }
         });
-
         res.json(result);
     } catch (error) {
         console.error('Error fetching user data:', error);
@@ -222,31 +216,50 @@ app.get('/api/sync', ensureAuthenticated, async (req, res) => {
     }
 });
 
-// POST endpoint to save user data
+// POST endpoint to bulk save user data
 app.post('/api/sync', ensureAuthenticated, async (req, res) => {
-    const { type, key, value } = req.body;
+    const { configs, cardStats } = req.body;
 
-    if (!type || !key || value === undefined) {
-        return res.status(400).json({ error: 'Missing type, key, or value' });
+    if (!configs && !cardStats) {
+        return res.status(400).json({ error: 'No data provided to sync' });
     }
 
-    try {
-        const valueJson = JSON.stringify(value);
-        await db.run(`
-      INSERT INTO user_data (user_id, type, key, value, updated_at)
-      VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
-      ON CONFLICT(user_id, type, key) DO UPDATE SET
-        value = excluded.value,
-        updated_at = CURRENT_TIMESTAMP
-    `, [req.user.id, type, key, valueJson]);
+    const userId = req.user.id;
 
+    try {
+        await db.run('BEGIN TRANSACTION');
+
+        const upsert = async (type, key, value) => {
+            const valueJson = JSON.stringify(value);
+            await db.run(`
+                INSERT INTO user_data (user_id, type, key, value, updated_at)
+                VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+                ON CONFLICT(user_id, type, key) DO UPDATE SET
+                    value = excluded.value,
+                    updated_at = CURRENT_TIMESTAMP
+            `, [userId, type, key, valueJson]);
+        };
+
+        if (configs) {
+            for (const key in configs) {
+                await upsert('configs', key, configs[key]);
+            }
+        }
+
+        if (cardStats) {
+            for (const key in cardStats) {
+                await upsert('cardStat', key, cardStats[key]);
+            }
+        }
+
+        await db.run('COMMIT');
         res.status(200).json({ message: 'Data saved successfully' });
     } catch (error) {
+        await db.run('ROLLBACK');
         console.error('Error saving user data:', error);
         res.status(500).json({ error: 'Failed to save data' });
     }
 });
-
 
 // Logout
 app.post('/api/logout', (req, res, next) => {
@@ -267,5 +280,5 @@ app.get('*', (req, res) => {
 
 // --- Server Start ---
 app.listen(PORT, () => {
-    // console.log(`Server listening on port ${PORT}`);
+    console.log(`Server listening on port ${PORT}`);
 });
