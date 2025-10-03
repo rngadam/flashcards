@@ -6,22 +6,33 @@ services:
         # Defang will automatically map this to a public port (e.g., 443 for HTTPS)
     # The start command is automatically picked up from the "start" script in package.json
     # Healthcheck to ensure the service is running before marking it as healthy
+    # healthcheck:
+    #   test: ["CMD", "curl", "-f", "http://localhost:3000"]
+    #   interval: 15s
+    #   timeout: 5s
+    #   retries: 3
+    #   start_period: 30s
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3000"]
+      test: ["CMD", "wget", "--spider", "http://localhost:3000"]
       interval: 15s
       timeout: 5s
       retries: 3
       start_period: 30s
+    environment:
+      NODE_ENV: production
+      SESSION_SECRET: ${SESSION_SECRET} # Ensure this is set in your environment or .env
+      GITHUB_CLIENT_ID: ${GITHUB_CLIENT_ID} # GitHub OAuth Client ID
+      GITHUB_CLIENT_SECRET: ${GITHUB_CLIENT_SECRET} # GitHub OAuth Client Secret
     # Deploy configuration (optional, but good practice)
-    deploy:
-      replicas: 1
-      endpoint_mode: dnsrr # Use Defang's default load balancing
-      resources:
-        reservations:
-          cpus: "0.25"
-          memory: "256MiB"
-      restart_policy:
-        condition: on-failure
-        delay: 5s
-        max_attempts: 3
-        window: 120s
+    # deploy:
+    #   replicas: 1
+    #   endpoint_mode: dnsrr # Use Defang's default load balancing
+    #   resources:
+    #     reservations:
+    #       cpus: "0.25"
+    #       memory: "256MiB"
+    #   #restart_policy:
+    #   #  condition: on-failure
+    #   #  delay: 5s
+    #   #  max_attempts: 3
+    #   #  window: 120s

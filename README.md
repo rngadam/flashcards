@@ -80,7 +80,7 @@ This application includes a backend server and is configured for easy deployment
         # (paste your client secret when prompted)
         ```
     *   You must set secrets for at least one provider.
-4.  **Deploy:**
+4.  **Deploy:**def
     *   Run the following command from the root of the repository:
         ```bash
         defang compose up

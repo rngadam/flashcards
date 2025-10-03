@@ -18,6 +18,7 @@ const PORT = process.env.PORT || 3000;
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+app.enable("trust proxy");
 app.use(express.static(path.join(__dirname, '/')));
 
 // --- Session Management ---
@@ -116,7 +117,7 @@ if (process.env.GITHUB_CLIENT_ID && process.env.GITHUB_CLIENT_SECRET) {
         clientID: process.env.GITHUB_CLIENT_ID,
         clientSecret: process.env.GITHUB_CLIENT_SECRET,
         callbackURL: `${callbackBaseUrl}/auth/github/callback`
-    }, findOrCreateUser));
+    }, (accessToken, refreshToken, profile, done) => findOrCreateUser(profile, done)));
 }
 
 // Google
@@ -125,7 +126,7 @@ if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
         clientID: process.env.GOOGLE_CLIENT_ID,
         clientSecret: process.env.GOOGLE_CLIENT_SECRET,
         callbackURL: `${callbackBaseUrl}/auth/google/callback`
-    }, findOrCreateUser));
+    }, (accessToken, refreshToken, profile, done) => findOrCreateUser(profile, done)));
 }
 
 // LinkedIn
@@ -136,7 +137,7 @@ if (process.env.LINKEDIN_CLIENT_ID && process.env.LINKEDIN_CLIENT_SECRET) {
         callbackURL: `${callbackBaseUrl}/auth/linkedin/callback`,
         scope: ['r_emailaddress', 'r_liteprofile'],
         state: true
-    }, findOrCreateUser));
+    }, (accessToken, refreshToken, profile, done) => findOrCreateUser(profile, done)));
 }
 
 
