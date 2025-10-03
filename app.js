@@ -14,6 +14,80 @@ import { TEST_DATA } from './lib/test-data.js';
  * and all user-facing features like TTS, spaced repetition, and settings.
  */
 document.addEventListener('DOMContentLoaded', () => {
+    initializeApp();
+    checkAuthStatus();
+});
+
+async function checkAuthStatus() {
+    const loginButton = document.getElementById('login-button');
+    const loginModal = document.getElementById('login-modal');
+    const closeLoginModalButton = document.getElementById('close-login-modal-button');
+    const userProfile = document.getElementById('user-profile');
+    const userDisplayName = document.getElementById('user-display-name');
+    const logoutButton = document.getElementById('logout-button');
+    const accountSettingsPanel = document.getElementById('account-settings');
+
+    try {
+        const response = await fetch('/api/user');
+        if (!response.ok) {
+            throw new Error(`API request failed with status ${response.status}`);
+        }
+        const data = await response.json();
+
+        if (data.user) {
+            // User is logged in
+            userProfile.classList.remove('hidden');
+            userDisplayName.textContent = data.user.displayName || data.user.email;
+            if (accountSettingsPanel) {
+                // Use textContent to prevent XSS
+                const strong = document.createElement('strong');
+                strong.textContent = data.user.displayName || data.user.email;
+
+                const p1 = document.createElement('p');
+                p1.textContent = 'You are logged in as ';
+                p1.appendChild(strong);
+                p1.appendChild(document.createTextNode('.'));
+
+                const p2 = document.createElement('p');
+                p2.textContent = 'Your progress is being saved to your account.';
+
+                accountSettingsPanel.innerHTML = ''; // Clear previous content
+                accountSettingsPanel.appendChild(p1);
+                accountSettingsPanel.appendChild(p2);
+            }
+            if (logoutButton) {
+                logoutButton.addEventListener('click', async () => {
+                    await fetch('/api/logout', { method: 'POST' });
+                    window.location.reload();
+                });
+            }
+        } else {
+            // User is not logged in
+            userProfile.classList.add('hidden');
+            setupLoginModal(loginButton, loginModal, closeLoginModalButton);
+        }
+    } catch (error) {
+        console.error('Error checking auth status. Running in guest mode.', error);
+        userProfile.classList.add('hidden');
+        // Make sure login button is still functional in case of API error
+        setupLoginModal(loginButton, loginModal, closeLoginModalButton);
+    }
+}
+
+function setupLoginModal(loginButton, loginModal, closeLoginModalButton) {
+    if (loginButton) {
+        loginButton.addEventListener('click', () => {
+            if (loginModal) loginModal.classList.remove('hidden');
+        });
+    }
+    if (closeLoginModalButton) {
+        closeLoginModalButton.addEventListener('click', () => {
+            if (loginModal) loginModal.classList.add('hidden');
+        });
+    }
+}
+
+function initializeApp() {
     const updateLayout = () => {
         // Use a media query to check for desktop-like screen widths (a common breakpoint).
         if (window.matchMedia('(min-width: 769px)').matches) {
@@ -3719,4 +3793,4 @@ document.addEventListener('DOMContentLoaded', () => {
                 });
         });
     }
-});
+}

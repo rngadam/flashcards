@@ -51,3 +51,93 @@ This web-app allows users to practice from custom data sources (TSV or CSV) with
 *   **Alternate Uppercase:** An option to alternate the casing on the front of the card between the original and all-uppercase, to help with memorization.
 *   **Audio-Only Front:** For listening comprehension practice, you can choose to hide the text on the front of the card and only hear the audio. A speech icon (🔊) will be displayed instead of the text.
 *   **On-Demand TTS:** An option to only have text-to-speech play when the 'f' hotkey is pressed.
+
+## Deployment to Defang
+
+This application includes a backend server and is configured for easy deployment to [Defang](https://defang.io/). The existing GitHub Pages deployment for the frontend remains unaffected.
+
+### Prerequisites
+
+1.  [Install the Defang CLI](https://defang.io/docs/cli/install).
+2.  [Configure the CLI](https://defang.io/docs/cli/configure) with your Defang account.
+
+### Deployment Steps
+
+1.  **Fork the Repository:** Start by forking this repository to your own GitHub account.
+2.  **Clone the Repository:** Clone your forked repository to your local machine.
+    ```bash
+    git clone https://github.com/your-username/your-repo-name.git
+    cd your-repo-name
+    ```
+3.  **Set Secrets:**
+    *   You will need to set secrets for the OAuth providers you want to use. See the "Obtaining OAuth Credentials" section below.
+    *   Use the Defang CLI to set these secrets. For example:
+        ```bash
+        defang secret set GITHUB_CLIENT_ID
+        # (paste your client ID when prompted)
+
+        defang secret set GITHUB_CLIENT_SECRET
+        # (paste your client secret when prompted)
+        ```
+    *   You must set secrets for at least one provider.
+4.  **Deploy:**def
+    *   Run the following command from the root of the repository:
+        ```bash
+        defang compose up
+        ```
+    *   Defang will build the image, provision the necessary resources, and deploy your application. The command will output the public URL of your service.
+
+### Environment Variables (Secrets)
+
+You will need to configure the following secrets using the `defang secret set` command.
+
+| Secret Key             | Description                                     | Example                               |
+| :--------------------- | :---------------------------------------------- | :------------------------------------ |
+| `SESSION_SECRET`       | A long, random string for securing sessions.    | `your_super_secret_session_key`       |
+| `GITHUB_CLIENT_ID`     | Your GitHub OAuth App Client ID.                | `iv1.1234567890abcdef`                |
+| `GITHUB_CLIENT_SECRET` | Your GitHub OAuth App Client Secret.            | `a1b2c3d4e5f6...`                     |
+| `GOOGLE_CLIENT_ID`     | Your Google OAuth 2.0 Client ID.                | `12345...apps.googleusercontent.com`  |
+| `GOOGLE_CLIENT_SECRET` | Your Google OAuth 2.0 Client Secret.            | `GOCSPX-...`                          |
+| `LINKEDIN_CLIENT_ID`   | Your LinkedIn OAuth 2.0 Client ID.              | `77a1b2c3d4e5`                        |
+| `LINKEDIN_CLIENT_SECRET`| Your LinkedIn OAuth 2.0 Client Secret.          | `XyZ123...`                           |
+
+*Note: The `DEFANG_HOST` environment variable is automatically injected by the platform and used to construct the callback URLs.*
+
+### Obtaining OAuth Credentials
+
+After you deploy your service for the first time, Defang will provide you with a public URL (e.g., `https://your-service-name.tenant-name.defang.dev`). You will need this URL to configure the OAuth providers.
+
+#### GitHub
+
+1.  Navigate to **GitHub Settings** > **Developer settings** > **OAuth Apps**.
+2.  Click **New OAuth App**.
+3.  **Application name:** `Flashcards App` (or your choice).
+4.  **Homepage URL:** Your Defang app's URL (e.g., `https://your-service.your-tenant.defang.dev`).
+5.  **Authorization callback URL:** Your Defang app's URL followed by `/auth/github/callback` (e.g., `https://your-service.your-tenant.defang.dev/auth/github/callback`).
+6.  Click **Register application**.
+7.  Copy the **Client ID** and generate/copy a new **Client Secret**. Use `defang secret set` to add them.
+
+#### Google
+
+1.  Go to the [Google Cloud Console](https://console.cloud.google.com/).
+2.  Create a new project or select an existing one.
+3.  Navigate to **APIs & Services** > **Credentials**.
+4.  Click **+ CREATE CREDENTIALS** > **OAuth client ID**.
+5.  If prompted, configure the **OAuth consent screen**:
+    *   **User Type:** External.
+    *   Fill in the required app name, user support email, and developer contact information.
+    *   Click **SAVE AND CONTINUE** through the Scopes and Test Users pages.
+6.  Return to the **Credentials** page to create the OAuth client ID:
+    *   **Application type:** Web application.
+    *   **Authorized JavaScript origins:** Add your Defang app's URL (e.g., `https://your-service.your-tenant.defang.dev`).
+    *   **Authorized redirect URIs:** Add your Defang app's URL followed by `/auth/google/callback` (e.g., `https://your-service.your-tenant.defang.dev/auth/google/callback`).
+7.  Click **CREATE** and copy the **Client ID** and **Client Secret**. Use `defang secret set` to add them.
+
+#### LinkedIn
+
+1.  Go to the [LinkedIn Developer Portal](https://www.linkedin.com/developers/apps/new) and click **Create app**.
+2.  Fill in the app details. You will need to associate it with a company page.
+3.  Once created, navigate to the **Auth** tab.
+4.  Under **OAuth 2.0 settings**, add an **Authorized redirect URL**: `https://your-service.your-tenant.defang.dev/auth/linkedin/callback`.
+5.  Copy the **Client ID** and **Client Secret** from this page. Use `defang secret set` to add them.
+6.  Navigate to the **Products** tab and request access for `Sign In with LinkedIn using OpenID Connect`. This is required to retrieve user profile information.
