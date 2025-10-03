@@ -6,7 +6,10 @@
 
 # SQLite Database
 database.db
-session.db
+session.db*
+
+# Log files
+*.log
 
 # macOS
 .DS_Store

@@ -21,13 +21,19 @@ const __dirname = path.dirname(__filename);
 app.use(express.static(path.join(__dirname, '/')));
 
 // --- Session Management ---
+
+// Enforce session secret in production
+if (process.env.NODE_ENV === 'production' && !process.env.SESSION_SECRET) {
+    throw new Error('FATAL: SESSION_SECRET environment variable is not set in production.');
+}
+
 app.use(session({
     store: new SQLiteStore({
         db: 'session.db',
         dir: './',
         table: 'sessions'
     }),
-    secret: process.env.SESSION_SECRET || 'a-secure-secret-for-development',
+    secret: process.env.SESSION_SECRET,
     resave: false,
     saveUninitialized: false,
     cookie: {
@@ -40,13 +46,13 @@ app.use(passport.initialize());
 app.use(passport.session());
 
 // --- User Serialization/Deserialization ---
-// This determines what user information is stored in the session.
 passport.serializeUser((user, done) => {
     done(null, user.id);
 });
 
 passport.deserializeUser(async (id, done) => {
     try {
+        // Fetch the canonical user from the users table
         const user = await db.get('SELECT * FROM users WHERE id = ?', id);
         done(null, user);
     } catch (err) {
@@ -61,18 +67,38 @@ const findOrCreateUser = async (profile, done) => {
         const email = emails?.[0]?.value;
         const photoUrl = photos?.[0]?.value;
 
-        let user = await db.get('SELECT * FROM users WHERE provider = ? AND provider_id = ?', [provider, provider_id]);
+        // An email is required to link accounts.
+        if (!email) {
+            return done(new Error('Email not provided by OAuth provider. Cannot link account.'), null);
+        }
 
-        if (user) {
-            return done(null, user);
-        } else {
-            const result = await db.run(
-                'INSERT INTO users (provider, provider_id, displayName, email, photos) VALUES (?, ?, ?, ?, ?)',
-                [provider, provider_id, displayName, email, photoUrl ? JSON.stringify(photos) : null]
-            );
-            user = await db.get('SELECT * FROM users WHERE id = ?', result.lastID);
+        // 1. Find an existing identity
+        const identity = await db.get('SELECT * FROM identities WHERE provider = ? AND provider_id = ?', [provider, provider_id]);
+        if (identity) {
+            const user = await db.get('SELECT * FROM users WHERE id = ?', [identity.user_id]);
             return done(null, user);
         }
+
+        // 2. No identity found, find or create user by email
+        let user = await db.get('SELECT * FROM users WHERE email = ?', [email]);
+
+        if (!user) {
+            // 3. If no user with this email, create one
+            const result = await db.run(
+                'INSERT INTO users (email, displayName) VALUES (?, ?)',
+                [email, displayName]
+            );
+            user = await db.get('SELECT * FROM users WHERE id = ?', result.lastID);
+        }
+
+        // 4. Create and link the new identity to the user (either found or newly created)
+        await db.run(
+            'INSERT INTO identities (user_id, provider, provider_id, photos) VALUES (?, ?, ?, ?)',
+            [user.id, provider, provider_id, photoUrl ? JSON.stringify(photos) : null]
+        );
+
+        return done(null, user);
+
     } catch (err) {
         return done(err);
     }
@@ -109,6 +135,7 @@ if (process.env.LINKEDIN_CLIENT_ID && process.env.LINKEDIN_CLIENT_SECRET) {
         clientSecret: process.env.LINKEDIN_CLIENT_SECRET,
         callbackURL: `${callbackBaseUrl}/auth/linkedin/callback`,
         scope: ['r_emailaddress', 'r_liteprofile'],
+        state: true
     }, findOrCreateUser));
 }
 
@@ -129,7 +156,7 @@ app.get('/auth/google/callback',
 );
 
 // LinkedIn
-app.get('/auth/linkedin', passport.authenticate('linkedin', { state: 'SOME_STATE' }));
+app.get('/auth/linkedin', passport.authenticate('linkedin')); // 'state' is now handled by the strategy
 app.get('/auth/linkedin/callback',
     passport.authenticate('linkedin', { failureRedirect: '/' }),
     (req, res) => res.redirect('/')
@@ -158,7 +185,7 @@ app.post('/api/logout', (req, res, next) => {
 });
 
 // --- Serve Frontend ---
-// All other GET requests not handled before will return the React app
+// All other GET requests not handled before will return the app
 app.get('*', (req, res) => {
     res.sendFile(path.join(__dirname, '/', 'index.html'));
 });

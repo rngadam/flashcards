@@ -39,7 +39,21 @@ async function checkAuthStatus() {
             userProfile.classList.remove('hidden');
             userDisplayName.textContent = data.user.displayName || data.user.email;
             if (accountSettingsPanel) {
-                accountSettingsPanel.innerHTML = `<p>You are logged in as <strong>${data.user.displayName || data.user.email}</strong>.</p><p>Your progress is being saved to your account.</p>`;
+                // Use textContent to prevent XSS
+                const strong = document.createElement('strong');
+                strong.textContent = data.user.displayName || data.user.email;
+
+                const p1 = document.createElement('p');
+                p1.textContent = 'You are logged in as ';
+                p1.appendChild(strong);
+                p1.appendChild(document.createTextNode('.'));
+
+                const p2 = document.createElement('p');
+                p2.textContent = 'Your progress is being saved to your account.';
+
+                accountSettingsPanel.innerHTML = ''; // Clear previous content
+                accountSettingsPanel.appendChild(p1);
+                accountSettingsPanel.appendChild(p2);
             }
             if (logoutButton) {
                 logoutButton.addEventListener('click', async () => {
@@ -50,31 +64,26 @@ async function checkAuthStatus() {
         } else {
             // User is not logged in
             userProfile.classList.add('hidden');
-            if (loginButton) {
-                loginButton.addEventListener('click', () => {
-                    if (loginModal) loginModal.classList.remove('hidden');
-                });
-            }
-            if (closeLoginModalButton) {
-                closeLoginModalButton.addEventListener('click', () => {
-                    if (loginModal) loginModal.classList.add('hidden');
-                });
-            }
+            setupLoginModal(loginButton, loginModal, closeLoginModalButton);
         }
     } catch (error) {
         console.error('Error checking auth status. Running in guest mode.', error);
         userProfile.classList.add('hidden');
         // Make sure login button is still functional in case of API error
-        if (loginButton) {
-            loginButton.addEventListener('click', () => {
-                if (loginModal) loginModal.classList.remove('hidden');
-            });
-        }
-        if (closeLoginModalButton) {
-            closeLoginModalButton.addEventListener('click', () => {
-                if (loginModal) loginModal.classList.add('hidden');
-            });
-        }
+        setupLoginModal(loginButton, loginModal, closeLoginModalButton);
+    }
+}
+
+function setupLoginModal(loginButton, loginModal, closeLoginModalButton) {
+    if (loginButton) {
+        loginButton.addEventListener('click', () => {
+            if (loginModal) loginModal.classList.remove('hidden');
+        });
+    }
+    if (closeLoginModalButton) {
+        closeLoginModalButton.addEventListener('click', () => {
+            if (loginModal) loginModal.classList.add('hidden');
+        });
     }
 }
 
