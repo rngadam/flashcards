@@ -53,6 +53,6 @@ await db.exec(`
   )
 `);
 
-console.log('Database initialized with users, identities, and user_data tables.');
+// console.log('Database initialized with users, identities, and user_data tables.');
 
 export default db;

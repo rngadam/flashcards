@@ -19,7 +19,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 app.enable("trust proxy");
-app.use(express.json({ limit: '50mb' })); // Middleware to parse JSON bodies
+app.use(express.json({ limit: '5mb' })); // Middleware to parse JSON bodies, with a reasonable limit
 app.use(express.static(path.join(__dirname, '/')));
 
 // --- Session Management ---
@@ -142,25 +142,6 @@ if (process.env.LINKEDIN_CLIENT_ID && process.env.LINKEDIN_CLIENT_SECRET) {
 }
 
 
-// --- API Routes ---
-
-// API endpoint to get the list of configured OAuth providers
-app.get('/api/auth/providers', (req, res) => {
-    const providers = [];
-    if (process.env.GITHUB_CLIENT_ID) providers.push('github');
-    if (process.env.GOOGLE_CLIENT_ID) providers.push('google');
-    if (process.env.LINKEDIN_CLIENT_ID) providers.push('linkedin');
-    res.json(providers);
-});
-
-// Middleware to ensure a user is authenticated
-const ensureAuthenticated = (req, res, next) => {
-    if (req.isAuthenticated()) {
-        return next();
-    }
-    res.status(401).json({ error: 'User not authenticated' });
-};
-
 // --- Authentication Routes ---
 // GitHub
 app.get('/auth/github', passport.authenticate('github', { scope: ['user:email'] }));
@@ -185,6 +166,24 @@ app.get('/auth/linkedin/callback',
 
 
 // --- API Routes ---
+
+// API endpoint to get the list of configured OAuth providers
+app.get('/api/auth/providers', (req, res) => {
+    const providers = [];
+    if (process.env.GITHUB_CLIENT_ID) providers.push('github');
+    if (process.env.GOOGLE_CLIENT_ID) providers.push('google');
+    if (process.env.LINKEDIN_CLIENT_ID) providers.push('linkedin');
+    res.json(providers);
+});
+
+// Middleware to ensure a user is authenticated
+const ensureAuthenticated = (req, res, next) => {
+    if (req.isAuthenticated()) {
+        return next();
+    }
+    res.status(401).json({ error: 'User not authenticated' });
+};
+
 // Get current user
 app.get('/api/user', (req, res) => {
     if (req.isAuthenticated()) {
@@ -202,13 +201,20 @@ app.get('/api/sync', ensureAuthenticated, async (req, res) => {
             configs: {},
             cardStats: {}
         };
+
+        // Find and assign the main configuration object to prevent overwrite.
+        const mainConfigRow = data.find(row => row.key === 'flashcard-configs');
+        if (mainConfigRow) {
+            result.configs = JSON.parse(mainConfigRow.value);
+        }
+
+        // Process card stats.
         data.forEach(row => {
-            if (row.type === 'configs') {
-                result.configs = JSON.parse(row.value);
-            } else if (row.type === 'cardStat') {
+            if (row.type === 'cardStat') {
                 result.cardStats[row.key] = JSON.parse(row.value);
             }
         });
+
         res.json(result);
     } catch (error) {
         console.error('Error fetching user data:', error);
@@ -261,5 +267,5 @@ app.get('*', (req, res) => {
 
 // --- Server Start ---
 app.listen(PORT, () => {
-    console.log(`Server listening on port ${PORT}`);
+    // console.log(`Server listening on port ${PORT}`);
 });

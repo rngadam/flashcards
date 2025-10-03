@@ -2,7 +2,7 @@
 // Tests unitaires pour la logique de persistance (lib/persistence.js)
 
 import { expect } from 'chai';
-import sinon from 'sinon';
+import { stub } from 'sinon';
 
 import * as wrapper from '../lib/idb-keyval-wrapper.js';
 import { saveConfig, loadConfig } from '../lib/persistence.js';
@@ -11,10 +11,10 @@ describe('Persistence Module', function () {
     let mock;
     beforeEach(function () {
         mock = {
-            set: sinon.stub().resolves(),
-            get: sinon.stub().resolves(),
-            del: sinon.stub().resolves(),
-            keys: sinon.stub().resolves(),
+            set: stub().resolves(),
+            get: stub().resolves(),
+            del: stub().resolves(),
+            keys: stub().resolves(),
         };
         wrapper.__setMock(mock);
     });
