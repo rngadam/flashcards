@@ -1,17 +1,15 @@
-/* global Sortable, Diff */
+/* global Sortable */
 
 // --- Module Imports ---
-import { get, set } from './lib/idb-keyval-wrapper.js';
 import { detectColumnLanguages } from './lib/detect-column-languages.js';
-import { Skill } from './lib/skill-utils.js';
 
 // --- UI and Core Logic Imports ---
 import dom from './lib/ui/dom-elements.js';
-import { getState, updateState, pushToViewHistory, popFromViewHistory, clearViewHistory, COLUMN_ROLES } from './lib/core/state.js';
-import { showTopNotification, adjustFontSize, formatTimeAgo, formatDuration, formatTimeDifference, renderDiff } from './lib/ui/ui-helpers.js';
+import { getState, updateState, popFromViewHistory, COLUMN_ROLES } from './lib/core/state.js';
+import { showTopNotification, formatTimeAgo, formatTimeDifference } from './lib/ui/ui-helpers.js';
 import { initConfigManager, saveCurrentConfig, saveConfig, resetDeckStats, loadSelectedConfig, populateConfigSelector, loadInitialConfigs, exportSQLite, exportAllData, importAllData } from './lib/core/config-manager.js';
 import { initSkillManager, renderSkillsList, openSkillDialog, saveSkill, deleteSkill, deleteAllSkills, addDefaultSkill, createPresetSkills, exportSkills, populateAllSkillSelectors, getSelectedSkills, getActiveSkills } from './lib/core/skill-manager.js';
-import { initCardLogic, getCardKey, getRetentionScore, createDefaultSkillStats, getSanitizedStats, getAllCardStats, markCardAsKnown, getTimeToDue, getCurrentSkillConfig, isAudioOnly, getTextForRoles, renderSkillMastery, displayCard, flipCard, showNextCard, showPrevCard, saveCardStats } from './lib/core/card-logic.js';
+import { initCardLogic, getCardKey, getRetentionScore, createDefaultSkillStats, getSanitizedStats, getAllCardStats, markCardAsKnown, getTimeToDue, getCurrentSkillConfig, getTextForRoles, renderSkillMastery, displayCard, flipCard, showNextCard, showPrevCard, saveCardStats } from './lib/core/card-logic.js';
 import { initVerification, checkWritingAnswer, generateMultipleChoiceOptions, checkMultipleChoiceAnswer, toggleVoiceRecognition, startVoiceRecognition, stopVoiceRecognition } from './lib/core/verification.js';
 import { initAuth, syncToServer, checkAuthStatus } from './lib/core/auth.js';
 
@@ -607,13 +605,13 @@ function initializeApp() {
         switch (e.type) {
             case 'keydown':
                 switch (e.code) {
-                    case 'Enter': if (!dom.nextCardButton.classList.contains('hidden')) showNextCard(); break;
-                    case 'Space': e.preventDefault(); if (dom.card && !dom.card.classList.contains('flipped')) flipCard(); break;
-                    case 'ArrowRight': showNextCard(); break;
-                    case 'ArrowLeft': showPrevCard(); break;
-                    case 'KeyK': markCardAsKnown(true); showNextCard(); break;
-                    case 'KeyJ': handleIDontKnow(); break;
-                    case 'KeyF':
+                    case 'Enter': { if (!dom.nextCardButton.classList.contains('hidden')) showNextCard(); break; }
+                    case 'Space': { e.preventDefault(); if (dom.card && !dom.card.classList.contains('flipped')) flipCard(); break; }
+                    case 'ArrowRight': { showNextCard(); break; }
+                    case 'ArrowLeft': { showPrevCard(); break; }
+                    case 'KeyK': { markCardAsKnown(true); showNextCard(); break; }
+                    case 'KeyJ': { handleIDontKnow(); break; }
+                    case 'KeyF': {
                         const skillConfig = getCurrentSkillConfig();
                         if (!skillConfig) break;
                         const parts = dom.card.classList.contains('flipped') ? state.ttsBackParts : state.ttsFrontParts;
@@ -622,6 +620,7 @@ function initializeApp() {
                         updateState({ replayRate: Math.max(0.1, state.replayRate - 0.2) });
                         speak(text, { rate: state.replayRate, ttsRole: role });
                         break;
+                    }
                 }
                 break;
             case 'keyup':
