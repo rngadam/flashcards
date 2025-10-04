@@ -183,6 +183,11 @@ function initializeApp() {
             if (!currentConfig || !currentConfig.activeSkills) return [];
             return currentConfig.activeSkills;
         },
+        getAllCardStats: async () => {
+            // Suppose que les stats sont stockées dans IndexedDB sous la clé 'flashcard-stats'
+            const stats = await get('flashcard-stats');
+            return stats || {};
+        },
         updateLayout: () => {
             if (window.matchMedia('(min-width: 769px)').matches) {
                 document.body.classList.add('desktop');
