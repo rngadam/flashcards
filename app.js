@@ -105,34 +105,60 @@ function initializeApp() {
     });
 
     // --- Modal & Menu Handlers ---
-    function setupModal(button, modal, closeButton) {
-        if (button) button.addEventListener('click', () => modal.classList.remove('hidden'));
+    function setupModal(button, modal, closeButton, onOpenCallback = null) {
+        if (button) {
+            button.addEventListener('click', () => {
+                if (onOpenCallback) {
+                    const proceed = onOpenCallback();
+                    if (proceed === false) return;
+                }
+                modal.classList.remove('hidden');
+            });
+        }
         if (closeButton) closeButton.addEventListener('click', () => modal.classList.add('hidden'));
     }
 
     setupModal(dom.hamburgerMenu, dom.mobileMenuOverlay, dom.closeMobileMenuButton);
     setupModal(dom.settingsButton, dom.settingsModal, dom.closeSettingsButton);
-    setupModal(dom.historyButton, dom.historyModal, dom.closeHistoryButton);
+    setupModal(dom.historyButton, dom.historyModal, dom.closeHistoryButton, () => {
+        if (state.cardData.length === 0) {
+            showTopNotification('No deck loaded. Please load a deck to view history.', 'error');
+            return false;
+        }
+        renderHistoryTable();
+        return true;
+    });
     setupModal(dom.helpButton, dom.helpModal, dom.closeHelpButton);
-    setupModal(dom.dashboardButton, dom.dashboardModal, dom.closeDashboardButton);
+    setupModal(dom.dashboardButton, dom.dashboardModal, dom.closeDashboardButton, () => {
+        if (state.cardData.length === 0) {
+            showTopNotification('No deck loaded. Please load a deck to view the dashboard.', 'error');
+            return false;
+        }
+        renderDashboard();
+        return true;
+    });
     setupModal(dom.loginButton, dom.loginModal, dom.closeLoginModalButton);
 
     if (dom.mobileSettingsButton) dom.mobileSettingsButton.addEventListener('click', () => {
         dom.mobileMenuOverlay.classList.add('hidden');
         dom.settingsModal.classList.remove('hidden');
     });
-    if (dom.mobileHistoryButton) dom.mobileHistoryButton.addEventListener('click', () => {
-        dom.mobileMenuOverlay.classList.add('hidden');
-        renderHistoryTable();
-    });
+    if (dom.mobileHistoryButton) {
+        dom.mobileHistoryButton.addEventListener('click', () => {
+            dom.mobileMenuOverlay.classList.add('hidden');
+            renderHistoryTable();
+        });
+    }
     if (dom.mobileHelpButton) dom.mobileHelpButton.addEventListener('click', () => {
         dom.mobileMenuOverlay.classList.add('hidden');
         dom.helpModal.classList.remove('hidden');
     });
-    if (dom.mobileDashboardButton) dom.mobileDashboardButton.addEventListener('click', () => {
-        dom.mobileMenuOverlay.classList.add('hidden');
-        renderDashboard();
-    });
+    if (dom.mobileDashboardButton) {
+        dom.mobileDashboardButton.addEventListener('click', () => {
+            dom.mobileMenuOverlay.classList.add('hidden');
+            renderDashboard();
+        });
+    }
 
     if (dom.logoutButton) {
         dom.logoutButton.addEventListener('click', async () => {
@@ -384,7 +410,10 @@ function initializeApp() {
         title.textContent = 'Column Roles:';
         dom.columnRolesContainer.appendChild(title);
         const rolesGrid = document.createElement('div');
-        rolesGrid.className = 'roles-grid';
+        rolesGrid.style.display = 'grid';
+        rolesGrid.style.gridTemplateColumns = 'auto 1fr';
+        rolesGrid.style.gap = '5px 10px';
+        rolesGrid.style.alignItems = 'center';
         state.headers.forEach((header, index) => {
             const label = document.createElement('label');
             label.textContent = header;
@@ -673,10 +702,11 @@ function initializeApp() {
     }
 
     async function renderDashboard() {
-        const MASTERED_THRESHOLD = 5;
         if (state.cardData.length === 0) {
-            showTopNotification('No deck loaded.', 'error'); return;
+            showTopNotification('No deck loaded. Please load a deck to view the dashboard.', 'error');
+            return;
         }
+        const MASTERED_THRESHOLD = 5;
         const allCardStats = await getAllCardStats();
         if (allCardStats.length === 0) return;
 
