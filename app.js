@@ -177,6 +177,12 @@ function initializeApp() {
                 dom.topNotification.className = `hidden ${type}`;
             }, duration);
         },
+        getActiveSkills: () => {
+            const currentConfigName = dom.configSelector.value;
+            const currentConfig = state.configs[currentConfigName];
+            if (!currentConfig || !currentConfig.activeSkills) return [];
+            return currentConfig.activeSkills;
+        },
         updateLayout: () => {
             if (window.matchMedia('(min-width: 769px)').matches) {
                 document.body.classList.add('desktop');
