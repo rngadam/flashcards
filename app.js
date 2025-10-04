@@ -184,9 +184,7 @@ function initializeApp() {
             return currentConfig.activeSkills;
         },
         getAllCardStats: async () => {
-          // Suppose que les stats sont stockées dans IndexedDB sous la clé 'flashcard-stats'
-          const stats = await get('flashcard-stats');
-          return stats ? Object.values(stats) : [];
+          return state.cardData;
         },
         updateLayout: () => {
             if (window.matchMedia('(min-width: 769px)').matches) {
