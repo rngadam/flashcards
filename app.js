@@ -136,6 +136,14 @@ function initializeApp() {
         renderDashboard();
     });
 
+    if (dom.logoutButton) {
+        dom.logoutButton.addEventListener('click', async () => {
+            await fetch('/api/logout', { method: 'POST' });
+            updateState({ isAuthenticated: false });
+            window.location.reload();
+        });
+    }
+
     function toggleFullscreen() {
         if (!document.fullscreenElement) document.documentElement.requestFullscreen();
         else if (document.exitFullscreen) document.exitFullscreen();
