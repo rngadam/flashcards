@@ -21,7 +21,8 @@ describe('Default Skills Configuration', () => {
             'Listening Comprehension': 'a771fa3da1b0947bbd9083ea8d8df9a9ae29fd04fcb4cc89f38bc97d5aeba8a4',
             'Validated Writing Practice': '840c4cbbeb3b4dd2f708f1f943498a60cf442b214b2005348b22427977a8107d',
             'Related words': 'bca6f1f962fa4d6398fcc26ca4dc738bd69c45fdb41be242bd2f3789f2266a64',
-            'Speaking Practice': 'e7d1afaee19dee8fe97256f3026773b7d1124761ec975e64f00ef4d9307e9a7f'
+            'Speaking Practice': 'e7d1afaee19dee8fe97256f3026773b7d1124761ec975e64f00ef4d9307e9a7f',
+            'Sentence Completion': '6d7b7a3425981c8ec13a6e9ae080adafd6fa5a9de18ca85a69bc3c5154c26945'
         };
 
         for (const skill of defaultSkills) {

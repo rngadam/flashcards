@@ -310,18 +310,18 @@
                 <input type="text" id="skill-name-input" placeholder="e.g., French Reading">
             </div>
 
-            <div class="setting">
-                <label for="skill-verification-method">Verification Method:</label>
-                <select id="skill-verification-method">
-                    <!-- Options will be populated by JS -->
-                </select>
-            </div>
-
             <div class="setting-grid">
                 <div><label>Front Column(s):</label></div>
                 <div><label>Back Column(s):</label></div>
                 <div id="skill-front-columns" class="column-checkbox-group"></div>
                 <div id="skill-back-columns" class="column-checkbox-group"></div>
+            </div>
+
+            <div class="setting">
+                <label for="skill-verification-method">Verification Method:</label>
+                <select id="skill-verification-method">
+                    <!-- Options will be populated by JS -->
+                </select>
             </div>
 
             <div class="setting">
@@ -346,16 +346,65 @@
             </div>
 
             <div class="setting">
-                <input type="checkbox" id="skill-alternate-uppercase">
-                <label for="skill-alternate-uppercase">Alternate Uppercase on Front</label>
-            </div>
-            <div class="setting">
                 <input type="checkbox" id="skill-tts-on-hotkey-only">
                 <label for="skill-tts-on-hotkey-only">Only read on hotkey (f)</label>
             </div>
 
             <div class="button-container">
                 <button id="save-skill-button">Save Skill</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="text-transform-modal" class="modal-overlay hidden">
+        <div id="text-transform-panel">
+            <button id="close-transform-button">X</button>
+            <h3 id="transform-config-title">Configure Column Transform</h3>
+            <input type="hidden" id="editing-transform-side">
+            <input type="hidden" id="editing-transform-role">
+
+            <fieldset>
+                <legend>Skill-Affecting Transforms</legend>
+                <div class="setting">
+                    <input type="checkbox" id="transform-hide-string">
+                    <label for="transform-hide-string">Hide String from Column:</label>
+                    <select id="transform-hide-string-column" disabled>
+                        <!-- Role options will be populated by JS -->
+                    </select>
+                </div>
+                <div class="setting">
+                    <input type="checkbox" id="transform-suppress-parentheses">
+                    <label for="transform-suppress-parentheses">Suppress text in parentheses</label>
+                </div>
+            </fieldset>
+
+            <fieldset>
+                <legend>Display-Only Transforms</legend>
+                <div class="setting">
+                    <label for="transform-font">Font:</label>
+                    <input type="text" id="transform-font" list="font-datalist" placeholder="e.g., Arial">
+                    <datalist id="font-datalist">
+                        <option value="Random"></option>
+                        <option value="Arial"></option>
+                        <option value="Verdana"></option>
+                        <option value="Times New Roman"></option>
+                        <option value="Courier New"></option>
+                    </datalist>
+                </div>
+                <div class="setting">
+                    <label for="transform-casing">Casing:</label>
+                    <select id="transform-casing">
+                        <option value="default">Default</option>
+                        <option value="uppercase">UPPERCASE</option>
+                        <option value="lowercase">lowercase</option>
+                        <option value="initial">Initial Case</option>
+                        <option value="alternate">Alternate Uppercase</option>
+                    </select>
+                </div>
+            </fieldset>
+
+            <div class="button-container">
+                <button id="save-transform-button">Apply</button>
             </div>
         </div>
     </div>
