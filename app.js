@@ -30,7 +30,6 @@ function initializeApp() {
     const dependencies = {
         dom,
         state,
-        updateState,
         showTopNotification,
         // Config Manager deps
         syncToServer,
@@ -49,6 +48,7 @@ function initializeApp() {
         updateFilterHighlights,
         // Skill Manager deps
         handleSettingsChange,
+        updateState,
         // Card Logic deps
         saveCardStats,
         startVoiceRecognition,
@@ -466,7 +466,11 @@ function initializeApp() {
             if (onEndCallback) onEndCallback();
             return;
         }
-        const sanitizedText = text.replace(/\(.*?\)/g, '').trim();
+
+        // Create pauses for hidden strings by replacing block characters with commas.
+        const textWithPauses = text.replace(/█+/g, match => ','.repeat(match.length));
+        const sanitizedText = textWithPauses.replace(/\(.*?\)/g, '').trim();
+
         if (!sanitizedText) {
             if (onEndCallback) onEndCallback();
             return;

@@ -31,7 +31,7 @@ describe('Skill ID Generation', () => {
         expect(id1).to.equal(id2);
     });
 
-    it('should NOT create a different hash if non-important properties change', async () => {
+    it('should NOT create a different hash for display-only property changes', async () => {
         const id1 = await createSkillId(baseSkill);
         const modifiedSkill = {
             ...baseSkill,
@@ -39,10 +39,28 @@ describe('Skill ID Generation', () => {
             back: ['BASE_LANGUAGE', 'EXAMPLE_SENTENCE'],
             ttsBackColumn: 'TARGET_LANGUAGE',
             ttsOnHotkeyOnly: true,
-            transforms: { front: { TARGET_LANGUAGE: { casing: 'uppercase' } } }
+            transforms: { front: { TARGET_LANGUAGE: { casing: 'uppercase', font: 'Arial' } } }
         };
         const id2 = await createSkillId(modifiedSkill);
-        expect(id1).to.equal(id2);
+        expect(id1).to.equal(id2, "Display-only properties and transforms should not affect the skill ID");
+    });
+
+    it('should create a different hash if skill-affecting transforms are added', async () => {
+        const id1 = await createSkillId(baseSkill);
+
+        const skillWithHideString = {
+            ...baseSkill,
+            transforms: { front: { TARGET_LANGUAGE: { hideString: true, hideStringColumn: 'BASE_LANGUAGE' } } }
+        };
+        const id2 = await createSkillId(skillWithHideString);
+        expect(id1).to.not.equal(id2, "The 'hideString' transform should change the skill ID");
+
+        const skillWithSuppress = {
+            ...baseSkill,
+            transforms: { front: { TARGET_LANGUAGE: { suppressParentheses: true } } }
+        };
+        const id3 = await createSkillId(skillWithSuppress);
+        expect(id1).to.not.equal(id3, "The 'suppressParentheses' transform should change the skill ID");
     });
 });
 
