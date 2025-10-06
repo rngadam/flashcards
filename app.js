@@ -8,7 +8,7 @@ import dom from './lib/ui/dom-elements.js';
 import { getState, updateState, popFromViewHistory, COLUMN_ROLES } from './lib/core/state.js';
 import { showTopNotification, formatTimeAgo, formatTimeDifference } from './lib/ui/ui-helpers.js';
 import { initConfigManager, saveCurrentConfig, saveConfig, resetDeckStats, loadSelectedConfig, populateConfigSelector, loadInitialConfigs, exportSQLite, exportAllData, importAllData } from './lib/core/config-manager.js';
-import { initSkillManager, renderSkillsList, openSkillDialog, saveSkill, deleteSkill, deleteAllSkills, addDefaultSkill, createPresetSkills, exportSkills, populateAllSkillSelectors, getSelectedSkills, getActiveSkills } from './lib/core/skill-manager.js';
+import { initSkillManager, renderSkillsList, openSkillDialog, saveSkill, deleteSkill, deleteAllSkills, addDefaultSkill, createPresetSkills, exportSkills, populateAllSkillSelectors, getSelectedSkills, getActiveSkills, saveTransform } from './lib/core/skill-manager.js';
 import { initCardLogic, getCardKey, getRetentionScore, createDefaultSkillStats, getSanitizedStats, getAllCardStats, markCardAsKnown, getTimeToDue, getCurrentSkillConfig, getTextForRoles, renderSkillMastery, displayCard, flipCard, showNextCard, showPrevCard, saveCardStats } from './lib/core/card-logic.js';
 import { initVerification, checkWritingAnswer, generateMultipleChoiceOptions, checkMultipleChoiceAnswer, toggleVoiceRecognition, startVoiceRecognition, stopVoiceRecognition } from './lib/core/verification.js';
 import { initAuth, syncToServer, checkAuthStatus } from './lib/core/auth.js';
@@ -30,7 +30,6 @@ function initializeApp() {
     const dependencies = {
         dom,
         state,
-        updateState,
         showTopNotification,
         // Config Manager deps
         syncToServer,
@@ -49,6 +48,7 @@ function initializeApp() {
         updateFilterHighlights,
         // Skill Manager deps
         handleSettingsChange,
+        updateState,
         // Card Logic deps
         saveCardStats,
         startVoiceRecognition,
@@ -257,6 +257,13 @@ function initializeApp() {
     });
     if (dom.saveSkillButton) dom.saveSkillButton.addEventListener('click', saveSkill);
 
+    // --- Transform Modal Event Listeners ---
+    if (dom.closeTransformButton) dom.closeTransformButton.addEventListener('click', () => dom.textTransformModal.classList.add('hidden'));
+    if (dom.saveTransformButton) dom.saveTransformButton.addEventListener('click', saveTransform);
+    if (dom.transformHideString) dom.transformHideString.addEventListener('change', (e) => {
+        if (dom.transformHideStringColumn) dom.transformHideStringColumn.disabled = !e.target.checked;
+    });
+
 
     // --- Skill Selection Syncing ---
     function syncCheckboxes(source, destination) {
@@ -459,7 +466,11 @@ function initializeApp() {
             if (onEndCallback) onEndCallback();
             return;
         }
-        const sanitizedText = text.replace(/\(.*?\)/g, '').trim();
+
+        // Create pauses for hidden strings by replacing block characters with commas.
+        const textWithPauses = text.replace(/█+/g, match => ','.repeat(match.length));
+        const sanitizedText = textWithPauses.replace(/\(.*?\)/g, '').trim();
+
         if (!sanitizedText) {
             if (onEndCallback) onEndCallback();
             return;
@@ -515,7 +526,7 @@ function initializeApp() {
         };
         if (skillConfig && skillConfig.ttsFrontColumn) {
             const ttsFrontRole = skillConfig.ttsFrontColumn;
-            const textParts = await getTextForRoles([ttsFrontRole]);
+            const textParts = await getTextForRoles([ttsFrontRole], 'front');
             const ttsText = textParts.map(p => p.text).join(' ');
             if (ttsText) speak(ttsText, { rate: 0.7, ttsRole: ttsFrontRole, onEndCallback });
             else onEndCallback();

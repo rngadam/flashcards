@@ -15,8 +15,14 @@
     "validationColumn": "none",
     "ttsFrontColumn": "TARGET_LANGUAGE",
     "ttsBackColumn": "BASE_LANGUAGE",
-    "alternateUppercase": true,
-    "ttsOnHotkeyOnly": false
+    "ttsOnHotkeyOnly": false,
+    "transforms": {
+        "front": {
+            "TARGET_LANGUAGE": {
+                "casing": "alternate"
+            }
+        }
+    }
   },
   {
     "id": "ffac7e8a2968d929e1fbe4abda98788ed7fb07634590664b82de70ce7db29f89",
@@ -31,7 +37,6 @@
     "validationColumn": "TARGET_LANGUAGE",
     "ttsFrontColumn": "BASE_LANGUAGE",
     "ttsBackColumn": "TARGET_LANGUAGE",
-    "alternateUppercase": false,
     "ttsOnHotkeyOnly": false
   },
   {
@@ -50,7 +55,6 @@
     "validationColumn": "none",
     "ttsFrontColumn": "none",
     "ttsBackColumn": "EXAMPLE_SENTENCE",
-    "alternateUppercase": false,
     "ttsOnHotkeyOnly": false
   },
   {
@@ -67,7 +71,6 @@
     "validationColumn": "none",
     "ttsFrontColumn": "TARGET_LANGUAGE",
     "ttsBackColumn": "COMMON_COLLOCATION",
-    "alternateUppercase": false,
     "ttsOnHotkeyOnly": false
   },
   {
@@ -86,7 +89,6 @@
     "validationColumn": "TARGET_LANGUAGE",
     "ttsFrontColumn": "BASE_LANGUAGE",
     "ttsBackColumn": "TARGET_LANGUAGE",
-    "alternateUppercase": false,
     "ttsOnHotkeyOnly": false
   },
   {
@@ -105,7 +107,6 @@
     "validationColumn": "RELATED_WORD",
     "ttsFrontColumn": "TARGET_LANGUAGE",
     "ttsBackColumn": "RELATED_WORD",
-    "alternateUppercase": false,
     "ttsOnHotkeyOnly": false
   },
   {
@@ -123,7 +124,32 @@
     "validationColumn": "TARGET_LANGUAGE",
     "ttsFrontColumn": "none",
     "ttsBackColumn": "TARGET_LANGUAGE",
-    "alternateUppercase": false,
     "ttsOnHotkeyOnly": false
+  },
+  {
+    "id": "71d97424906413da6a9d6111aa8776dcf4995ea5a9a07557b5965e1736343da0",
+    "name": "Sentence Completion",
+    "verificationMethod": "multipleChoice",
+    "front": [
+      "EXAMPLE_SENTENCE"
+    ],
+    "back": [
+      "TARGET_LANGUAGE",
+      "BASE_LANGUAGE",
+      "EXAMPLE_SENTENCE"
+    ],
+    "validationColumn": "TARGET_LANGUAGE",
+    "ttsFrontColumn": "EXAMPLE_SENTENCE",
+    "ttsBackColumn": "EXAMPLE_SENTENCE",
+    "ttsOnHotkeyOnly": false,
+    "transforms": {
+      "front": {
+        "EXAMPLE_SENTENCE": {
+          "hideString": true,
+          "hideStringColumn": "TARGET_LANGUAGE",
+          "suppressParentheses": true
+        }
+      }
+    }
   }
 ]

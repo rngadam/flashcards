@@ -1044,7 +1044,7 @@ button.danger:hover {
     margin-left: 5px;
 }
 
-#skill-config-panel {
+#skill-config-panel, #text-transform-panel {
     background: var(--background-color);
     padding: 30px;
     border-radius: 8px;
@@ -1056,7 +1056,15 @@ button.danger:hover {
     overflow-y: auto;
 }
 
-#close-skill-config-button {
+#text-transform-panel {
+    max-width: 500px;
+}
+
+#text-transform-panel {
+    max-width: 500px;
+}
+
+#close-skill-config-button, #close-transform-button {
     position: absolute;
     top: 15px;
     right: 15px;
