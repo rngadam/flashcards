@@ -654,8 +654,9 @@ button.danger:hover {
 
 #skill-mastery-dashboard {
     position: absolute;
-    bottom: 10px;
-    right: 10px;
+    top: 10px;
+    left: 50%;
+    transform: translateX(-50%);
     display: flex;
     justify-content: center;
     gap: 5px; /* Reduced gap for smaller space */

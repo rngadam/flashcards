@@ -276,13 +276,40 @@ function initializeApp() {
         });
     }
 
+    function updateToggleAllState(container) {
+        if (!container) return;
+        const toggleAll = container.querySelector('input[name="toggle-all-skills"]');
+        if (!toggleAll) return;
+
+        const skillCheckboxes = container.querySelectorAll('input[type="checkbox"]:not([name="toggle-all-skills"])');
+        if (skillCheckboxes.length > 0) {
+            const allChecked = Array.from(skillCheckboxes).every(cb => cb.checked);
+            toggleAll.checked = allChecked;
+        }
+    }
+
     async function handleSkillSelectionChange(e) {
         if (e.target.matches('input[type="checkbox"]')) {
+            const isToggleAll = e.target.name === 'toggle-all-skills';
+            const container = e.currentTarget;
+
+            if (isToggleAll) {
+                const isChecked = e.target.checked;
+                container.querySelectorAll('input[type="checkbox"]:not([name="toggle-all-skills"])').forEach(cb => {
+                    cb.checked = isChecked;
+                });
+            }
+
             if (e.currentTarget === dom.mobileSkillSelectorCheckboxes) {
                 syncCheckboxes(dom.mobileSkillSelectorCheckboxes, dom.skillSelectorCheckboxes);
             } else {
                 syncCheckboxes(dom.skillSelectorCheckboxes, dom.mobileSkillSelectorCheckboxes);
             }
+
+            // Update toggle-all state in both containers after any change
+            updateToggleAllState(dom.skillSelectorCheckboxes);
+            updateToggleAllState(dom.mobileSkillSelectorCheckboxes);
+
             await saveCurrentConfig();
             if (state.cardData.length > 0 && state.currentCardIndex < state.cardData.length) {
                 const cardKey = getCardKey(state.cardData[state.currentCardIndex]);
