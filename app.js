@@ -105,7 +105,7 @@ function initializeApp() {
     });
 
     // --- Modal & Menu Handlers ---
-    function setupModal(button, modal, closeButton, onOpenCallback = null) {
+    function setupModal(button, modal, closeButton, onOpenCallback = null, onCloseCallback = null) {
         if (button) {
             button.addEventListener('click', () => {
                 if (onOpenCallback) {
@@ -115,11 +115,23 @@ function initializeApp() {
                 modal.classList.remove('hidden');
             });
         }
-        if (closeButton) closeButton.addEventListener('click', () => modal.classList.add('hidden'));
+        if (closeButton) {
+            closeButton.addEventListener('click', () => {
+                modal.classList.add('hidden');
+                if (onCloseCallback) {
+                    onCloseCallback();
+                }
+            });
+        }
     }
 
     setupModal(dom.hamburgerMenu, dom.mobileMenuOverlay, dom.closeMobileMenuButton);
-    setupModal(dom.settingsButton, dom.settingsModal, dom.closeSettingsButton);
+    setupModal(dom.settingsButton, dom.settingsModal, dom.closeSettingsButton, null, () => {
+        // If we are closing the settings and cards are loaded but none is shown, show the first card.
+        if (state.cardData.length > 0 && state.currentCardIndex === -1) {
+            showNextCard();
+        }
+    });
     setupModal(dom.historyButton, dom.historyModal, dom.closeHistoryButton, () => {
         if (state.cardData.length === 0) {
             showTopNotification('No deck loaded. Please load a deck to view history.', 'error');
@@ -181,8 +193,14 @@ function initializeApp() {
 
     // --- Core Action Event Listeners ---
     if (dom.loadDataButton) dom.loadDataButton.addEventListener('click', async () => {
+        const isFirstRun = Object.keys(state.configs).length === 0;
         await loadData();
-        if (state.cardData.length > 0) showNextCard();
+        // On a subsequent run (not the first), loading data should immediately show a card.
+        // On the first run, the user must complete the setup, and the modal's
+        // onCloseCallback will handle showing the first card.
+        if (!isFirstRun && state.cardData.length > 0) {
+            showNextCard();
+        }
     });
     if (dom.saveConfigButton) dom.saveConfigButton.addEventListener('click', saveConfig);
     if (dom.resetStatsButton) dom.resetStatsButton.addEventListener('click', resetDeckStats);
@@ -409,7 +427,11 @@ function initializeApp() {
                 await parseData(await response.text());
                 updateCacheStatus(response);
             }
-            if (dom.settingsModal) dom.settingsModal.classList.add('hidden');
+            // Only hide settings modal if a configuration already exists.
+            // On first run, the user needs to configure the columns.
+            if (Object.keys(state.configs).length > 0) {
+                if (dom.settingsModal) dom.settingsModal.classList.add('hidden');
+            }
             document.body.classList.add('debug-data-loaded');
         } catch (error) {
             showTopNotification(`Failed to load data: ${error.message}.`, 'error');

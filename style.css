@@ -154,6 +154,14 @@ body.desktop .desktop-only-buttons {
     border-color: var(--primary-color);
 }
 
+#skill-selector-checkboxes label.current-skill-highlight,
+#mobile-skill-selector-checkboxes label.current-skill-highlight {
+    background-color: var(--success-message-bg) !important;
+    border-color: var(--success-color) !important;
+    color: var(--success-message-text) !important;
+    font-weight: bold;
+}
+
 
 /* Desktop Overrides */
 body.desktop #top-left-controls {
@@ -424,7 +432,17 @@ body.desktop .btn-text {
     left: 15px;
     font-size: 0.8em;
     color: var(--dark-gray);
-    z-index: 6; /* Higher than skill-mastery-dashboard */
+    z-index: 6;
+}
+
+#success-rate {
+    position: absolute;
+    bottom: 10px;
+    right: 15px;
+    font-size: 0.8em;
+    color: var(--dark-gray);
+    font-weight: bold;
+    z-index: 5;
 }
 
 .card-face {

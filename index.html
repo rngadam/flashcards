@@ -15,7 +15,9 @@
                 <input type="checkbox" id="toggle-all-skills" name="toggle-all-skills" checked>
                 <label for="toggle-all-skills">Toggle All</label>
             </div>
-            <!-- Skill checkboxes will be populated here by JS -->
+            <div id="skill-checkbox-list" class="skill-checkbox-list">
+                <!-- Skill checkboxes will be populated here by JS -->
+            </div>
         </div>
         <div id="skill-selector-filter" class="column-checkbox-group">
             <button id="filter-toggle-button" class="filter-toggle-button" title="Enable/Disable Word Filter">Filter</button><span id="filter-status-indicator" class="filter-status"></span>
@@ -45,7 +47,9 @@
                         <input type="checkbox" id="mobile-toggle-all-skills" name="toggle-all-skills" checked>
                         <label for="mobile-toggle-all-skills">Toggle All</label>
                     </div>
-                    <!-- Mobile skill checkboxes will be populated here -->
+                    <div id="mobile-skill-checkbox-list" class="skill-checkbox-list">
+                        <!-- Mobile skill checkboxes will be populated here -->
+                    </div>
                 </div>
                 <div id="mobile-skill-selector-filter" class="column-checkbox-group">
                     <button id="mobile-filter-toggle-button" class="filter-toggle-button" title="Enable/Disable Word Filter">Filter</button><span id="mobile-filter-status-indicator" class="filter-status"></span>
@@ -435,6 +439,7 @@
           <div class="card-overlays">
               <div id="deck-title"></div>
               <div id="last-seen"></div>
+              <div id="success-rate"></div>
               <div id="skill-mastery-dashboard"></div>
               <div id="writing-practice-container" class="hidden">
                 <button id="slow-replay-button">🔊</button>
