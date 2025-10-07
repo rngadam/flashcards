@@ -40,15 +40,14 @@ graph TD
     F -- HTTP Requests --> H
     H -- HTTP Responses --> F
 
-    classDef ui fill:#cce5ff,stroke:#004085,stroke-width:1px;
-    classDef logic fill:#d1e7dd,stroke:#155724,stroke-width:1px;
-    classDef adapter fill:#fff3cd,stroke:#856404,stroke-width:1px;
-    classDef datastore fill:#f8d7da,stroke:#721c24,stroke-width:1px;
-    classDef server fill:#e2e3e5,stroke:#383d41,stroke-width:1px;
+    classDef ui fill:#eaf4ff,stroke:#005a9e,stroke-width:1px,color:#000;
+    classDef logic fill:#e8f5e9,stroke:#1b5e20,stroke-width:1px,color:#000;
+    classDef adapter fill:#fff9c4,stroke:#f9a825,stroke-width:1px,color:#000;
+    classDef datastore fill:#ffebee,stroke:#c62828,stroke-width:1px,color:#000;
+    classDef server fill:#eceff1,stroke:#37474f,stroke-width:1px,color:#000;
 
-    class A ui;
+    class A,D ui;
     class B,C logic;
-    class D ui;
     class E,F adapter;
     class G,J datastore;
     class H,I server;
@@ -155,10 +154,12 @@ sequenceDiagram
     participant IndexedDBAdapter as IndexedDB Adapter
     participant IndexedDB
 
-    style User,UI fill:#cce5ff,stroke:#004085,stroke-width:1px
-    style BusinessLogic,DAL fill:#d1e7dd,stroke:#155724,stroke-width:1px
-    style IndexedDBAdapter fill:#fff3cd,stroke:#856404,stroke-width:1px
-    style IndexedDB fill:#f8d7da,stroke:#721c24,stroke-width:1px
+    style User fill:#eaf4ff,stroke:#005a9e,stroke-width:1px,color:#000
+    style UI fill:#eaf4ff,stroke:#005a9e,stroke-width:1px,color:#000
+    style BusinessLogic fill:#e8f5e9,stroke:#1b5e20,stroke-width:1px,color:#000
+    style DAL fill:#e8f5e9,stroke:#1b5e20,stroke-width:1px,color:#000
+    style IndexedDBAdapter fill:#fff9c4,stroke:#f9a825,stroke-width:1px,color:#000
+    style IndexedDB fill:#ffebee,stroke:#c62828,stroke-width:1px,color:#000
 
     User->>UI: Loads Application
     UI->>BusinessLogic: initializeApp()
@@ -193,10 +194,12 @@ sequenceDiagram
     participant HTTPAdapter as HTTP Adapter
     participant Server
 
-    style User,UI fill:#cce5ff,stroke:#004085,stroke-width:1px
-    style BusinessLogic,DAL fill:#d1e7dd,stroke:#155724,stroke-width:1px
-    style HTTPAdapter fill:#fff3cd,stroke:#856404,stroke-width:1px
-    style Server fill:#e2e3e5,stroke:#383d41,stroke-width:1px
+    style User fill:#eaf4ff,stroke:#005a9e,stroke-width:1px,color:#000
+    style UI fill:#eaf4ff,stroke:#005a9e,stroke-width:1px,color:#000
+    style BusinessLogic fill:#e8f5e9,stroke:#1b5e20,stroke-width:1px,color:#000
+    style DAL fill:#e8f5e9,stroke:#1b5e20,stroke-width:1px,color:#000
+    style HTTPAdapter fill:#fff9c4,stroke:#f9a825,stroke-width:1px,color:#000
+    style Server fill:#eceff1,stroke:#37474f,stroke-width:1px,color:#000
 
     User->>UI: Loads Application
     UI->>BusinessLogic: initializeApp()
