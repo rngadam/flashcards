@@ -219,3 +219,16 @@ body {
     color: var(--medium-gray);
     padding-top: 50px;
 }
+
+/* Font size classes */
+.font-size-20 { font-size: 20px; }
+.font-size-24 { font-size: 24px; }
+.font-size-28 { font-size: 28px; }
+.font-size-32 { font-size: 32px; }
+.font-size-40 { font-size: 40px; }
+
+/* Font family classes */
+.font-family-arial { font-family: Arial, sans-serif; }
+.font-family-verdana { font-family: Verdana, sans-serif; }
+.font-family-times-new-roman { font-family: 'Times New Roman', Times, serif; }
+.font-family-courier-new { font-family: 'Courier New', Courier, monospace; }

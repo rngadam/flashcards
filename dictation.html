@@ -28,6 +28,7 @@
             </div>
             <div id="hotkey-bar">
                 <button id="repeat-word-btn">Repeat Word (Tab)</button>
+                <button id="reveal-text-btn" class="hidden">Reveal Text (`)</button>
             </div>
         </main>
     </div>
@@ -39,18 +40,18 @@
             <div class="config-grid">
                 <label for="font-size-select">Font Size:</label>
                 <select id="font-size-select">
-                    <option value="20px">20px</option>
-                    <option value="24px">24px</option>
-                    <option value="28px">28px</option>
-                    <option value="32px">32px</option>
-                    <option value="40px">40px</option>
+                    <option value="font-size-20">20px</option>
+                    <option value="font-size-24">24px</option>
+                    <option value="font-size-28">28px</option>
+                    <option value="font-size-32">32px</option>
+                    <option value="font-size-40">40px</option>
                 </select>
                 <label for="font-family-select">Font Family:</label>
                 <select id="font-family-select">
-                    <option value="Arial, sans-serif">Arial</option>
-                    <option value="Verdana, sans-serif">Verdana</option>
-                    <option value="'Times New Roman', Times, serif">Times New Roman</option>
-                    <option value="'Courier New', Courier, monospace">Courier New</option>
+                    <option value="font-family-arial">Arial</option>
+                    <option value="font-family-verdana">Verdana</option>
+                    <option value="font-family-times-new-roman">Times New Roman</option>
+                    <option value="font-family-courier-new">Courier New</option>
                 </select>
             </div>
         </div>
@@ -61,10 +62,10 @@
                 <input type="range" id="speed-slider" min="0.5" max="2" value="1" step="0.1">
                 <label for="hide-text-checkbox">Hide Text Mode:</label>
                 <input type="checkbox" id="hide-text-checkbox">
-                <label for="auto-read-next-word-checkbox">Read next word automatically:</label>
-                <input type="checkbox" id="auto-read-next-word-checkbox" checked>
-                <label for="auto-read-on-correct-checkbox">Read word when entered correctly:</label>
-                <input type="checkbox" id="auto-read-on-correct-checkbox" checked>
+                <label for="read-next-checkbox">Read next word aloud after current word finished:</label>
+                <input type="checkbox" id="read-next-checkbox" checked>
+                <label for="read-on-correct-checkbox">Read current word aloud when completed:</label>
+                <input type="checkbox" id="read-on-correct-checkbox" checked>
             </div>
         </div>
         <div class="config-section">

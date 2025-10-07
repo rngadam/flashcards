@@ -19,11 +19,14 @@ document.addEventListener('DOMContentLoaded', () => {
     const fontSizeSelect = document.getElementById('font-size-select');
     const fontFamilySelect = document.getElementById('font-family-select');
     const hideTextCheckbox = document.getElementById('hide-text-checkbox');
+    const readNextCheckbox = document.getElementById('read-next-checkbox');
+    const readOnCorrectCheckbox = document.getElementById('read-on-correct-checkbox');
     const textTitleInput = document.getElementById('text-title-input');
     const textContentTextarea = document.getElementById('text-content-textarea');
     const saveTextBtn = document.getElementById('save-text-btn');
     const readAloudBtn = document.getElementById('read-aloud-btn');
     const repeatWordBtn = document.getElementById('repeat-word-btn');
+    const revealTextBtn = document.getElementById('reveal-text-btn');
     const configToggleBtn = document.getElementById('config-toggle-btn');
     const configPanel = document.getElementById('config-panel');
     const closeConfigBtn = document.getElementById('close-config-btn');
@@ -35,6 +38,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let currentWordIndex = 0;
     let originalTitle = null; // Used for editing/renaming texts
     let tabKeyPressCount = 0;
+    let speechQueue = [];
 
     // --- Function Declarations (ordered to prevent no-use-before-define) ---
 
@@ -86,18 +90,46 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     // ** Level 2: Dependencies on Level 1 **
-    const speakWord = (word, rate) => {
-        if (!('speechSynthesis' in window)) return;
-        speechSynthesis.cancel();
+    let isSpeaking = false;
+
+    const processSpeechQueue = () => {
+        if (isSpeaking || speechQueue.length === 0) {
+            return;
+        }
+
+        isSpeaking = true;
+        const { word, rate } = speechQueue.shift();
+        console.log(`Speaking: ${word}`);
+
         const utterance = new SpeechSynthesisUtterance(word);
         utterance.lang = textDisplay.lang || 'en';
-        utterance.rate = rate || parseFloat(speedSlider.value);
+        utterance.rate = rate;
+
+        utterance.onend = () => {
+            isSpeaking = false;
+            processSpeechQueue();
+        };
+
         speechSynthesis.speak(utterance);
+    };
+
+    const speakWord = (word, rate) => {
+        if (!('speechSynthesis' in window)) return;
+        speechQueue.push({ word, rate: rate || parseFloat(speedSlider.value) });
+        processSpeechQueue();
+    };
+
+    const speakImmediately = (word, rate) => {
+        if (!('speechSynthesis' in window)) return;
+        speechQueue = []; // Clear the queue
+        speechSynthesis.cancel(); // Stop any current speech
+        isSpeaking = false;
+        speakWord(word, rate);
     };
 
     const loadTexts = async () => {
         const keys = await idb.keys();
-        const dictationKeys = keys.filter(key => key.startsWith(DB_PREFIX));
+        const dictationKeys = keys.filter(key => key.startsWith(DB_PREFIX) && key !== DB_CONFIG_KEY);
         const entries = await Promise.all(
             dictationKeys.map(async (key) => {
                 const title = key.substring(DB_PREFIX.length);
@@ -119,46 +151,61 @@ document.addEventListener('DOMContentLoaded', () => {
     const repeatCurrentWord = () => {
         if (currentWordIndex < sourceWords.length) {
             const speed = 1.0 - (0.2 * tabKeyPressCount++);
-            speakWord(stripPunctuation(sourceWords[currentWordIndex]), Math.max(0.2, speed));
+            speakImmediately(stripPunctuation(sourceWords[currentWordIndex]), Math.max(0.2, speed));
         }
     };
 
     const speakText = () => {
         if (!sourceWords.length || !('speechSynthesis' in window)) return;
-        speechSynthesis.cancel();
         const fullText = sourceWords.join(' ');
-        const utterance = new SpeechSynthesisUtterance(fullText);
-        utterance.lang = textDisplay.lang || 'en';
-        utterance.rate = parseFloat(speedSlider.value);
-        speechSynthesis.speak(utterance);
+        speakImmediately(fullText, parseFloat(speedSlider.value));
     };
 
     const handleContinuousInput = () => {
         const sourceSpans = Array.from(textDisplay.querySelectorAll('span'));
-        const inputWords = writingInput.value.split(/[\s\n]+/).filter(w => w.length > 0);
+        const inputValue = writingInput.value;
+        const inputWords = inputValue.split(/[\s\n]+/).filter(w => w.length > 0);
+        // A word is considered "complete" if there's trailing whitespace.
+        // An empty input is also considered "complete" to reset the state.
+        const isInputComplete = /[\s\n]$/.test(inputValue) || inputValue.length === 0;
+
         let lastCorrectIndex = -1;
 
         sourceSpans.forEach(span => span.classList.remove('correct', 'incorrect', 'current'));
 
         sourceSpans.forEach((span, index) => {
             if (index < inputWords.length) {
-                if (inputWords[index] === sourceWords[index]) {
-                    span.classList.add('correct');
-                    lastCorrectIndex = index;
+                const isLastWord = index === inputWords.length - 1;
+
+                if (isLastWord && !isInputComplete) {
+                    // Word is being typed, check for prefix match
+                    if (!sourceWords[index].startsWith(inputWords[index])) {
+                        span.classList.add('incorrect');
+                    }
                 } else {
-                    span.classList.add('incorrect');
+                    // Word is complete, check for exact match
+                    if (inputWords[index] === sourceWords[index]) {
+                        span.classList.add('correct');
+                        lastCorrectIndex = index;
+                    } else {
+                        span.classList.add('incorrect');
+                    }
                 }
             }
         });
 
         const newWordIndex = lastCorrectIndex + 1;
 
-        if (newWordIndex > currentWordIndex && newWordIndex < sourceWords.length) {
+        if (newWordIndex > currentWordIndex) {
             currentWordIndex = newWordIndex;
-            speakWord(stripPunctuation(sourceWords[currentWordIndex - 1]));
-            speakNextWord();
+            if (readOnCorrectCheckbox.checked && currentWordIndex > 0) {
+                speakWord(stripPunctuation(sourceWords[currentWordIndex - 1]));
+            }
+            if (readNextCheckbox.checked) {
+                speakNextWord();
+            }
         } else {
-             currentWordIndex = newWordIndex;
+            currentWordIndex = newWordIndex;
         }
 
         if (currentWordIndex < sourceWords.length) {
@@ -224,6 +271,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const isHidden = hideTextCheckbox.checked;
         textDisplay.classList.toggle('hidden', isHidden);
         speakerIcon.classList.toggle('hidden', !isHidden);
+        revealTextBtn.classList.toggle('hidden', !isHidden);
         if (isHidden) {
             writingInput.focus();
             speakNextWord();
@@ -231,10 +279,27 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     const applyConfig = (config) => {
-        writingInput.style.fontSize = config.fontSize;
-        writingInput.style.fontFamily = config.fontFamily;
-        textDisplay.style.fontSize = config.fontSize;
-        textDisplay.style.fontFamily = config.fontFamily;
+        // Remove any existing font size or family classes
+        writingInput.classList.forEach(c => {
+            if (c.startsWith('font-size-') || c.startsWith('font-family-')) {
+                writingInput.classList.remove(c);
+            }
+        });
+        textDisplay.classList.forEach(c => {
+            if (c.startsWith('font-size-') || c.startsWith('font-family-')) {
+                textDisplay.classList.remove(c);
+            }
+        });
+
+        // Add the new classes
+        if (config.fontSize) {
+            writingInput.classList.add(config.fontSize);
+            textDisplay.classList.add(config.fontSize);
+        }
+        if (config.fontFamily) {
+            writingInput.classList.add(config.fontFamily);
+            textDisplay.classList.add(config.fontFamily);
+        }
     };
 
     const saveConfig = async () => {
@@ -243,16 +308,20 @@ document.addEventListener('DOMContentLoaded', () => {
             fontFamily: fontFamilySelect.value,
             hideText: hideTextCheckbox.checked,
             speed: speedSlider.value,
+            readNext: readNextCheckbox.checked,
+            readOnCorrect: readOnCorrectCheckbox.checked,
         };
         await idb.set(DB_CONFIG_KEY, config);
     };
 
     const loadConfig = async () => {
         const config = await idb.get(DB_CONFIG_KEY) || {};
-        fontSizeSelect.value = config.fontSize || '28px';
-        fontFamilySelect.value = config.fontFamily || 'Arial, sans-serif';
+        fontSizeSelect.value = config.fontSize || 'font-size-28';
+        fontFamilySelect.value = config.fontFamily || 'font-family-arial';
         speedSlider.value = config.speed || '1';
         hideTextCheckbox.checked = config.hideText || false;
+        readNextCheckbox.checked = config.readNext !== false; // Default to true
+        readOnCorrectCheckbox.checked = config.readOnCorrect !== false; // Default to true
 
         applyConfig({ fontSize: fontSizeSelect.value, fontFamily: fontFamilySelect.value });
         toggleHideText();
@@ -303,6 +372,8 @@ document.addEventListener('DOMContentLoaded', () => {
         toggleHideText();
         saveConfig();
     });
+    readNextCheckbox.addEventListener('change', saveConfig);
+    readOnCorrectCheckbox.addEventListener('change', saveConfig);
 
     writingInput.addEventListener('keydown', (event) => {
         if (event.key === 'Tab') {
@@ -315,6 +386,23 @@ document.addEventListener('DOMContentLoaded', () => {
         if (event.ctrlKey && event.key.toLowerCase() === 's') {
             event.preventDefault();
             speakText();
+        } else if (event.key === '`') {
+            if (hideTextCheckbox.checked) {
+                hideTextCheckbox.checked = false;
+                toggleHideText();
+                saveConfig();
+            }
+        } else if (event.key === 'Escape') {
+            event.preventDefault();
+            speakText();
+        }
+    });
+
+    revealTextBtn.addEventListener('click', () => {
+        if (hideTextCheckbox.checked) {
+            hideTextCheckbox.checked = false;
+            toggleHideText();
+            saveConfig();
         }
     });
 
