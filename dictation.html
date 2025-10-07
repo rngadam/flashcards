@@ -3,53 +3,74 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dictation</title>
+    <title>Dictation Practice</title>
     <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="dictation.css">
 </head>
 <body>
-    <div id="container">
-        <h1>Dictation</h1>
-        <div id="main-content">
-            <div id="text-selection-area">
-                <h2>Texts</h2>
-                <select id="text-select" size="10"></select>
+    <header class="top-bar">
+        <h1>Dictation Practice</h1>
+        <div class="top-bar-controls">
+            <button id="config-toggle-btn">Settings</button>
+        </div>
+    </header>
+
+    <div id="dictation-container">
+        <aside id="text-selection-sidebar">
+            <h2>My Texts</h2>
+            <div id="text-list-container">
+                <select id="text-select" size="15"></select>
+            </div>
+            <div class="sidebar-buttons">
                 <button id="new-text-btn">New</button>
                 <button id="edit-text-btn">Edit</button>
                 <button id="delete-text-btn">Delete</button>
             </div>
-            <div id="dictation-area">
-                <div id="text-display-container">
-                    <div id="text-display"></div>
-                </div>
-                <div id="input-area">
-                    <input type="text" id="writing-input" autocomplete="off">
-                    <button id="read-text-btn">Read</button>
-                </div>
+        </aside>
+
+        <main id="main-content">
+            <div id="text-display-container">
+                <div id="text-display" class="text-display-styling"></div>
             </div>
-            <div id="config-area">
-                <h2>Configuration</h2>
-                <label for="speed-slider">Speed:</label>
-                <input type="range" id="speed-slider" min="0.5" max="2" value="1" step="0.1">
-                <label for="font-size-select">Font Size:</label>
-                <select id="font-size-select">
-                    <option value="16px">16px</option>
-                    <option value="20px">20px</option>
-                    <option value="24px">24px</option>
-                    <option value="28px">28px</option>
-                </select>
-                <label for="font-family-select">Font Family:</label>
-                <select id="font-family-select">
-                    <option value="Arial">Arial</option>
-                    <option value="Verdana">Verdana</option>
-                    <option value="Times New Roman">Times New Roman</option>
-                </select>
-                <label for="hide-text-checkbox">
-                    <input type="checkbox" id="hide-text-checkbox">
-                    Hide Text
-                </label>
+            <div id="input-area">
+                <input type="text" id="writing-input" class="text-display-styling" autocomplete="off" placeholder="Start typing here...">
+                <button id="read-text-btn">Read Aloud</button>
             </div>
+        </main>
+    </div>
+
+    <div id="config-panel" class="config-panel-hidden">
+        <h2>Configuration</h2>
+        <div class="config-grid">
+            <label for="speed-slider">Speed:</label>
+            <input type="range" id="speed-slider" min="0.5" max="2" value="1" step="0.1">
+
+            <label for="font-size-select">Font Size:</label>
+            <select id="font-size-select">
+                <option value="20px">20px</option>
+                <option value="24px">24px</option>
+                <option value="28px">28px</option>
+                <option value="32px">32px</option>
+                <option value="40px">40px</option>
+            </select>
+
+            <label for="font-family-select">Font Family:</label>
+            <select id="font-family-select">
+                <option value="Arial, sans-serif">Arial</option>
+                <option value="Verdana, sans-serif">Verdana</option>
+                <option value="'Times New Roman', Times, serif">Times New Roman</option>
+                <option="'Courier New', Courier, monospace">Courier New</option>
+            </select>
+
+            <label for="hide-text-checkbox">Hide Text Mode:</label>
+            <input type="checkbox" id="hide-text-checkbox">
         </div>
-        <div id="modal" class="modal">
+        <button id="close-config-btn">Close</button>
+    </div>
+
+    <div id="notification-area" class="hidden"></div>
+
+    <div id="modal" class="modal">
             <div class="modal-content">
                 <span class="close-button">&times;</span>
                 <h2>Text Editor</h2>

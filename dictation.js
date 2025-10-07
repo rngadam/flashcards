@@ -3,7 +3,11 @@ import * as idb from './lib/idb-keyval-wrapper.js';
 import { detectLanguage } from './lib/detect-language.js';
 
 document.addEventListener('DOMContentLoaded', () => {
-    // DOM elements
+    // --- Constants ---
+    const DB_PREFIX = 'dictation-';
+    const DB_CONFIG_KEY = 'dictation-config';
+
+    // --- DOM Elements ---
     const textSelect = document.getElementById('text-select');
     const newTextBtn = document.getElementById('new-text-btn');
     const editTextBtn = document.getElementById('edit-text-btn');
@@ -20,28 +24,57 @@ document.addEventListener('DOMContentLoaded', () => {
     const textContentTextarea = document.getElementById('text-content-textarea');
     const saveTextBtn = document.getElementById('save-text-btn');
     const readTextBtn = document.getElementById('read-text-btn');
+    const configToggleBtn = document.getElementById('config-toggle-btn');
+    const configPanel = document.getElementById('config-panel');
+    const closeConfigBtn = document.getElementById('close-config-btn');
+    const notificationArea = document.getElementById('notification-area');
 
-    // App state
+    // --- App State ---
     let texts = {};
     let currentText = null;
     let wordsToDictate = [];
     let currentWordIndex = 0;
     let fKeyPressCount = 0;
     let originalTitle = null;
+    let highlightedWord = null;
 
-    // Functions
+    // --- Functions ---
+
+    /**
+     * Shows a non-blocking notification to the user.
+     * @param {string} message The message to display.
+     * @param {number} duration Time in ms to show the message.
+     */
+    const showNotification = (message, duration = 3000) => {
+        notificationArea.textContent = message;
+        notificationArea.classList.remove('hidden');
+        setTimeout(() => {
+            notificationArea.classList.add('hidden');
+        }, duration);
+    };
+
+    /**
+     * Loads all text fragments from IndexedDB in parallel for better performance.
+     */
     const loadTexts = async () => {
         const keys = await idb.keys();
-        texts = {};
-        for (const key of keys) {
-            if (key.startsWith('dictation-')) {
-                const title = key.substring('dictation-'.length);
-                texts[title] = await idb.get(key);
-            }
-        }
+        const dictationKeys = keys.filter(key => key.startsWith(DB_PREFIX));
+
+        const entries = await Promise.all(
+            dictationKeys.map(async (key) => {
+                const title = key.substring(DB_PREFIX.length);
+                const content = await idb.get(key);
+                return [title, content];
+            })
+        );
+
+        texts = Object.fromEntries(entries);
         updateTextList();
     };
 
+    /**
+     * Updates the text selection list in the UI.
+     */
     const updateTextList = () => {
         textSelect.innerHTML = '';
         for (const title in texts) {
@@ -52,6 +85,12 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
+    /**
+     * Opens the modal for creating or editing a text.
+     * @param {string} title The title of the text.
+     * @param {string} content The content of the text.
+     * @param {boolean} isEditing Flag to indicate if we are editing an existing text.
+     */
     const openModal = (title = '', content = '', isEditing = false) => {
         textTitleInput.value = title;
         textContentTextarea.value = content;
@@ -64,37 +103,37 @@ document.addEventListener('DOMContentLoaded', () => {
         originalTitle = null;
     };
 
+    /**
+     * Saves a new text or updates an existing one in IndexedDB.
+     */
     const saveText = async () => {
         const newTitle = textTitleInput.value.trim();
         const content = textContentTextarea.value.trim();
         if (newTitle && content) {
             if (originalTitle && originalTitle !== newTitle) {
-                // If the title has changed, delete the old entry
-                await idb.del(`dictation-${originalTitle}`);
+                await idb.del(`${DB_PREFIX}${originalTitle}`);
             }
-            await idb.set(`dictation-${newTitle}`, content);
+            await idb.set(`${DB_PREFIX}${newTitle}`, content);
             await loadTexts();
             closeModal();
         }
     };
 
+    /**
+     * Deletes the currently selected text from IndexedDB.
+     */
     const deleteText = async () => {
         const title = textSelect.value;
         if (title) {
-            await idb.del(`dictation-${title}`);
+            await idb.del(`${DB_PREFIX}${title}`);
             await loadTexts();
             textDisplay.innerHTML = '';
         }
     };
 
-    const handleWordClick = (event) => {
-        const word = event.target.textContent;
-        const sourceLang = textDisplay.lang || 'auto';
-        const targetLang = 'en'; // Default to English
-        const url = `https://translate.google.com/?sl=${sourceLang}&tl=${targetLang}&text=${encodeURIComponent(word)}&op=translate`;
-        window.open(url, '_blank');
-    };
-
+    /**
+     * Displays the selected text and prepares for dictation.
+     */
     const displayText = async () => {
         const title = textSelect.value;
         if (title && texts[title]) {
@@ -105,10 +144,6 @@ document.addEventListener('DOMContentLoaded', () => {
             writingInput.value = '';
             textDisplay.innerHTML = wordsToDictate.map(word => `<span>${word}</span>`).join(' ');
 
-            textDisplay.querySelectorAll('span').forEach(wordSpan => {
-                wordSpan.addEventListener('click', handleWordClick);
-            });
-
             const lang = await detectLanguage(currentText);
             textDisplay.lang = lang;
             writingInput.lang = lang;
@@ -116,41 +151,43 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
+    /**
+     * Reads the entire current text aloud with word highlighting.
+     */
     const speakText = () => {
         if (!currentText || !('speechSynthesis' in window)) {
             return;
         }
-
-        speechSynthesis.cancel(); // Cancel any previous speech
+        speechSynthesis.cancel();
 
         const utterance = new SpeechSynthesisUtterance(currentText);
         utterance.lang = textDisplay.lang || 'en';
         utterance.rate = parseFloat(speedSlider.value);
 
-        const words = textDisplay.querySelectorAll('span');
-        let currentWordIndex = 0;
+        const words = Array.from(textDisplay.querySelectorAll('span'));
 
         utterance.onboundary = (event) => {
             if (event.name === 'word') {
-                // Find the current word based on charIndex
-                for (let i = 0; i < words.length; i++) {
-                    words[i].classList.remove('highlight');
+                if (highlightedWord) {
+                    highlightedWord.classList.remove('highlight');
                 }
                 let charCount = 0;
-                for (let i = 0; i < words.length; i++) {
-                    const word = words[i].textContent;
-                    if (event.charIndex >= charCount && event.charIndex < charCount + word.length) {
-                        words[i].classList.add('highlight');
+                for (const word of words) {
+                    const wordText = word.textContent;
+                    if (event.charIndex >= charCount && event.charIndex < charCount + wordText.length) {
+                        word.classList.add('highlight');
+                        highlightedWord = word;
                         break;
                     }
-                    charCount += word.length + 1; // +1 for the space
+                    charCount += wordText.length + 1;
                 }
             }
         };
 
         utterance.onend = () => {
-            for (let i = 0; i < words.length; i++) {
-                words[i].classList.remove('highlight');
+            if (highlightedWord) {
+                highlightedWord.classList.remove('highlight');
+                highlightedWord = null;
             }
         };
 
@@ -175,7 +212,13 @@ document.addEventListener('DOMContentLoaded', () => {
         speechSynthesis.speak(utterance);
     };
 
+    /**
+     * Handles user input during dictation practice.
+     */
     const handleDictationInput = (event) => {
+        // Helper to strip punctuation for comparison
+        const stripPunctuation = (str) => str.replace(/[\p{P}]/gu, '');
+
         if (event.key === 'Enter') {
             event.preventDefault();
             if (hideTextCheckbox.checked && currentWordIndex < wordsToDictate.length) {
@@ -194,23 +237,18 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-
-        const typedValue = writingInput.value.trim();
-        const currentWord = wordsToDictate[currentWordIndex];
+        const typedValue = stripPunctuation(writingInput.value.trim());
+        const currentWord = stripPunctuation(wordsToDictate[currentWordIndex]);
 
         if (typedValue === currentWord) {
-            speakWord(currentWord);
+            speakWord(wordsToDictate[currentWordIndex]);
             writingInput.value = '';
             currentWordIndex++;
-            fKeyPressCount = 0; // Reset on correct word
+            fKeyPressCount = 0;
             if (currentWordIndex < wordsToDictate.length) {
                 updateWordHighlight();
-                 if (hideTextCheckbox.checked) {
-                    // In hide mode, we don't auto-speak the next word. User presses Enter.
-                }
             } else {
-                // End of dictation
-                alert('Dictation complete!');
+                showNotification('Dictation complete!');
             }
         }
     };
@@ -221,43 +259,46 @@ document.addEventListener('DOMContentLoaded', () => {
             writingInput.focus();
             currentWordIndex = 0;
             updateWordHighlight();
-             // Speak the first word to start things off
-            if(wordsToDictate.length > 0) {
+            if (wordsToDictate.length > 0) {
                 speakWord(wordsToDictate[0]);
             }
         }
     };
 
-
+    // --- Configuration ---
     const saveConfig = async () => {
         const config = {
             fontSize: fontSizeSelect.value,
             fontFamily: fontFamilySelect.value,
         };
-        await idb.set('dictation-config', config);
+        await idb.set(DB_CONFIG_KEY, config);
     };
 
     const applyConfig = (config) => {
-        const fontSize = config.fontSize || '20px';
-        const fontFamily = config.fontFamily || 'Arial';
+        const fontSize = config.fontSize || '28px'; // Increased default size
+        const fontFamily = config.fontFamily || 'Arial, sans-serif';
 
         fontSizeSelect.value = fontSize;
         fontFamilySelect.value = fontFamily;
 
-        textDisplay.style.fontSize = fontSize;
-        writingInput.style.fontSize = fontSize;
-        textDisplay.style.fontFamily = fontFamily;
-        writingInput.style.fontFamily = fontFamily;
+        const elementsToStyle = [textDisplay, writingInput];
+        elementsToStyle.forEach(el => {
+            if (el) {
+                el.style.fontSize = fontSize;
+                el.style.fontFamily = fontFamily;
+            }
+        });
     };
 
     const loadConfig = async () => {
-        const config = await idb.get('dictation-config');
-        if (config) {
-            applyConfig(config);
-        }
+        const config = await idb.get(DB_CONFIG_KEY);
+        // Apply default or loaded config
+        applyConfig(config || {});
     };
 
-    // Event Listeners
+    // --- Event Listeners ---
+
+    // Text management
     newTextBtn.addEventListener('click', () => openModal());
     editTextBtn.addEventListener('click', () => {
         const title = textSelect.value;
@@ -269,22 +310,43 @@ document.addEventListener('DOMContentLoaded', () => {
     saveTextBtn.addEventListener('click', saveText);
     closeButton.addEventListener('click', closeModal);
     textSelect.addEventListener('change', displayText);
+
+    // Dictation controls
     readTextBtn.addEventListener('click', speakText);
     writingInput.addEventListener('keyup', handleDictationInput);
+
+    // Event Delegation for word clicks
+    textDisplay.addEventListener('click', (event) => {
+        if (event.target.tagName === 'SPAN') {
+            const word = event.target.textContent;
+            const sourceLang = textDisplay.lang || 'auto';
+            const targetLang = 'en';
+            const url = `https://translate.google.com/?sl=${sourceLang}&tl=${targetLang}&text=${encodeURIComponent(word)}&op=translate`;
+            window.open(url, '_blank');
+        }
+    });
+
+    // Configuration Panel
+    configToggleBtn.addEventListener('click', () => configPanel.classList.toggle('config-panel-hidden'));
+    closeConfigBtn.addEventListener('click', () => configPanel.classList.add('config-panel-hidden'));
     hideTextCheckbox.addEventListener('change', toggleHideText);
-    fontSizeSelect.addEventListener('change', () => {
-        textDisplay.style.fontSize = fontSizeSelect.value;
-        writingInput.style.fontSize = fontSizeSelect.value;
+
+    const handleConfigChange = () => {
+        applyConfig({
+            fontSize: fontSizeSelect.value,
+            fontFamily: fontFamilySelect.value
+        });
         saveConfig();
-    });
-    fontFamilySelect.addEventListener('change', () => {
-        textDisplay.style.fontFamily = fontFamilySelect.value;
-        writingInput.style.fontFamily = fontFamilySelect.value;
-        saveConfig();
-    });
+    };
+    fontSizeSelect.addEventListener('change', handleConfigChange);
+    fontFamilySelect.addEventListener('change', handleConfigChange);
 
 
-    // Initial load
-    loadConfig();
-    loadTexts();
+    // --- Initial Load ---
+    const initializeApp = async () => {
+        await loadConfig();
+        await loadTexts();
+    };
+
+    initializeApp();
 });
