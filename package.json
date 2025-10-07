@@ -8,7 +8,6 @@
     "start": "node server.js",
     "test": "mocha 'test/**/*.js'",
     "lint": "eslint .",
-    "lint:md": "markdownlint \"**/*.md\" --ignore node_modules",
     "format:md": "prettier --write \"**/*.md\""
   },
   "keywords": [],
@@ -18,7 +17,6 @@
     "chai": "^4.5.0",
     "eslint": "^8.57.0",
     "jsdom": "^27.0.0",
-    "markdownlint-cli": "^0.45.0",
     "mocha": "^10.2.0",
     "prettier": "^3.6.2",
     "sinon": "^21.0.0"

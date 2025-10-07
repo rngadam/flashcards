@@ -46,8 +46,8 @@ graph TD
     classDef datastore fill:#ffebee,stroke:#c62828,stroke-width:1px,color:#000;
     classDef server fill:#eceff1,stroke:#37474f,stroke-width:1px,color:#000;
 
-    class A,D ui;
-    class B,C logic;
+    class A ui;
+    class B,C,D logic;
     class E,F adapter;
     class G,J datastore;
     class H,I server;
@@ -55,9 +55,9 @@ graph TD
 
 ## 2. Isomorphic Code and Shared Libraries
 
-A key goal of this architecture is to maximize code reuse between the client (browser) and server (Node.js) environments. This is achieved by writing environment-agnostic business logic in shared modules. These modules will be written as standard ES Modules, which are supported in both modern browsers and Node.js.
+A key goal of this architecture is to maximize code reuse between the client (browser) and server (Node.js) environments. This is achieved by writing environment-agnostic business logic in shared modules. These modules will be written as standard ES Modules, which are supported in both modern browsers and Node.js. To ensure portability, these shared modules will not directly access environment-specific global APIs like the browser's `window` or `document` objects, or Node.js's `fs` module. Any necessary interaction with the environment will be handled by dedicated modules injected into the core logic.
 
-The following table identifies the core modules that will be shared. These modules will be designed to be pure, without direct dependencies on browser-specific APIs (like the DOM) or server-specific APIs (like the file system).
+The following table identifies the core modules that will be shared.
 
 | Shared Module (from `lib/core/`) | Description                                                               | Key Responsibilities                                                                                          |
 | -------------------------------- | ------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
@@ -70,7 +70,7 @@ These shared modules will form the heart of the application's business logic, en
 
 ## 3. Message Bus and Definitions
 
-Communication between the DAL and the data adapters is handled via a namespaced message bus. This ensures clarity and prevents event collisions.
+Communication between the DAL and the data adapters is handled via a namespaced message bus.
 
 | Message Name                   | Direction      | Payload                                  | Description                                                                  |
 | ------------------------------ | -------------- | ---------------------------------------- | ---------------------------------------------------------------------------- |
@@ -92,10 +92,11 @@ Communication between the DAL and the data adapters is handled via a namespaced 
 
 ### IndexedDB Mapping
 
-The IndexedDB database will be simple, containing two main object stores:
+The IndexedDB database will be simple, containing three main object stores:
 
 - `configs`: Stores user configuration objects.
 - `cardStats`: Stores learning statistics for each card.
+- `unresolved_conflicts`: Stores conflict data that the user has not yet resolved.
 
 ### Relational Database (Server-side) Mapping
 
@@ -118,7 +119,58 @@ Connectivity is determined by a **heartbeat mechanism**. The application will pe
 
 ## 7. Conflict Resolution and Synchronization
 
-Synchronization relies on versioning to prevent data loss. Each record will have a `base_version` and a `new_version`. A conflict occurs if the server's version does not match the `base_version` sent by the client. Conflicts must be resolved by the user.
+To prevent data loss from simultaneous edits, a robust synchronization strategy is required. This strategy relies on versioning to reliably detect and resolve conflicts, with the user being the final arbiter in any dispute.
+
+### Data and Versioning Payload
+
+Each record sent to the server for synchronization will include not just the new data but also versioning information.
+
+```json
+{
+  "key": "card-A",
+  "data": { "prompt": "Hello", "answer": "Hola" },
+  "base_version": 4,
+  "new_version": 5
+}
+```
+
+- **`base_version`**: The version number of the record when the client last synced it. This tells the server what state the client _thinks_ the data was in before modification.
+- **`new_version`**: The new version number after the client's modifications.
+
+### Detailed Synchronization and Conflict Resolution Flow
+
+1.  **Client Initiates Sync:** When the application comes online, it gathers all locally modified records from IndexedDB and sends them to the server in a single batch request.
+
+2.  **Server Conflict Detection:** For each record in the batch, the server performs the following check:
+    - It retrieves its current version of the record (`server_version`).
+    - It compares the `base_version` from the client with the `server_version`.
+    - **No Conflict:** If `client.base_version == server_version`, the server updates its record and version, then marks the item as successfully synced.
+    - **Conflict Detected:** If `client.base_version != server_version`, a conflict exists. The server **does not** modify its data for this record. It marks the item as conflicted.
+
+3.  **Server Responds:** The server sends a response to the client detailing the outcome of the batch sync. This response includes a list of successfully synced items and a list of all conflicting items. For each conflict, the server provides the client's attempted data alongside the server's current data and version.
+
+4.  **Client Surfaces Conflicts to User:** The client's business logic receives the conflict list.
+    - It triggers a UI event to display a prominent, non-blocking notification (e.g., a toast or a banner) that says "Sync conflicts detected. Please review."
+    - A persistent badge or indicator will also appear on the sync/status icon in the main UI.
+
+5.  **Conflict Resolution UI:** When the user clicks the notification or the sync icon, a modal dialog will appear.
+    - This modal will list each conflicting item (e.g., by card name or configuration name).
+    - Clicking an item in the list will display a clear, side-by-side view: "Your Version (Offline)" on the left, and "Server's Version" on the right, with the differing fields highlighted.
+    - Below the comparison, two buttons will be presented:
+      - **"Keep My Changes"**: This option will discard the server's version and re-submit the user's local version to the server for saving.
+      - **"Use Server's Changes"**: This option will discard the user's local, offline changes. The client will then fetch the server's version and update its local IndexedDB store.
+    - A manual merge option is considered out of scope for the initial implementation due to its complexity.
+
+6.  **Handling Unresolved Conflicts:** If the user goes offline or closes the modal before resolving all conflicts:
+    - The list of unresolved conflicts (including the server's version of the data for each) will be stored locally in a dedicated IndexedDB object store (`unresolved_conflicts`).
+    - The sync icon will remain in a "conflict" state.
+    - The user will be prompted to resolve the remaining items the next time they are online and initiate a sync.
+
+7.  **Finalizing Resolution:** Once the user makes a choice in the UI, the client takes the appropriate action.
+    - If "Keep My Changes" is chosen, the client sends a new request to the server for that specific item. This time, the `base_version` will be the `server_version` that was returned in the conflict response, ensuring the update succeeds.
+    - If "Use Server's Changes" is chosen, the client updates its local IndexedDB with the server's data and version.
+
+This process ensures that no data is ever lost automatically and gives the user full control over resolving discrepancies.
 
 ## 8. End-to-End User Flow Scenarios
 
@@ -193,4 +245,5 @@ sequenceDiagram
 4. **Implement the Message Bus.**
 5. **Create Data Store Adapters (IndexedDB and HTTP).**
 6. **Refactor Business Logic to use the DAL.**
-7. **Update Server-side Logic to handle data versioning.**
+7. **Update Server-side Logic to handle data versioning and the new conflict response.**
+8. **Implement the conflict resolution UI and client-side logic.**
