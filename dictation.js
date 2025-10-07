@@ -28,7 +28,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const textTitleInput = document.getElementById('text-title-input');
     const textContentTextarea = document.getElementById('text-content-textarea');
     const saveTextBtn = document.getElementById('save-text-btn');
-    const readAloudTextBtn = document.getElementById('read-aloud-text-btn');
     const repeatWordBtn = document.getElementById('repeat-word-btn');
     const revealTextBtn = document.getElementById('reveal-text-btn');
     const configToggleBtn = document.getElementById('config-toggle-btn');
@@ -44,6 +43,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let originalTitle = null; // Used for editing/renaming texts
     let tabKeyPressCount = 0;
     let speechQueue = [];
+    const spokenWordIndexes = new Set();
 
     // --- Function Declarations (ordered to prevent no-use-before-define) ---
 
@@ -202,16 +202,10 @@ document.addEventListener('DOMContentLoaded', () => {
         const isHiddenMode = hideTextCheckbox.checked;
 
         let lastCorrectIndex = -1;
-        let diffShown = false;
+        let firstErrorFound = null;
 
-        // At the start of each check, reset the diff/speaker icon state in hidden mode.
-        if (isHiddenMode) {
-            diffDisplay.classList.add('hidden');
-            speakerIcon.classList.remove('hidden');
-        }
-
+        // Part 1: Determine correctness of each word and find the first error
         sourceSpans.forEach(span => span.classList.remove('correct', 'incorrect', 'current'));
-
         sourceSpans.forEach((span, index) => {
             if (index < inputWords.length) {
                 const isLastWord = index === inputWords.length - 1;
@@ -219,11 +213,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 const normalizedInput = normalizeWord(inputWords[index]);
 
                 let isIncorrect = false;
-                if (isLastWord && !isInputComplete) {
+                if (isLastWord && !isInputComplete) { // Typing last word
                     if (!normalizedSource.startsWith(normalizedInput)) {
                         isIncorrect = true;
                     }
-                } else {
+                } else { // Word is complete
                     if (normalizedInput !== normalizedSource) {
                         isIncorrect = true;
                     }
@@ -231,16 +225,19 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 if (isIncorrect) {
                     span.classList.add('incorrect');
-                    // If it's the first error and we're hidden, show the diff.
-                    if (isHiddenMode && !diffShown) {
-                        const diffHtml = createDiffHtml(inputWords[index], sourceWords[index]);
-                        diffDisplay.innerHTML = '';
-                        diffDisplay.appendChild(diffHtml);
-                        diffDisplay.classList.remove('hidden');
-                        speakerIcon.classList.add('hidden');
-                        diffShown = true;
+                    if (!firstErrorFound) {
+                        firstErrorFound = { input: inputWords[index], source: sourceWords[index] };
                     }
-                } else {
+                } else { // Word is correct so far
+                    const isExactMatch = normalizeWord(inputWords[index]) === normalizeWord(sourceWords[index]);
+
+                    // Speak on exact match, but only once.
+                    if (readOnCorrectCheckbox.checked && isExactMatch && !spokenWordIndexes.has(index)) {
+                        speakWord(stripPunctuation(sourceWords[index]));
+                        spokenWordIndexes.add(index);
+                    }
+
+                    // A word is marked 'correct' for highlighting purposes if it's a completed word
                     if (!isLastWord || isInputComplete) {
                         span.classList.add('correct');
                         lastCorrectIndex = index;
@@ -249,14 +246,28 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
 
+        // Part 2: Update the hidden mode display based on whether an error was found
+        if (isHiddenMode) {
+            if (firstErrorFound) {
+                const diffHtml = createDiffHtml(firstErrorFound.input, firstErrorFound.source);
+                diffDisplay.innerHTML = '';
+                diffDisplay.appendChild(diffHtml);
+                diffDisplay.classList.remove('hidden');
+                speakerIcon.classList.add('hidden');
+            } else {
+                // No errors found, show the speaker icon
+                diffDisplay.classList.add('hidden');
+                speakerIcon.classList.remove('hidden');
+            }
+        }
+
+        // Part 3: Update current word index, handle audio, and save session
         const newWordIndex = lastCorrectIndex + 1;
         const hasAdvanced = newWordIndex > currentWordIndex;
         currentWordIndex = newWordIndex;
 
-        if (hasAdvanced) {
-            if (readOnCorrectCheckbox.checked && currentWordIndex > 0) {
-                speakWord(stripPunctuation(sourceWords[currentWordIndex - 1]));
-            }
+        // "Read next word" should only trigger when a complete word has been entered.
+        if (hasAdvanced && isInputComplete) {
             if (readNextCheckbox.checked) {
                 speakNextWord();
             }
@@ -281,6 +292,7 @@ document.addEventListener('DOMContentLoaded', () => {
             // Clear any previous diff display when loading new text
             diffDisplay.innerHTML = '';
             diffDisplay.classList.add('hidden');
+            spokenWordIndexes.clear();
 
             sourceWords = texts[title].split(' ').filter(w => w.length > 0);
             currentWordIndex = 0;
@@ -446,7 +458,6 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     writingInput.addEventListener('input', handleContinuousInput);
-    readAloudTextBtn.addEventListener('click', speakText);
     repeatWordBtn.addEventListener('click', repeatCurrentWord);
 
     textDisplay.addEventListener('click', (event) => {
@@ -498,7 +509,9 @@ document.addEventListener('DOMContentLoaded', () => {
             revealHiddenText();
         } else if (event.key === 'Escape') {
             event.preventDefault();
-            speakText();
+            hideTextCheckbox.checked = !hideTextCheckbox.checked;
+            toggleHideText();
+            saveConfig();
         }
     });
 
