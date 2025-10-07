@@ -31,7 +31,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const repeatWordBtn = document.getElementById('repeat-word-btn');
     const revealTextBtn = document.getElementById('reveal-text-btn');
     const toggleHiddenBtn = document.getElementById('toggle-hidden-btn');
-    const configPanel = document.getElementById('config-panel');
     const resetSettingsBtn = document.getElementById('reset-settings-btn');
     const notificationArea = document.getElementById('notification-area');
 
@@ -62,7 +61,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 title: textSelect.value,
                 userInput: writingInput.value
             };
-            console.log('Saving session:', sessionData);
             sessionStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(sessionData));
         }
     };
@@ -489,6 +487,12 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
+    const toggleHiddenTextMode = () => {
+        hideTextCheckbox.checked = !hideTextCheckbox.checked;
+        toggleHideText();
+        saveConfig();
+    };
+
     document.addEventListener('keydown', (event) => {
         if (event.ctrlKey && event.key.toLowerCase() === 's') {
             event.preventDefault();
@@ -497,18 +501,12 @@ document.addEventListener('DOMContentLoaded', () => {
             revealHiddenText();
         } else if (event.key === 'Escape') {
             event.preventDefault();
-            hideTextCheckbox.checked = !hideTextCheckbox.checked;
-            toggleHideText();
-            saveConfig();
+            toggleHiddenTextMode();
         }
     });
 
     revealTextBtn.addEventListener('click', revealHiddenText);
-    toggleHiddenBtn.addEventListener('click', () => {
-        hideTextCheckbox.checked = !hideTextCheckbox.checked;
-        toggleHideText();
-        saveConfig();
-    });
+    toggleHiddenBtn.addEventListener('click', toggleHiddenTextMode);
 
     const initializeApp = async () => {
         await loadConfig();
@@ -516,14 +514,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Restore the previous session if it exists
         const savedSession = loadSession();
-        console.log('Loaded session from sessionStorage:', savedSession);
         if (savedSession && texts[savedSession.title]) {
-            console.log('Session is valid, restoring for text:', savedSession.title);
             textSelect.value = savedSession.title;
             // Directly call displayText with the saved user input to restore the state
             await displayText(savedSession.userInput);
-        } else {
-            console.log('No valid session found to restore.');
         }
     };
 
