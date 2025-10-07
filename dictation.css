@@ -62,6 +62,8 @@ body {
     border-radius: 8px;
     border: 1px solid var(--medium-gray);
     resize: none; /* Disable manual resizing */
+    background-color: transparent; /* Match the display container */
+    box-sizing: border-box; /* Ensure padding is included in width/height */
 }
 
 .text-display-styling {
@@ -216,11 +218,13 @@ body {
 #speaker-icon {
     font-size: 5em;
     text-align: center;
-    color: var(--medium-gray);
+    color: rgba(128, 128, 128, 0.2); /* Make icon semi-transparent */
     position: absolute;
     top: 50%;
     left: 50%;
     transform: translate(-50%, -50%);
+    z-index: -1; /* Place it behind the text/diff */
+    pointer-events: none; /* Make it unclickable */
 }
 
 #text-display-container {

@@ -30,6 +30,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const saveTextBtn = document.getElementById('save-text-btn');
     const repeatWordBtn = document.getElementById('repeat-word-btn');
     const revealTextBtn = document.getElementById('reveal-text-btn');
+    const toggleHiddenBtn = document.getElementById('toggle-hidden-btn');
     const configToggleBtn = document.getElementById('config-toggle-btn');
     const configPanel = document.getElementById('config-panel');
     const closeConfigBtn = document.getElementById('close-config-btn');
@@ -516,6 +517,11 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     revealTextBtn.addEventListener('click', revealHiddenText);
+    toggleHiddenBtn.addEventListener('click', () => {
+        hideTextCheckbox.checked = !hideTextCheckbox.checked;
+        toggleHideText();
+        saveConfig();
+    });
 
     const initializeApp = async () => {
         await loadConfig();
