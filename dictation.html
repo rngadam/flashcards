@@ -28,7 +28,7 @@
             </div>
             <div id="hotkey-bar">
                 <button id="read-aloud-btn">Read Aloud (Ctrl+S)</button>
-                <button id="repeat-word-btn">Repeat Word (F)</button>
+                <button id="repeat-word-btn">Repeat Word (Tab)</button>
             </div>
         </main>
     </div>
@@ -66,30 +66,25 @@
         </div>
         <div class="config-section">
             <h3>My Texts</h3>
-            <div id="text-list-container">
-                <select id="text-select" size="8"></select>
-            </div>
-            <div class="sidebar-buttons">
-                <button id="new-text-btn">New</button>
-                <button id="edit-text-btn">Edit</button>
-                <button id="delete-text-btn">Delete</button>
+            <div class="master-detail-container">
+                <div id="text-list-container">
+                    <select id="text-select" size="8"></select>
+                </div>
+                <div id="text-editor-container">
+                    <input type="text" id="text-title-input" placeholder="Title">
+                    <textarea id="text-content-textarea" rows="8" placeholder="Content..."></textarea>
+                    <div class="editor-buttons">
+                        <button id="new-text-btn">New</button>
+                        <button id="save-text-btn">Save</button>
+                        <button id="delete-text-btn">Delete</button>
+                    </div>
+                </div>
             </div>
         </div>
         <button id="close-config-btn">Close</button>
     </div>
 
     <div id="notification-area" class="hidden"></div>
-
-    <div id="modal" class="modal">
-            <div class="modal-content">
-                <span class="close-button">&times;</span>
-                <h2>Text Editor</h2>
-                <input type="text" id="text-title-input" placeholder="Title">
-                <textarea id="text-content-textarea" rows="10" cols="50"></textarea>
-                <button id="save-text-btn">Save</button>
-            </div>
-        </div>
-    </div>
     <script type="module" src="dictation.js"></script>
 </body>
 </html>
