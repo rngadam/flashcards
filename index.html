@@ -21,6 +21,8 @@
         </div>
         <div id="skill-selector-filter" class="column-checkbox-group">
             <button id="filter-toggle-button" class="filter-toggle-button" title="Enable/Disable Word Filter">Filter</button><span id="filter-status-indicator" class="filter-status"></span>
+            <span id="sync-status-indicator" class="sync-status"></span>
+            <span id="conflict-badge" class="badge hidden">!</span>
         </div>
       </div>
       <div class="desktop-only-buttons">
@@ -53,6 +55,8 @@
                 </div>
                 <div id="mobile-skill-selector-filter" class="column-checkbox-group">
                     <button id="mobile-filter-toggle-button" class="filter-toggle-button" title="Enable/Disable Word Filter">Filter</button><span id="mobile-filter-status-indicator" class="filter-status"></span>
+                    <span id="mobile-sync-status-indicator" class="sync-status"></span>
+                    <span id="mobile-conflict-badge" class="badge hidden">!</span>
                 </div>
             </div>
             <button id="mobile-dashboard-button">📊 Dashboard</button>
@@ -418,6 +422,32 @@
 
             <div class="button-container">
                 <button id="save-transform-button">Apply</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="conflict-resolution-modal" class="modal-overlay hidden">
+        <div id="conflict-resolution-panel">
+            <button id="close-conflict-resolution-button">X</button>
+            <h2>Conflict Resolution</h2>
+            <p>The following items have conflicting changes between your local version and the server's version. Please choose which version to keep.</p>
+            <div id="conflict-list">
+                <!-- Conflicting items will be populated here by JS -->
+            </div>
+            <div id="conflict-comparison" class="hidden">
+                <h3 id="conflict-item-key"></h3>
+                <div class="comparison-container">
+                    <div class="version-panel">
+                        <h4>Your Version (Offline)</h4>
+                        <pre id="client-version-data"></pre>
+                        <button id="keep-client-version">Keep My Changes</button>
+                    </div>
+                    <div class="version-panel">
+                        <h4>Server's Version</h4>
+                        <pre id="server-version-data"></pre>
+                        <button id="keep-server-version">Use Server's Changes</button>
+                    </div>
+                </div>
             </div>
         </div>
     </div>

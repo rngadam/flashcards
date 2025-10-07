@@ -219,41 +219,56 @@ app.get('/api/sync', ensureAuthenticated, async (req, res) => {
 // POST endpoint to bulk save user data
 app.post('/api/sync', ensureAuthenticated, async (req, res) => {
     const { configs, cardStats } = req.body;
+    const userId = req.user.id;
+    const synced = [];
+    const conflicts = [];
 
     if (!configs && !cardStats) {
         return res.status(400).json({ error: 'No data provided to sync' });
     }
 
-    const userId = req.user.id;
-
     try {
         await db.run('BEGIN TRANSACTION');
 
-        const upsert = async (type, key, value) => {
-            const valueJson = JSON.stringify(value);
-            await db.run(`
-                INSERT INTO user_data (user_id, type, key, value, updated_at)
-                VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
-                ON CONFLICT(user_id, type, key) DO UPDATE SET
-                    value = excluded.value,
-                    updated_at = CURRENT_TIMESTAMP
-            `, [userId, type, key, valueJson]);
+        const processItems = async (items, type) => {
+            for (const key in items) {
+                const clientItem = items[key];
+                const serverItemRaw = await db.get('SELECT value FROM user_data WHERE user_id = ? AND type = ? AND key = ?', [userId, type, key]);
+                const serverItem = serverItemRaw ? JSON.parse(serverItemRaw.value) : null;
+                const serverVersion = serverItem ? serverItem.version : 0;
+
+                if (clientItem.base_version === serverVersion) {
+                    const valueJson = JSON.stringify({ data: clientItem.data, version: clientItem.new_version });
+                    await db.run(`
+                        INSERT INTO user_data (user_id, type, key, value, updated_at)
+                        VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+                        ON CONFLICT(user_id, type, key) DO UPDATE SET
+                            value = excluded.value,
+                            updated_at = CURRENT_TIMESTAMP
+                    `, [userId, type, key, valueJson]);
+                    synced.push(key);
+                } else {
+                    conflicts.push({
+                        key,
+                        client_version: clientItem.base_version,
+                        server_version: serverVersion,
+                        client_data: clientItem.data,
+                        server_data: serverItem ? serverItem.data : null,
+                    });
+                }
+            }
         };
 
         if (configs) {
-            for (const key in configs) {
-                await upsert('configs', key, configs[key]);
-            }
+            await processItems(configs, 'configs');
         }
 
         if (cardStats) {
-            for (const key in cardStats) {
-                await upsert('cardStat', key, cardStats[key]);
-            }
+            await processItems(cardStats, 'cardStat');
         }
 
         await db.run('COMMIT');
-        res.status(200).json({ message: 'Data saved successfully' });
+        res.status(200).json({ synced, conflicts });
     } catch (error) {
         await db.run('ROLLBACK');
         console.error('Error saving user data:', error);

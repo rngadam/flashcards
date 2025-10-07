@@ -2,16 +2,23 @@
 
 // --- Module Imports ---
 import { detectColumnLanguages } from './lib/detect-column-languages.js';
+import * as dal from './lib/core/dal.js';
+import { init as initDBAdapter } from './lib/core/indexeddb-adapter.js';
+import { init as initHttpAdapter } from './lib/core/http-adapter.js';
+import { VERIFICATION_METHODS } from './lib/skill-utils.js';
+
 
 // --- UI and Core Logic Imports ---
 import dom from './lib/ui/dom-elements.js';
 import { getState, updateState, popFromViewHistory, COLUMN_ROLES } from './lib/core/state.js';
 import { showTopNotification, formatTimeAgo, formatTimeDifference } from './lib/ui/ui-helpers.js';
-import { initConfigManager, saveCurrentConfig, saveConfig, resetDeckStats, loadSelectedConfig, populateConfigSelector, loadInitialConfigs, exportSQLite, exportAllData, importAllData } from './lib/core/config-manager.js';
-import { initSkillManager, renderSkillsList, openSkillDialog, saveSkill, deleteSkill, deleteAllSkills, addDefaultSkill, createPresetSkills, exportSkills, populateAllSkillSelectors, getSelectedSkills, getActiveSkills, saveTransform } from './lib/core/skill-manager.js';
-import { initCardLogic, getCardKey, getRetentionScore, createDefaultSkillStats, getSanitizedStats, getAllCardStats, markCardAsKnown, getTimeToDue, getCurrentSkillConfig, getTextForRoles, renderSkillMastery, displayCard, flipCard, showNextCard, showPrevCard, saveCardStats } from './lib/core/card-logic.js';
+import { initConfigManager, saveCurrentConfig, saveConfig, loadSelectedConfig } from './lib/shared/config-manager.js';
+import { initSkillManager, saveSkill, deleteSkill, deleteAllSkills, addDefaultSkill, createPresetSkills, getActiveSkills } from './lib/shared/skill-manager.js';
+import { initCardLogic, getCardKey, getRetentionScore, createDefaultSkillStats, getSanitizedStats, getAllCardStats, markCardAsKnown, getTimeToDue, getCurrentSkillConfig, getTextForRoles, displayCard, flipCard, showNextCard, showPrevCard, saveCardStats } from './lib/shared/card-logic.js';
 import { initVerification, checkWritingAnswer, generateMultipleChoiceOptions, checkMultipleChoiceAnswer, toggleVoiceRecognition, startVoiceRecognition, stopVoiceRecognition } from './lib/core/verification.js';
 import { initAuth, syncToServer, checkAuthStatus } from './lib/core/auth.js';
+import { initUIManager, renderSkillsList, openSkillDialog, saveTransform, populateAllSkillSelectors, getSelectedSkills, populateConfigSelector, renderCardFaces, renderSkillMastery, isAudioOnly } from './lib/ui/ui-manager.js';
+import { init as initConflictResolution, showConflictResolutionModal } from './lib/ui/conflict-resolution.js';
 
 
 /**
@@ -25,32 +32,42 @@ function initializeApp() {
     // Direct reference to the state object for frequent read access.
     const state = getState();
 
+    // --- Initialize Adapters ---
+    initDBAdapter();
+    initHttpAdapter();
+    window.showConflictResolutionModal = showConflictResolutionModal;
+
+
+    function resolveConflictCallback(choice, conflict) {
+        console.log('Resolving conflict:', choice, conflict);
+    }
+
     // --- Dependency Injection ---
     // Pass dependencies to each module that needs them.
     const dependencies = {
         dom,
         state,
+        updateState,
         showTopNotification,
+        handleSettingsChange,
+        // DAL functions
+        saveConfigs: (configs) => dal.saveConfig('flashcard-configs', configs),
+        loadConfigs: () => dal.loadConfig('flashcard-configs'),
+        saveLastConfig: (configName) => dal.saveConfig('flashcard-last-config', configName),
+        loadLastConfig: () => dal.loadConfig('flashcard-last-config'),
         // Config Manager deps
         syncToServer,
         loadData,
         parseData,
         showNextCard,
-        displayCard,
         addDefaultSkill,
-        renderSkillsList,
-        populateAllSkillSelectors,
         getCardKey,
         getAllCardStats,
-        getSelectedSkills,
-        setFilterEnabled,
-        updateFilterState,
-        updateFilterHighlights,
         // Skill Manager deps
-        handleSettingsChange,
-        updateState,
         // Card Logic deps
-        saveCardStats,
+        saveCardStats: dal.saveCardStats,
+        getCardStats: dal.loadCardStats,
+        setCardStats: dal.saveCardStats,
         startVoiceRecognition,
         stopVoiceRecognition,
         speak,
@@ -65,8 +82,13 @@ function initializeApp() {
         getLanguageForRole,
         getCurrentSkillConfig,
         // Auth deps
-        populateConfigSelector,
-        loadSelectedConfig,
+        showConflictResolutionModal,
+        // UI Manager deps
+        getRetentionScore,
+        getTimeToDue,
+        createDefaultSkillStats,
+        // Conflict Resolution deps
+        resolveConflictCallback,
     };
 
     initConfigManager(dependencies);
@@ -74,6 +96,8 @@ function initializeApp() {
     initCardLogic(dependencies);
     initVerification(dependencies);
     initAuth(dependencies);
+    initUIManager(dependencies);
+    initConflictResolution(dependencies);
 
 
     // --- UI Layout & Tab Switching ---
@@ -190,6 +214,36 @@ function initializeApp() {
         toggleFullscreen();
     });
 
+    function updateVerificationUI(skillConfig) {
+        dom.writingPracticeContainer.classList.add('hidden');
+        dom.multipleChoiceContainer.classList.add('hidden');
+        dom.voiceInputContainer.classList.add('hidden');
+        dom.iKnowButton.classList.remove('hidden');
+        dom.iDontKnowButton.classList.remove('hidden');
+        dom.nextCardButton.classList.remove('hidden');
+
+        if (skillConfig.verificationMethod === VERIFICATION_METHODS.TEXT) {
+            dom.writingPracticeContainer.classList.remove('hidden');
+            dom.writingPracticeContainer.classList.toggle('audio-only-writing', isAudioOnly(skillConfig));
+            dom.iKnowButton.classList.add('hidden');
+            dom.iDontKnowButton.classList.add('hidden');
+            dom.nextCardButton.classList.add('hidden');
+            dom.writingInput.value = '';
+            dom.writingInput.disabled = false;
+            dom.writingInput.setAttribute('autocomplete', 'off');
+            dom.writingInput.focus();
+        } else if (skillConfig.verificationMethod === VERIFICATION_METHODS.MULTIPLE_CHOICE) {
+            dom.multipleChoiceContainer.classList.remove('hidden');
+            generateMultipleChoiceOptions();
+        } else if (skillConfig.verificationMethod === VERIFICATION_METHODS.VOICE) {
+            dom.voiceInputContainer.classList.remove('hidden');
+            dom.voiceInputFeedback.textContent = '';
+            dom.iKnowButton.classList.add('hidden');
+            dom.iDontKnowButton.classList.remove('hidden');
+            dom.nextCardButton.classList.add('hidden');
+        }
+    }
+
 
     // --- Core Action Event Listeners ---
     if (dom.loadDataButton) dom.loadDataButton.addEventListener('click', async () => {
@@ -202,13 +256,72 @@ function initializeApp() {
             showNextCard();
         }
     });
-    if (dom.saveConfigButton) dom.saveConfigButton.addEventListener('click', saveConfig);
+    if (dom.saveConfigButton) dom.saveConfigButton.addEventListener('click', () => {
+        const newConfigName = dom.configNameInput.value.trim();
+        const sourceConfigName = dom.configSelector.value;
+        const currentSettings = {
+            dataUrl: dom.dataUrlInput.value,
+            repetitionIntervals: dom.repetitionIntervalsTextarea.value,
+            activeSkills: getSelectedSkills(),
+            columnRoleAssignments: getColumnRoleAssignments(),
+            font: dom.fontSelector.value,
+            ttsRate: dom.ttsRateSlider.value,
+            ttsRateBase: dom.ttsRateBaseSlider.value,
+            disableAnimation: dom.disableAnimationCheckbox.checked,
+            multipleChoiceCount: dom.multipleChoiceCount.value,
+            voiceCorrectDelay: dom.voiceCorrectDelayInput.value,
+            filterIsEnabled: dom.enableFilterSettingsCheckbox.checked,
+            filterText: dom.filterTextarea.value,
+            filterAllowOverflow: dom.filterAllowOverflowCheckbox.checked
+        };
+        saveConfig(newConfigName, sourceConfigName, currentSettings);
+    });
+
     if (dom.resetStatsButton) dom.resetStatsButton.addEventListener('click', resetDeckStats);
-    if (dom.configSelector) dom.configSelector.addEventListener('change', () => loadSelectedConfig(dom.configSelector.value));
-    if (dom.flipCardButton) dom.flipCardButton.addEventListener('click', flipCard);
-    if (dom.nextCardButton) dom.nextCardButton.addEventListener('click', () => showNextCard());
-    if (dom.prevCardButton) dom.prevCardButton.addEventListener('click', showPrevCard);
-    if (dom.iKnowButton) dom.iKnowButton.addEventListener('click', async () => { await markCardAsKnown(true); await showNextCard(); });
+    if (dom.configSelector) dom.configSelector.addEventListener('change', () => {
+        loadSelectedConfig(dom.configSelector.value).then(result => {
+            if (result) {
+                const { config, cardData, headers } = result;
+                updateState({ cardData, headers });
+                updateSettingsUI(config);
+            }
+        });
+    });
+    if (dom.flipCardButton) dom.flipCardButton.addEventListener('click', () => {
+        flipCard().then(renderData => {
+            if (renderData) {
+                renderCardFaces(state.frontParts, state.backParts, renderData.skillConfig);
+            }
+        });
+    });
+    if (dom.nextCardButton) dom.nextCardButton.addEventListener('click', () => {
+        showNextCard().then(renderData => {
+            if (renderData) {
+                renderCardFaces(state.frontParts, state.backParts, renderData.skillConfig);
+                renderSkillMastery(renderData.stats);
+                updateVerificationUI(renderData.skillConfig);
+            }
+        });
+    });
+    if (dom.prevCardButton) dom.prevCardButton.addEventListener('click', () => {
+        showPrevCard().then(renderData => {
+            if (renderData) {
+                renderCardFaces(state.frontParts, state.backParts, renderData.skillConfig);
+                renderSkillMastery(renderData.stats);
+                updateVerificationUI(renderData.skillConfig);
+            }
+        });
+    });
+    if (dom.iKnowButton) dom.iKnowButton.addEventListener('click', async () => {
+        await markCardAsKnown(true);
+        showNextCard().then(renderData => {
+            if (renderData) {
+                renderCardFaces(state.frontParts, state.backParts, renderData.skillConfig);
+                renderSkillMastery(renderData.stats);
+                updateVerificationUI(renderData.skillConfig);
+            }
+        });
+    });
     if (dom.iDontKnowButton) dom.iDontKnowButton.addEventListener('click', handleIDontKnow);
 
     // --- Settings Event Listeners ---
@@ -219,15 +332,39 @@ function initializeApp() {
         if (dom.card) dom.card.classList.toggle('no-animation', dom.disableAnimationCheckbox.checked);
     });
 
+    function getColumnRoleAssignments() {
+        const columnRoleAssignments = {};
+        dom.columnRolesContainer.querySelectorAll('select').forEach(select => {
+            columnRoleAssignments[select.dataset.columnIndex] = select.value;
+        });
+        return columnRoleAssignments;
+    }
+
     function handleSettingsChange() {
         clearTimeout(window.saveConfigTimeout);
         window.saveConfigTimeout = setTimeout(async () => {
-            const success = await saveCurrentConfig();
+            const configName = dom.configSelector.value;
+            const configData = {
+                configName,
+                dataUrl: dom.dataUrlInput.value,
+                repetitionIntervals: dom.repetitionIntervalsTextarea.value,
+                activeSkills: getSelectedSkills(),
+                columnRoleAssignments: getColumnRoleAssignments(),
+                font: dom.fontSelector.value,
+                ttsRate: dom.ttsRateSlider.value,
+                ttsRateBase: dom.ttsRateBaseSlider.value,
+                disableAnimation: dom.disableAnimationCheckbox.checked,
+                multipleChoiceCount: dom.multipleChoiceCount.value,
+                voiceCorrectDelay: dom.voiceCorrectDelayInput.value,
+                filterIsEnabled: dom.enableFilterSettingsCheckbox.checked,
+                filterText: dom.filterTextarea.value,
+                filterAllowOverflow: dom.filterAllowOverflowCheckbox.checked
+            };
+            const success = await saveCurrentConfig(configData);
             if (success) {
-                console.log(`Auto-saved config '${dom.configSelector.value}'`);
-                const configName = dom.configSelector.value;
-                const configData = { configs: { [configName]: state.configs[configName] } };
-                await syncToServer(configData);
+                console.log(`Auto-saved config '${configName}'`);
+                const syncData = { configs: { [configName]: state.configs[configName] } };
+                await syncToServer(syncData);
             }
         }, 500);
     }
@@ -254,7 +391,11 @@ function initializeApp() {
             const skillId = e.target.closest('.skill-item')?.dataset.skillId;
             if (!skillId) return;
             if (e.target.matches('.edit-skill-button')) openSkillDialog(skillId);
-            if (e.target.matches('.delete-skill-button')) deleteSkill(skillId);
+            if (e.target.matches('.delete-skill-button')) {
+                if (confirm('Are you sure you want to delete this skill?')) {
+                    deleteSkill(skillId);
+                }
+            }
         });
         Sortable.create(dom.skillsList, {
             animation: 150,
@@ -273,7 +414,25 @@ function initializeApp() {
     if (dom.skillVerificationMethod) dom.skillVerificationMethod.addEventListener('change', (e) => {
         dom.skillValidationColumn.disabled = e.target.value === 'none';
     });
-    if (dom.saveSkillButton) dom.saveSkillButton.addEventListener('click', saveSkill);
+    if (dom.saveSkillButton) dom.saveSkillButton.addEventListener('click', () => {
+        const skillData = {
+            editingSkillId: dom.editingSkillIdInput.value,
+            transientSkill: state.transientSkill,
+            name: dom.skillNameInput.value.trim(),
+            verificationMethod: dom.skillVerificationMethod.value,
+            validationColumn: dom.skillValidationColumn.value,
+            ttsFrontColumn: dom.skillTtsFrontColumn.value,
+            ttsBackColumn: dom.skillTtsBackColumn.value,
+            ttsOnHotkeyOnly: dom.skillTtsOnHotkeyOnly.checked,
+            front: getSelectedRoles(dom.skillFrontColumns),
+            back: getSelectedRoles(dom.skillBackColumns)
+        };
+        saveSkill(skillData).then(() => {
+            renderSkillsList();
+            populateAllSkillSelectors();
+            dom.skillConfigModal.classList.add('hidden');
+        });
+    });
 
     // --- Transform Modal Event Listeners ---
     if (dom.closeTransformButton) dom.closeTransformButton.addEventListener('click', () => dom.textTransformModal.classList.add('hidden'));
@@ -328,7 +487,7 @@ function initializeApp() {
             updateToggleAllState(dom.skillSelectorCheckboxes);
             updateToggleAllState(dom.mobileSkillSelectorCheckboxes);
 
-            await saveCurrentConfig();
+            await handleSettingsChange();
             if (state.cardData.length > 0 && state.currentCardIndex < state.cardData.length) {
                 const cardKey = getCardKey(state.cardData[state.currentCardIndex]);
                 const stats = await getSanitizedStats(cardKey);
@@ -359,7 +518,7 @@ function initializeApp() {
         const currentConfig = state.configs[dom.configSelector.value];
         if (!currentConfig) return;
         setFilterEnabled(!currentConfig.filterIsEnabled);
-        saveCurrentConfig();
+        handleSettingsChange();
         showNextCard();
     }
     if (dom.filterToggleButton) dom.filterToggleButton.addEventListener('click', toggleFilter);
@@ -367,7 +526,7 @@ function initializeApp() {
 
     async function handleSettingsFilterToggle(event) {
         setFilterEnabled(event.target.checked);
-        await saveCurrentConfig();
+        await handleSettingsChange();
         showNextCard();
     }
     if (dom.enableFilterSettingsCheckbox) dom.enableFilterSettingsCheckbox.addEventListener('change', handleSettingsFilterToggle);
@@ -658,7 +817,7 @@ function initializeApp() {
         updateState({ activeFilterWords: words });
         setFilterEnabled(true);
         updateFilterState('learning');
-        await saveCurrentConfig();
+        await handleSettingsChange();
         showTopNotification(`Filter applied and saved. Found ${words.size} unique words.`, 'success');
         updateFilterHighlights();
         showNextCard();
@@ -669,7 +828,7 @@ function initializeApp() {
         setFilterEnabled(false);
         if (dom.filterTextarea) dom.filterTextarea.value = '';
         updateFilterState('off');
-        await saveCurrentConfig();
+        await handleSettingsChange();
         showTopNotification('Filter cleared and saved.', 'success');
         updateFilterHighlights();
         showNextCard();
@@ -914,6 +1073,32 @@ function initializeApp() {
 
 
     // --- Initial Load ---
+    async function loadInitialConfigs() {
+        console.log("loadInitialConfigs called");
+        try {
+            const savedConfigs = await dal.loadConfig('flashcard-configs');
+            if (savedConfigs && savedConfigs.value) {
+                updateState({ configs: savedConfigs.value });
+                populateConfigSelector();
+            }
+
+            const lastConfig = await dal.loadConfig('flashcard-last-config');
+            if (lastConfig && lastConfig.value && state.configs[lastConfig.value]) {
+                dom.configSelector.value = lastConfig.value;
+                await loadSelectedConfig(lastConfig.value);
+            } else {
+                if (dom.settingsModal) {
+                    dom.settingsModal.classList.remove('hidden');
+                }
+            }
+        } catch (error) {
+            console.error('Error loading initial configs from DAL:', error);
+            if (dom.settingsModal) {
+                dom.settingsModal.classList.remove('hidden');
+            }
+        }
+    }
+
     function loadVoices() {
         if (!('speechSynthesis' in window)) return;
         const setVoices = () => updateState({ voices: speechSynthesis.getVoices() });
@@ -924,7 +1109,6 @@ function initializeApp() {
     }
 
     loadVoices();
-    populateAllSkillSelectors();
     loadInitialConfigs().then(() => {
         checkAuthStatus();
     });
