@@ -11,7 +11,7 @@ The core of this proposal is the introduction of a **Data Abstraction Layer (DAL
 
 ### Component Diagram
 
-This diagram illustrates the major components and their relationships.
+This diagram illustrates the major components and their relationships. The communication between the `WebSocket/HTTP Adapter` and the `NodeJS API Server` will be implemented using HTTP requests (`POST /api/sync`) initially. The bidirectional arrow indicates that while the current implementation is request-response, the architecture is designed to accommodate WebSockets for real-time communication in the future.
 
 ```mermaid
 graph TD
@@ -21,7 +21,7 @@ graph TD
         C[Data Abstraction Layer - DAL]
         D[Message Bus]
         E[IndexedDB Adapter]
-        F[WebSocket/HTTP Adapter]
+        F[HTTP Adapter]
         G[IndexedDB]
     end
 
@@ -37,9 +37,8 @@ graph TD
     D --> E
     D --> F
     E --> G
-    F <--> H
-    H --> I
-    I --> J
+    F -- HTTP Requests --> H
+    H -- HTTP Responses --> F
 
     style B fill:#c8e6c9,stroke:#333,stroke-width:2px
     style C fill:#c8e6c9,stroke:#333,stroke-width:2px
@@ -58,7 +57,7 @@ Communication between the DAL and the data adapters is handled via a namespaced 
 | `data:card:stats:load`       | DAL -> Adapter | `{ key: string }`                           | Request to load the statistics for a specific card.                            |
 | `data:card:stats:load:success`| Adapter -> DAL | `{ key: string, value: object }`            | Response when card stats are loaded successfully.                            |
 | `data:card:stats:save`       | DAL -> Adapter | `{ key: string, value: object }`            | Request to save the statistics for a specific card.                            |
-| `data:card:stats:save:success`| Adapter -> DAL | `{ key:string, value: object }`             | Response when card stats are saved successfully.                             |
+| `data:card:stats:save:success`| Adapter -> DAL | `{ key: string, value: object }`            | Response when card stats are saved successfully.                             |
 | `data:sync:all:load`         | DAL -> Adapter | `null`                                      | Request to load all user data (configs and stats) for initial sync.            |
 | `data:sync:all:load:success` | Adapter -> DAL | `{ configs: object, cardStats: object }`    | Response with all user data.                                                 |
 | `data:sync:all:save`         | DAL -> Adapter | `{ configs: object, cardStats: object }`    | Request to save all user data in a bulk operation.                           |
@@ -70,92 +69,69 @@ Communication between the DAL and the data adapters is handled via a namespaced 
 This section details how the data payloads from the message bus map onto the underlying storage mechanisms.
 
 ### IndexedDB Mapping
-The IndexedDB database will be simple, containing two main object stores to mirror the data types managed by the application:
+The IndexedDB database will be simple, containing two main object stores:
 *   `configs`: Stores user configuration objects.
 *   `cardStats`: Stores learning statistics for each card.
 
-For a message like `data:config:save` with a payload of `{ key: 'my-deck-config', value: { ... } }`, the IndexedDB adapter will perform the following operation:
-*   **Database:** `flashcardsDB`
-*   **Object Store:** `configs`
-*   **Action:** `put()`
-*   **Key:** `'my-deck-config'`
-*   **Value:** `{ "value": { ... }, "_version": 1 }`
-
-The `_version` field is added to the stored object to support the synchronization strategy.
+For a message like `data:config:save`, the adapter will store an object that includes both the data and versioning metadata.
 
 ### Relational Database (Server-side) Mapping
-The existing `user_data` table in the SQLite database is well-suited for this model. The API Adapter will translate messages into `POST /api/sync` requests. The backend will then map the data to the `user_data` table as follows:
+The existing `user_data` table in the SQLite database is well-suited for this model. The API Adapter will translate messages into `POST /api/sync` requests.
 
 | Message Data    | `user_data` Table Column | Value                                                              |
 | --------------- | ------------------------ | ------------------------------------------------------------------ |
-| Data Type       | `type`                   | `'configs'` or `'cardStat'`                                        |
+| Data Type       | `type`                   | `'configs'` or `'cardStats'`                                       |
 | `key`           | `key`                    | The `key` from the message payload (e.g., `'my-deck-config'`).     |
-| `value`         | `value`                  | A JSON string of the object `{ "value": { ... }, "_version": 1 }`. |
+| `value`         | `value`                  | A JSON string of the object containing the data and versioning.    |
 | User            | `user_id`                | The ID of the authenticated user.                                  |
-
-The `value` column, which currently stores the configuration or stat object directly, will now store a new object that wraps the original `value` and includes the `_version` metadata. This change is necessary to support the conflict resolution mechanism. The server-side logic will need to be updated to handle this new structure.
 
 ## 4. Error Handling
 
-A robust error handling strategy is crucial. The DAL returns a Promise for every request, which will be rejected upon failure, allowing the business logic and UI to respond appropriately. When an adapter encounters an error, it will dispatch a namespaced `failure` event (e.g., `data:config:save:failure`) on the message bus.
-
-### Sequence Diagram: Error Handling Example
-
-```mermaid
-sequenceDiagram
-    participant BusinessLogic
-    participant DAL
-    participant MessageBus
-    participant ActiveAdapter
-    participant DataStore
-
-    BusinessLogic->>DAL: saveData('myConfig', {...})
-    DAL->>MessageBus: dispatch('data:config:save', ...)
-    MessageBus->>ActiveAdapter: on('data:config:save', ...)
-    ActiveAdapter->>DataStore: Save operation fails
-    DataStore-->>ActiveAdapter: Error
-    ActiveAdapter-->>MessageBus: dispatch('data:config:save:failure', {error})
-    MessageBus-->>DAL: on('data:config:save:failure')
-    DAL-->>BusinessLogic: Promise rejects with error
-    BusinessLogic->>BusinessLogic: Handle error (e.g., show UI notification)
-```
+The DAL returns a Promise for every request, which will be rejected upon failure. When an adapter encounters an error, it will dispatch a namespaced `failure` event (e.g., `data:config:save:failure`) on the message bus, allowing the business logic to handle it.
 
 ## 5. Online/Offline Mode Switching
 
-The application will use the standard `navigator.onLine` browser API and `online`/`offline` window events to detect connectivity changes. This status will be stored in the global application state. The DAL inspects this state to determine which adapter (API or IndexedDB) should handle a given request.
+To provide a reliable user experience, connectivity is determined by a **heartbeat mechanism** rather than the unreliable `navigator.onLine` API.
+
+*   **Heartbeat:** The application will periodically send a lightweight request to a dedicated server endpoint (e.g., `GET /api/health`).
+*   **Status Management:** If the heartbeat request succeeds, the application's state is set to `online`. If it fails (e.g., due to a timeout or network error), the state is set to `offline`. This state determines which data adapter (HTTP or IndexedDB) the DAL will use.
 
 ## 6. Conflict Resolution and Synchronization
 
-To prevent data loss, a robust synchronization strategy is required. This strategy relies on versioning each piece of data.
+To prevent data loss from simultaneous edits, the synchronization strategy must reliably detect and resolve conflicts.
 
-### Data Versioning
-Each record stored (both in IndexedDB and on the server) will include a version counter (`_version`). This is a simple integer that is incremented with every modification.
+### Data and Versioning Payload
+Each record will include a `base_version` and a `new_version` to ensure accurate conflict detection. The `value` stored in the database will be a JSON object containing the data and versioning metadata.
+
+```json
+{
+  "key": "card-A",
+  "data": { "prompt": "Hello", "answer": "Hola" },
+  "base_version": 4,
+  "new_version": 5
+}
+```
 
 ### Synchronization Flow
-Synchronization is triggered when the application comes online after a period of being offline.
+When the application comes online, it initiates a sync process for all locally modified data.
 
-1.  **Client Initiates Sync:** The client sends the server a list of all locally modified records along with their version numbers.
-2.  **Server Compares Versions:** The server iterates through the client's records and compares them with its own versions.
-3.  **Conflict Resolution Logic:**
-    *   **No Conflict (Client Ahead):** If the client's `_version` is greater than the server's, the server's record is outdated. The server updates its record with the client's data and new version number.
-    *   **No Conflict (Server Ahead):** If the server's `_version` is greater, the client's record is outdated. The server sends its version to the client, which updates its local record.
-    *   **No Conflict (New Data):** If the client has a record that the server doesn't (or vice versa), the record is simply copied to the other party.
-    *   **Conflict Detected:** If the server has also modified a record that the client modified offline, a conflict exists.
+1.  **Client Sends Sync Request:** For each modified record, the client sends the `key`, `data`, `base_version` (the version it started with), and `new_version` to the server.
+2.  **Server Conflict Detection:** The server compares the client's `base_version` with the version currently stored in its database (`server_version`).
+    *   **No Conflict:** If `client.base_version == server_version`, there is no conflict. The server updates its record with the client's data and sets its version to `client.new_version`.
+    *   **Conflict Detected:** If `client.base_version != server_version`, another client has already updated the record. This is a conflict.
 
 ### User-Driven Conflict Resolution
 When a conflict is detected, the application must not automatically overwrite data.
 
-1.  **Flag Conflicting Items:** The server returns a list of conflicting items to the client.
-2.  **Present to User:** The UI will display a modal showing the conflicts. For each conflict, the user will see their local version and the server's version side-by-side.
-3.  **User Resolves:** The user must choose which version to keep.
-4.  **Finalize Resolution:** Once the user makes a choice, the resolved version is saved with an incremented `_version` to both the client and the server, ensuring they are back in sync.
+1.  **Server Returns Conflicts:** The server rejects the sync request and returns a list of the conflicting items, including the server's current version of the data.
+2.  **UI Presents Conflicts:** The UI displays a modal showing the conflicts. For each item, the user sees their local version and the server's version side-by-side.
+3.  **User Resolves:** The user chooses which version to keep.
+4.  **Finalize Resolution:** Once resolved, the chosen version is sent back to the server with the correct `base_version` to finalize the update.
 
 ## 7. Implementation Plan
 
-The implementation will be broken down into the following steps:
-
 1.  **Create the Data Abstraction Layer (DAL).**
 2.  **Implement the Message Bus.**
-3.  **Create Data Store Adapters (IndexedDB and API).**
+3.  **Create Data Store Adapters (IndexedDB and HTTP).**
 4.  **Refactor Business Logic to use the DAL.**
-5.  **Update Server-side Logic to handle data versioning.**
+5.  **Update Server-side Logic to handle the new versioning and conflict detection scheme.**
