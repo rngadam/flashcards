@@ -53,7 +53,22 @@ graph TD
     class H,I server;
 ```
 
-## 2. Message Bus and Definitions
+## 2. Isomorphic Code and Shared Libraries
+
+A key goal of this architecture is to maximize code reuse between the client (browser) and server (Node.js) environments. This is achieved by writing environment-agnostic business logic in shared modules. These modules will be written as standard ES Modules, which are supported in both modern browsers and Node.js.
+
+The following table identifies the core modules that will be shared. These modules will be designed to be pure, without direct dependencies on browser-specific APIs (like the DOM) or server-specific APIs (like the file system).
+
+| Shared Module (from `lib/core/`) | Description                                                               | Key Responsibilities                                                                                          |
+| -------------------------------- | ------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| `card-logic.js`                  | Manages the core logic of spaced repetition and card selection.           | - Calculating card retention scores. <br>- Determining the next card to review based on SRS algorithms.       |
+| `skill-manager.js`               | Handles the creation, modification, and validation of skill definitions.  | - Creating new skill configurations. <br>- Validating the structure of skill objects.                         |
+| `config-manager.js`              | Manages user and deck configurations.                                     | - Loading and saving configuration objects. <br>- Providing default configurations.                           |
+| `validation.js` (new module)     | Contains pure functions for validating the structure of all data objects. | - Validating the shape of `cardStats` objects. <br>- Validating the shape of `configs` objects before saving. |
+
+These shared modules will form the heart of the application's business logic, ensuring that data is processed and validated consistently, regardless of where the code is running.
+
+## 3. Message Bus and Definitions
 
 Communication between the DAL and the data adapters is handled via a namespaced message bus. This ensures clarity and prevents event collisions.
 
@@ -73,7 +88,7 @@ Communication between the DAL and the data adapters is handled via a namespaced 
 | `data:sync:all:save:success`   | Adapter -> DAL | `null`                                   | Response when all data has been saved successfully.                          |
 | `*:failure`                    | Adapter -> DAL | `{ error: Error }`                       | Generic failure message. The `*` is a wildcard for any request message name. |
 
-## 3. Data Store Mapping
+## 4. Data Store Mapping
 
 ### IndexedDB Mapping
 
@@ -82,11 +97,9 @@ The IndexedDB database will be simple, containing two main object stores:
 - `configs`: Stores user configuration objects.
 - `cardStats`: Stores learning statistics for each card.
 
-For a message like `data:config:save`, the adapter will store an object that includes both the data and versioning metadata.
-
 ### Relational Database (Server-side) Mapping
 
-The existing `user_data` table in the SQLite database is well-suited for this model. The API Adapter will translate messages into `POST /api/sync` requests.
+The existing `user_data` table in the SQLite database is well-suited for this model.
 
 | Message Data | `user_data` Table Column | Value                                                           |
 | ------------ | ------------------------ | --------------------------------------------------------------- |
@@ -95,59 +108,21 @@ The existing `user_data` table in the SQLite database is well-suited for this mo
 | `value`      | `value`                  | A JSON string of the object containing the data and versioning. |
 | User         | `user_id`                | The ID of the authenticated user.                               |
 
-## 4. Error Handling
+## 5. Error Handling
 
-The DAL returns a Promise for every request, which will be rejected upon failure. When an adapter encounters an error, it will dispatch a namespaced `failure` event (e.g., `data:config:save:failure`) on the message bus, allowing the business logic to handle it.
+The DAL returns a Promise for every request, which will be rejected upon failure. When an adapter encounters an error, it will dispatch a namespaced `failure` event on the message bus.
 
-## 5. Online/Offline Mode Switching
+## 6. Online/Offline Mode Switching
 
-To provide a reliable user experience, connectivity is determined by a **heartbeat mechanism** rather than the unreliable `navigator.onLine` API.
+Connectivity is determined by a **heartbeat mechanism**. The application will periodically send a lightweight request to a server endpoint (e.g., `GET /api/health`). If the request succeeds, the state is `online`; otherwise, it's `offline`.
 
-- **Heartbeat:** The application will periodically send a lightweight request to a dedicated server endpoint (e.g., `GET /api/health`).
-- **Status Management:** If the heartbeat request succeeds, the application's state is set to `online`. If it fails (e.g., due to a timeout or network error), the state is set to `offline`. This state determines which data adapter (HTTP or IndexedDB) the DAL will use.
+## 7. Conflict Resolution and Synchronization
 
-## 6. Conflict Resolution and Synchronization
+Synchronization relies on versioning to prevent data loss. Each record will have a `base_version` and a `new_version`. A conflict occurs if the server's version does not match the `base_version` sent by the client. Conflicts must be resolved by the user.
 
-To prevent data loss from simultaneous edits, the synchronization strategy must reliably detect and resolve conflicts.
-
-### Data and Versioning Payload
-
-Each record will include a `base_version` and a `new_version` to ensure accurate conflict detection. The `value` stored in the database will be a JSON object containing the data and versioning metadata.
-
-```json
-{
-  "key": "card-A",
-  "data": { "prompt": "Hello", "answer": "Hola" },
-  "base_version": 4,
-  "new_version": 5
-}
-```
-
-### Synchronization Flow
-
-When the application comes online, it initiates a sync process for all locally modified data.
-
-1. **Client Sends Sync Request:** For each modified record, the client sends the `key`, `data`, `base_version` (the version it started with), and `new_version` to the server.
-2. **Server Conflict Detection:** The server compares the client's `base_version` with the version currently stored in its database (`server_version`).
-   - **No Conflict:** If `client.base_version == server_version`, there is no conflict. The server updates its record with the client's data and sets its version to `client.new_version`.
-   - **Conflict Detected:** If `client.base_version != server_version`, another client has already updated the record. This is a conflict.
-
-### User-Driven Conflict Resolution
-
-When a conflict is detected, the application must not automatically overwrite data.
-
-1. **Server Returns Conflicts:** The server rejects the sync request and returns a list of the conflicting items, including the server's current version of the data.
-2. **UI Presents Conflicts:** The UI displays a modal showing the conflicts. For each item, the user sees their local version and the server's version side-by-side.
-3. **User Resolves:** The user chooses which version to keep.
-4. **Finalize Resolution:** Once resolved, the chosen version is sent back to the server with the correct `base_version` to finalize the update.
-
-## 7. End-to-End User Flow Scenarios
-
-These diagrams illustrate the complete user flow from loading the application to completing a skills exercise in both offline and online modes.
+## 8. End-to-End User Flow Scenarios
 
 ### Scenario 1: Offline Mode (In-Browser Only)
-
-This sequence shows the application loading data from IndexedDB and saving progress locally.
 
 ```mermaid
 sequenceDiagram
@@ -180,8 +155,6 @@ sequenceDiagram
 
 ### Scenario 2: Online Mode (Client-Server Communication)
 
-This sequence shows the application syncing data with the server upon loading and saving progress back to the server.
-
 ```mermaid
 sequenceDiagram
     participant User
@@ -212,10 +185,12 @@ sequenceDiagram
     BusinessLogic->>UI: Display next card
 ```
 
-## 8. Implementation Plan
+## 9. Implementation Plan
 
-1. **Create the Data Abstraction Layer (DAL).**
-2. **Implement the Message Bus.**
-3. **Create Data Store Adapters (IndexedDB and HTTP).**
-4. **Refactor Business Logic to use the DAL.**
-5. **Update Server-side Logic to handle the new versioning and conflict detection scheme.**
+1. **Create a `lib/shared` directory for isomorphic modules.**
+2. **Refactor existing logic from `lib/core` into the new shared modules.**
+3. **Create the Data Abstraction Layer (DAL).**
+4. **Implement the Message Bus.**
+5. **Create Data Store Adapters (IndexedDB and HTTP).**
+6. **Refactor Business Logic to use the DAL.**
+7. **Update Server-side Logic to handle data versioning.**
