@@ -6,18 +6,20 @@ import * as dal from './lib/core/dal.js';
 import { init as initDBAdapter } from './lib/core/indexeddb-adapter.js';
 import { init as initHttpAdapter } from './lib/core/http-adapter.js';
 import { VERIFICATION_METHODS } from './lib/skill-utils.js';
+import { createDatabase } from './lib/db-export.js';
+import { mergeCardStats } from './lib/shared/stats-utils.js';
 
 
 // --- UI and Core Logic Imports ---
 import dom from './lib/ui/dom-elements.js';
-import { getState, updateState, popFromViewHistory, COLUMN_ROLES } from './lib/core/state.js';
+import { getState, updateState, popFromViewHistory, COLUMN_ROLES, defaultIntervals } from './lib/core/state.js';
 import { showTopNotification, formatTimeAgo, formatTimeDifference } from './lib/ui/ui-helpers.js';
 import { initConfigManager, saveCurrentConfig, saveConfig, loadSelectedConfig } from './lib/shared/config-manager.js';
 import { initSkillManager, saveSkill, deleteSkill, deleteAllSkills, addDefaultSkill, createPresetSkills, getActiveSkills } from './lib/shared/skill-manager.js';
-import { initCardLogic, getCardKey, getRetentionScore, createDefaultSkillStats, getSanitizedStats, getAllCardStats, markCardAsKnown, getTimeToDue, getCurrentSkillConfig, getTextForRoles, displayCard, flipCard, showNextCard, showPrevCard, saveCardStats } from './lib/shared/card-logic.js';
+import { initCardLogic, getCardKey, getRetentionScore, createDefaultSkillStats, getSanitizedStats, getAllCardStats, markCardAsKnown, getTimeToDue, getCurrentSkillConfig, getTextForRoles, displayCard, flipCard, showNextCard, showPrevCard } from './lib/shared/card-logic.js';
 import { initVerification, checkWritingAnswer, generateMultipleChoiceOptions, checkMultipleChoiceAnswer, toggleVoiceRecognition, startVoiceRecognition, stopVoiceRecognition } from './lib/core/verification.js';
 import { initAuth, syncToServer, checkAuthStatus } from './lib/core/auth.js';
-import { initUIManager, renderSkillsList, openSkillDialog, saveTransform, populateAllSkillSelectors, getSelectedSkills, populateConfigSelector, renderCardFaces, renderSkillMastery, isAudioOnly } from './lib/ui/ui-manager.js';
+import { initUIManager, renderSkillsList, openSkillDialog, saveTransform, populateAllSkillSelectors, populateConfigSelector, renderCardFaces, renderSkillMastery, isAudioOnly } from './lib/ui/ui-manager.js';
 import { init as initConflictResolution, showConflictResolutionModal } from './lib/ui/conflict-resolution.js';
 
 
