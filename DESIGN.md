@@ -11,7 +11,7 @@ The core of this proposal is the introduction of a **Data Abstraction Layer (DAL
 
 ### Component Diagram
 
-This diagram illustrates the major components and their relationships. The communication between the `WebSocket/HTTP Adapter` and the `NodeJS API Server` will be implemented using HTTP requests (`POST /api/sync`) initially. The bidirectional arrow indicates that while the current implementation is request-response, the architecture is designed to accommodate WebSockets for real-time communication in the future.
+This diagram illustrates the major components and their relationships. The communication between the `HTTP Adapter` and the `NodeJS API Server` will be implemented using HTTP requests (`POST /api/sync`) initially. The architecture is designed to accommodate WebSockets for real-time communication in the future if needed.
 
 ```mermaid
 graph TD
@@ -40,8 +40,18 @@ graph TD
     F -- HTTP Requests --> H
     H -- HTTP Responses --> F
 
-    style B fill:#c8e6c9,stroke:#333,stroke-width:2px
-    style C fill:#c8e6c9,stroke:#333,stroke-width:2px
+    classDef ui fill:#cce5ff,stroke:#004085,stroke-width:1px;
+    classDef logic fill:#d1e7dd,stroke:#155724,stroke-width:1px;
+    classDef adapter fill:#fff3cd,stroke:#856404,stroke-width:1px;
+    classDef datastore fill:#f8d7da,stroke:#721c24,stroke-width:1px;
+    classDef server fill:#e2e3e5,stroke:#383d41,stroke-width:1px;
+
+    class A ui;
+    class B,C logic;
+    class D ui;
+    class E,F adapter;
+    class G,J datastore;
+    class H,I server;
 ```
 
 ## 2. Message Bus and Definitions
@@ -128,7 +138,88 @@ When a conflict is detected, the application must not automatically overwrite da
 3.  **User Resolves:** The user chooses which version to keep.
 4.  **Finalize Resolution:** Once resolved, the chosen version is sent back to the server with the correct `base_version` to finalize the update.
 
-## 7. Implementation Plan
+## 7. End-to-End User Flow Scenarios
+
+These diagrams illustrate the complete user flow from loading the application to completing a skills exercise in both offline and online modes.
+
+### Scenario 1: Offline Mode (In-Browser Only)
+
+This sequence shows the application loading data from IndexedDB and saving progress locally.
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant UI
+    participant BusinessLogic as Core Business Logic
+    participant DAL as Data Abstraction Layer
+    participant IndexedDBAdapter as IndexedDB Adapter
+    participant IndexedDB
+
+    style User,UI fill:#cce5ff,stroke:#004085,stroke-width:1px
+    style BusinessLogic,DAL fill:#d1e7dd,stroke:#155724,stroke-width:1px
+    style IndexedDBAdapter fill:#fff3cd,stroke:#856404,stroke-width:1px
+    style IndexedDB fill:#f8d7da,stroke:#721c24,stroke-width:1px
+
+    User->>UI: Loads Application
+    UI->>BusinessLogic: initializeApp()
+    BusinessLogic->>DAL: loadConfig('last_used_config')
+    DAL->>IndexedDBAdapter: dispatch('data:config:load')
+    IndexedDBAdapter->>IndexedDB: get('last_used_config')
+    IndexedDB-->>IndexedDBAdapter: return config
+    IndexedDBAdapter-->>DAL: dispatch('data:config:load:success')
+    DAL-->>BusinessLogic: return config
+    BusinessLogic->>UI: Display first card
+    User->>UI: Answers card (e.g., clicks 'I Know')
+    UI->>BusinessLogic: handleAnswer(true)
+    BusinessLogic->>DAL: saveCardStats('card-A', { ...stats })
+    DAL->>IndexedDBAdapter: dispatch('data:card:stats:save')
+    IndexedDBAdapter->>IndexedDB: put('card-A', { ...stats, _version: 2 })
+    IndexedDB-->>IndexedDBAdapter: success
+    IndexedDBAdapter-->>DAL: dispatch('data:card:stats:save:success')
+    DAL-->>BusinessLogic: Promise resolves
+    BusinessLogic->>UI: Display next card
+```
+
+### Scenario 2: Online Mode (Client-Server Communication)
+
+This sequence shows the application syncing data with the server upon loading and saving progress back to the server.
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant UI
+    participant BusinessLogic as Core Business Logic
+    participant DAL as Data Abstraction Layer
+    participant HTTPAdapter as HTTP Adapter
+    participant Server
+
+    style User,UI fill:#cce5ff,stroke:#004085,stroke-width:1px
+    style BusinessLogic,DAL fill:#d1e7dd,stroke:#155724,stroke-width:1px
+    style HTTPAdapter fill:#fff3cd,stroke:#856404,stroke-width:1px
+    style Server fill:#e2e3e5,stroke:#383d41,stroke-width:1px
+
+    User->>UI: Loads Application
+    UI->>BusinessLogic: initializeApp()
+    note over BusinessLogic, Server: App is online, heartbeat is successful.
+    BusinessLogic->>DAL: syncAllData()
+    DAL->>HTTPAdapter: dispatch('data:sync:all:load')
+    HTTPAdapter->>Server: POST /api/sync (get all data)
+    Server-->>HTTPAdapter: return { configs, cardStats }
+    HTTPAdapter-->>DAL: dispatch('data:sync:all:load:success')
+    DAL-->>BusinessLogic: return all data
+    BusinessLogic->>UI: Display first card
+    User->>UI: Answers card (e.g., clicks 'I Dont Know')
+    UI->>BusinessLogic: handleAnswer(false)
+    BusinessLogic->>DAL: saveCardStats('card-B', { ...stats })
+    DAL->>HTTPAdapter: dispatch('data:card:stats:save')
+    HTTPAdapter->>Server: POST /api/sync (save single stat)
+    Server-->>HTTPAdapter: success
+    HTTPAdapter-->>DAL: dispatch('data:card:stats:save:success')
+    DAL-->>BusinessLogic: Promise resolves
+    BusinessLogic->>UI: Display next card
+```
+
+## 8. Implementation Plan
 
 1.  **Create the Data Abstraction Layer (DAL).**
 2.  **Implement the Message Bus.**
