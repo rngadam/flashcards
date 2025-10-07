@@ -195,17 +195,17 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         const newWordIndex = lastCorrectIndex + 1;
+        const hasAdvanced = newWordIndex > currentWordIndex;
 
-        if (newWordIndex > currentWordIndex) {
-            currentWordIndex = newWordIndex;
+        currentWordIndex = newWordIndex;
+
+        if (hasAdvanced) {
             if (readOnCorrectCheckbox.checked && currentWordIndex > 0) {
                 speakWord(stripPunctuation(sourceWords[currentWordIndex - 1]));
             }
             if (readNextCheckbox.checked) {
                 speakNextWord();
             }
-        } else {
-            currentWordIndex = newWordIndex;
         }
 
         if (currentWordIndex < sourceWords.length) {
@@ -279,17 +279,18 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     const applyConfig = (config) => {
-        // Remove any existing font size or family classes
-        writingInput.classList.forEach(c => {
-            if (c.startsWith('font-size-') || c.startsWith('font-family-')) {
-                writingInput.classList.remove(c);
-            }
-        });
-        textDisplay.classList.forEach(c => {
-            if (c.startsWith('font-size-') || c.startsWith('font-family-')) {
-                textDisplay.classList.remove(c);
-            }
-        });
+        const classesToRemove = (element) => {
+            const toRemove = [];
+            element.classList.forEach(c => {
+                if (c.startsWith('font-size-') || c.startsWith('font-family-')) {
+                    toRemove.push(c);
+                }
+            });
+            return toRemove;
+        };
+
+        classesToRemove(writingInput).forEach(c => writingInput.classList.remove(c));
+        classesToRemove(textDisplay).forEach(c => textDisplay.classList.remove(c));
 
         // Add the new classes
         if (config.fontSize) {
@@ -349,7 +350,9 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     writingInput.addEventListener('input', handleContinuousInput);
-    readAloudBtn.addEventListener('click', speakText);
+    if (readAloudBtn) {
+        readAloudBtn.addEventListener('click', speakText);
+    }
     repeatWordBtn.addEventListener('click', repeatCurrentWord);
 
     textDisplay.addEventListener('click', (event) => {
@@ -382,29 +385,27 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
+    const revealHiddenText = () => {
+        if (hideTextCheckbox.checked) {
+            hideTextCheckbox.checked = false;
+            toggleHideText();
+            saveConfig();
+        }
+    };
+
     document.addEventListener('keydown', (event) => {
         if (event.ctrlKey && event.key.toLowerCase() === 's') {
             event.preventDefault();
             speakText();
         } else if (event.key === '`') {
-            if (hideTextCheckbox.checked) {
-                hideTextCheckbox.checked = false;
-                toggleHideText();
-                saveConfig();
-            }
+            revealHiddenText();
         } else if (event.key === 'Escape') {
             event.preventDefault();
             speakText();
         }
     });
 
-    revealTextBtn.addEventListener('click', () => {
-        if (hideTextCheckbox.checked) {
-            hideTextCheckbox.checked = false;
-            toggleHideText();
-            saveConfig();
-        }
-    });
+    revealTextBtn.addEventListener('click', revealHiddenText);
 
     const initializeApp = async () => {
         await loadConfig();
