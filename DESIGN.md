@@ -47,8 +47,8 @@ graph TD
     H --> I
     I --> J
 
-    style B fill:#bbf,stroke:#333,stroke-width:2px
-    style C fill:#bbf,stroke:#333,stroke-width:2px
+    style B fill:#c8e6c9,stroke:#333,stroke-width:2px
+    style C fill:#c8e6c9,stroke:#333,stroke-width:2px
 ```
 
 **Components:**
@@ -63,37 +63,23 @@ graph TD
 *   **Data Access Logic:** Server-side logic to interact with the database.
 *   **Relational Database:** The server's database (e.g., SQLite).
 
-## 2. Data Flow
+## 2. Data Flow and Messages
 
-The data flow will change depending on whether the application is in "offline" or "online" mode.
+The data flow will change depending on whether the application is in "offline" or "online" mode. Communication between the DAL and the adapters is handled via namespaced messages on the Message Bus.
 
-### Sequence Diagram: Saving Data
+### Message Definitions
+To ensure clarity and prevent event collisions, messages will be namespaced. The main unit of interaction is the flashcard, identified by the target language text.
 
-This diagram shows the sequence of events when the application saves data.
+*   `data:card:next`: Request to retrieve the next card to be reviewed.
+*   `data:card:stats:save`: Save the interaction results for a specific card.
+*   `data:config:save`: Save a configuration object.
+*   `data:config:load`: Load a configuration object.
 
-#### Client-Only (Offline) Mode
+Each action will have corresponding `success` and `failure` messages, e.g., `data:config:save:success` and `data:config:save:failure`.
 
-```mermaid
-sequenceDiagram
-    participant UI
-    participant BusinessLogic
-    participant DAL
-    participant MessageBus
-    participant IndexedDBAdapter
-    participant IndexedDB
+### Sequence Diagram: Saving Card Statistics
 
-    UI->>BusinessLogic: User action (e.g., save config)
-    BusinessLogic->>DAL: saveData(key, data)
-    DAL->>MessageBus: dispatch('save', {key, data})
-    MessageBus->>IndexedDBAdapter: on('save', payload)
-    IndexedDBAdapter->>IndexedDB: put(payload.key, payload.data)
-    IndexedDB-->>IndexedDBAdapter: Success
-    IndexedDBAdapter-->>MessageBus: dispatch('save_success')
-    MessageBus-->>DAL: on('save_success')
-    DAL-->>BusinessLogic: Promise resolves
-```
-
-#### Client-Server (Online) Mode
+This diagram shows the sequence of events when the application saves card interaction statistics.
 
 ```mermaid
 sequenceDiagram
@@ -101,21 +87,72 @@ sequenceDiagram
     participant BusinessLogic
     participant DAL
     participant MessageBus
-    participant WebSocketAdapter
-    participant Server
+    participant ActiveAdapter
+    participant DataStore
 
-    UI->>BusinessLogic: User action (e.g., save config)
-    BusinessLogic->>DAL: saveData(key, data)
-    DAL->>MessageBus: dispatch('save', {key, data})
-    MessageBus->>WebSocketAdapter: on('save', payload)
-    WebSocketAdapter->>Server: send(JSON.stringify({action: 'save', ...}))
-    Server-->>WebSocketAdapter: receive(JSON.stringify({status: 'success'}))
-    WebSocketAdapter-->>MessageBus: dispatch('save_success')
-    MessageBus-->>DAL: on('save_success')
-    DAL-->>BusinessLogic: Promise resolves
+    UI->>BusinessLogic: User answers card
+    BusinessLogic->>DAL: saveCardStats(cardKey, stats)
+    DAL->>MessageBus: dispatch('data:card:stats:save', {key, stats})
+    MessageBus->>ActiveAdapter: on('data:card:stats:save', payload)
+    ActiveAdapter->>DataStore: Save(payload.key, payload.stats)
+    alt On Success
+        DataStore-->>ActiveAdapter: Success
+        ActiveAdapter-->>MessageBus: dispatch('data:card:stats:save:success')
+        MessageBus-->>DAL: on('data:card:stats:save:success')
+        DAL-->>BusinessLogic: Promise resolves
+    else On Failure
+        DataStore-->>ActiveAdapter: Failure (e.g., DB error)
+        ActiveAdapter-->>MessageBus: dispatch('data:card:stats:save:failure', {error})
+        MessageBus-->>DAL: on('data:card:stats:save:failure')
+        DAL-->>BusinessLogic: Promise rejects with error
+    end
 ```
 
-## 3. Implementation Plan
+## 3. Error Handling
+A robust error handling strategy is crucial. Errors can occur at multiple points (network, database, validation). The general principle is that the DAL returns a Promise that will be rejected upon failure, allowing the business logic and UI to respond appropriately.
+
+When an adapter encounters an error (e.g., a network request fails or an IndexedDB write operation throws an exception), it will:
+1.  Catch the error.
+2.  Dispatch a corresponding `failure` event on the message bus (e.g., `data:config:save:failure`).
+3.  Include the error object in the event payload.
+
+The DAL, upon receiving the failure event, will reject the promise it returned to the business logic, which can then update the UI to inform the user (e.g., "Failed to save. Please try again.").
+
+## 4. Online/Offline Mode Switching
+
+The application must be able to seamlessly switch between online and offline modes.
+
+*   **Status Detection:** The application will use the standard `navigator.onLine` browser API to detect the initial online/offline status. It will also listen for the `online` and `offline` window events to handle changes in connectivity.
+*   **State Management:** The current mode (e.g., `'online'` or `'offline'`) will be managed as part of the global application state.
+*   **Adapter Activation:** The DAL will be responsible for directing messages to the correct adapter. It will check the current application mode before dispatching an event. For example:
+    ```javascript
+    // Inside the DAL
+    saveData(key, data) {
+        const eventName = 'data:config:save';
+        if (getState().mode === 'online') {
+            this.messageBus.dispatch(eventName, { target: 'api', payload: { key, data } });
+        } else {
+            this.messageBus.dispatch(eventName, { target: 'indexeddb', payload: { key, data } });
+        }
+        // ... return a promise that resolves/rejects based on success/failure events
+    }
+    ```
+    Adapters will listen for messages and inspect the `target` property to determine if they should act on the message.
+
+## 5. Synchronization Strategy
+
+A simple "last-write-wins" strategy is risky and can lead to data loss. A more sophisticated approach is required for the long term.
+
+### Initial Strategy (MVP)
+For the initial implementation, we will use a "last-write-wins" approach but with clear user notification. When the application comes online, it will check if there is local data that needs to be synced. The user will be prompted to either push their local changes to the server (overwriting server data) or discard their local changes.
+
+### Long-Term Strategy
+A more robust solution will involve the following:
+1.  **Conflict Detection:** Use version vectors (or at a minimum, `updated_at` timestamps) for each piece of data. When syncing, the client and server can compare versions to detect conflicts.
+2.  **Data Merging:** For non-conflicting changes (e.g., the user updated one card offline and a different card on another device), the changes can be automatically merged.
+3.  **User-driven Resolution:** When a direct conflict is detected (e.g., the same card was modified both locally and on the server), the UI must prompt the user to resolve the conflict by choosing which version to keep.
+
+## 6. Implementation Plan
 
 The implementation will be broken down into the following steps:
 
@@ -134,9 +171,5 @@ The implementation will be broken down into the following steps:
 4.  **Refactor Business Logic:**
     *   Modify the existing modules (`config-manager.js`, `skill-manager.js`, `card-logic.js`) to use the new DAL instead of directly calling `fetch` or accessing local storage.
     *   For example, instead of `syncToServer()`, a call like `DAL.set('configs', allConfigs)` would be used.
-
-5.  **Develop a Synchronization Strategy:**
-    *   When switching from offline to online, a synchronization process will be needed to resolve any conflicts between the local (IndexedDB) and remote (server) data.
-    *   A simple "last-write-wins" strategy can be implemented initially, where the client's data is pushed to the server upon connection. The `updated_at` timestamp in the `user_data` table will be crucial here.
 
 By following this design, we can achieve a highly flexible and maintainable architecture that supports both online and offline use cases while maximizing code reuse.
