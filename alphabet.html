@@ -5,9 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Alphabet Learning App</title>
     <script src="https://cdn.jsdelivr.net/npm/dexie@4.0.1/dist/dexie.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/gsap@3.13.0/dist/gsap.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/gsap@3.13.0/dist/DrawSVGPlugin.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/svg-path-parser@1.1.0/dist/svg-path-parser.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/DrawSVGPlugin.min.js"></script>
     <style>
         body {
             font-family: sans-serif;
@@ -78,17 +77,16 @@
 
         #character-display-container {
             display: flex;
-            flex-direction: column;
             gap: 20px;
         }
 
-        .animation-box {
+        #animation-container {
             width: 200px;
             height: 200px;
             border: 1px solid #ddd;
         }
 
-        .animation-box svg path {
+        #handwriting-svg path {
             stroke: #333;
             stroke-width: 5;
             fill: none;
@@ -100,80 +98,11 @@
             border: 1px solid #333;
             cursor: crosshair;
         }
-
-        .main-columns {
-            display: flex;
-            gap: 20px;
-        }
-
-        #left-column {
-            flex: 1;
-        }
-
-        #right-column {
-            flex: 2;
-        }
-
-        #hamburger-menu {
-            cursor: pointer;
-        }
-
-        #hamburger-menu span {
-            display: block;
-            width: 25px;
-            height: 3px;
-            margin: 5px;
-            background: #333;
-        }
-
-        #settings-panel {
-            position: fixed;
-            top: 0;
-            left: -300px;
-            width: 300px;
-            height: 100%;
-            background: #fff;
-            box-shadow: 2px 0 5px rgba(0,0,0,0.1);
-            transition: left 0.3s;
-            padding: 20px;
-            z-index: 1000;
-        }
-
-        #settings-panel.open {
-            left: 0;
-        }
-
-        .setting-item {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 15px;
-        }
     </style>
 </head>
 <body>
-    <div id="file-protocol-error" style="display: none; padding: 20px; text-align: center; max-width: 600px; margin: 40px auto; background-color: #fff; border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.1);">
-        <h2 style="color: #d9534f;">Unsupported Protocol</h2>
-        <p style="font-size: 1.1em;">This application cannot be run directly from the local file system (<code style="background: #eee; padding: 2px 5px; border-radius: 3px;">file://</code>) due to browser security restrictions that block its database features.</p>
-        <hr style="margin: 20px 0;">
-        <p><strong>To fix this, please start a simple local web server.</strong></p>
-        <p>If you have Python installed, you can run one of the following commands in your terminal from the project's root directory:</p>
-        <pre style="background-color: #f5f5f5; padding: 15px; border-radius: 4px; border: 1px solid #ddd; text-align: left;"><code># For Python 3
-python3 -m http.server
-
-# For Python 2
-python -m SimpleHTTPServer</code></pre>
-        <p>After starting the server, open this page in your browser at:</p>
-        <p><a href="http://localhost:8000/alphabet.html">http://localhost:8000/alphabet.html</a></p>
-    </div>
-
     <div id="app-container">
         <header>
-            <div id="hamburger-menu">
-                <span></span>
-                <span></span>
-                <span></span>
-            </div>
             <h1>Alphabet Learning App</h1>
             <div id="mode-selector">
                 <button id="train-mode-btn" class="active">Train</button>
@@ -181,93 +110,41 @@ python -m SimpleHTTPServer</code></pre>
             </div>
         </header>
 
-        <div id="settings-panel">
-            <h2>Settings</h2>
-            <div class="setting-item">
-                <label for="logging-toggle">Enable Logging</label>
-                <input type="checkbox" id="logging-toggle">
-            </div>
-            <div class="setting-item">
-                <label for="gridlines-toggle">Show Gridlines</label>
-                <input type="checkbox" id="gridlines-toggle">
-            </div>
-            <div class="setting-item">
-                <label for="alphabet-select">Alphabet</label>
-                <select id="alphabet-select"></select>
-            </div>
-            <div class="setting-item">
-                <span>Speech Language:</span>
-                <span id="speech-language-display">Default</span>
-            </div>
-        </div>
+        <main id="main-content">
+            <section id="alphabet-selection-container">
+                <h2>Select an Alphabet</h2>
+                <div id="alphabet-buttons"></div>
+            </section>
 
-        <main id="main-content" class="main-columns">
-            <div id="left-column">
-                <section id="character-grid-container">
-                    <h2 id="character-grid-title">Select an alphabet from settings to begin</h2>
-                    <div id="character-grid"></div>
-                </section>
-            </div>
+            <section id="character-grid-container" class="hidden">
+                <h2 id="character-grid-title"></h2>
+                <div id="character-grid"></div>
+            </section>
 
-            <div id="right-column">
-                <section id="character-display-container" class="hidden">
-                    <div id="character-info">
-                        <h2 id="character-name"></h2>
-                        <p>Uppercase: <span id="char-uppercase"></span></p>
-                        <p>Lowercase: <span id="char-lowercase"></span></p>
-                    </div>
-                    <div id="animation-container-upper" class="animation-box">
-                        <svg id="handwriting-svg-upper" viewBox="0 0 100 100"></svg>
-                    </div>
-                    <div id="animation-container-lower" class="animation-box">
-                        <svg id="handwriting-svg-lower" viewBox="0 0 100 100"></svg>
-                    </div>
-                    <button id="replay-animation-btn">Replay Animation</button>
-                    <button id="edit-strokes-btn">Edit Strokes</button>
-                </section>
+            <section id="character-display-container" class="hidden">
+                <div id="character-info">
+                    <h2 id="character-name"></h2>
+                    <p>Uppercase: <span id="char-uppercase"></span></p>
+                    <p>Lowercase: <span id="char-lowercase"></span></p>
+                </div>
+                <div id="animation-container">
+                    <svg id="handwriting-svg" viewBox="0 0 100 100"></svg>
+                </div>
+                <button id="replay-animation-btn">Replay Animation</button>
+            </section>
 
-                <section id="testing-mode-container" class="hidden">
-                    <h2 id="test-prompt"></h2>
-                    <canvas id="drawing-canvas" width="400" height="400"></canvas>
-                    <div id="test-feedback"></div>
-                    <button id="submit-drawing-btn">Submit</button>
-                </section>
-
-                <section id="stroke-editor-container" class="hidden">
-                    <h3>SVG Stroke Editor</h3>
-                    <div>
-                        <label for="uppercase-path-input">Uppercase Path Data:</label>
-                        <textarea id="uppercase-path-input" rows="4" cols="50"></textarea>
-                    </div>
-                    <div>
-                        <label for="lowercase-path-input">Lowercase Path Data:</label>
-                        <textarea id="lowercase-path-input" rows="4" cols="50"></textarea>
-                    </div>
-                    <button id="redraw-svg-btn">Redraw</button>
-                    <button id="close-editor-btn">Close</button>
-                </section>
-            </div>
+            <section id="testing-mode-container" class="hidden">
+                <h2 id="test-prompt"></h2>
+                <canvas id="drawing-canvas" width="400" height="400"></canvas>
+                <div id="test-feedback"></div>
+                <button id="submit-drawing-btn">Submit</button>
+            </section>
         </main>
     </div>
 
     <script>
-        window.onload = function() {
-            if (window.location.protocol === 'file:') {
-                document.getElementById('app-container').style.display = 'none';
-                document.getElementById('file-protocol-error').style.display = 'block';
-                return; // Stop further execution
-            }
-
+        (function() {
             'use strict';
-
-            // --- 0. CONSTANTS ---
-            const MAX_INCORRECT_ATTEMPTS = 3;
-            const FEEDBACK_TIMEOUT_MS = 1500;
-            const HINT_TIMEOUT_MS = 4000;
-            const CANVAS_WIDTH = 400;
-            const CANVAS_HEIGHT = 400;
-            const SVG_VIEWBOX_SIZE = 100;
-            const STROKE_VALIDATION_THRESHOLD = 20;
 
             // --- 1. DATABASE SETUP ---
             const db = new Dexie('AlphabetDB');
@@ -401,38 +278,45 @@ python -m SimpleHTTPServer</code></pre>
             async function seedDatabase() {
                 const alphabetCount = await db.alphabets.count();
                 if (alphabetCount > 0) {
-                    logger.log("Database already seeded.");
+                    console.log('Database already seeded.');
                     return; // Don't re-seed
                 }
 
-                logger.log("Seeding database...");
+                console.log('Seeding database...');
                 try {
                     await db.transaction('rw', db.alphabets, db.characters, async () => {
+                        // Use allKeys: true to get the generated primary keys
                         const alphabetIds = await db.alphabets.bulkAdd(alphabetsData, { allKeys: true });
+
+                        // Create a map of alphabet names to their new IDs
                         const nameToIdMap = {};
                         alphabetsData.forEach((alphabet, index) => {
                             nameToIdMap[alphabet.name] = alphabetIds[index];
                         });
 
-                        const charactersToSeed = charactersData.map(char => ({
-                            ...char,
-                            alphabetId: nameToIdMap[char.alphabetName],
-                            alphabetName: undefined
-                        }));
+                        // Prepare character data with the correct foreign keys
+                        const charactersToSeed = charactersData.map(char => {
+                            const newChar = { ...char };
+                            newChar.alphabetId = nameToIdMap[char.alphabetName];
+                            delete newChar.alphabetName; // Clean up the temporary property
+                            return newChar;
+                        });
 
                         await db.characters.bulkAdd(charactersToSeed);
                     });
-                    logger.log("Database seeded successfully.");
+                    console.log('Database seeded successfully.');
                 } catch (error) {
-                    logger.error('Error seeding database:', error);
-                    // Inform the user that a feature might not work
-                    alert("There was an error initializing the alphabet data. Some features may not work correctly.");
+                    console.error('Error seeding database:', error);
                 }
             }
 
             // --- 4. INITIALIZATION ---
-            // Moved initialization logic to be called directly from window.onload
-            // This avoids issues with nested DOMContentLoaded listeners.
+            // When the DOM is ready, seed the database and initialize the app
+            document.addEventListener('DOMContentLoaded', () => {
+                seedDatabase().then(initializeApp).catch(err => {
+                    console.error("Failed to initialize database:", err);
+                });
+            });
 
             // --- 5. DOM ELEMENT REFERENCES ---
             const alphabetSelectionContainer = document.getElementById('alphabet-selection-container');
@@ -444,22 +328,8 @@ python -m SimpleHTTPServer</code></pre>
             const characterName = document.getElementById('character-name');
             const charUppercase = document.getElementById('char-uppercase');
             const charLowercase = document.getElementById('char-lowercase');
-            const handwritingSvgUpper = document.getElementById('handwriting-svg-upper');
-            const handwritingSvgLower = document.getElementById('handwriting-svg-lower');
+            const handwritingSvg = document.getElementById('handwriting-svg');
             const replayAnimationBtn = document.getElementById('replay-animation-btn');
-
-            const hamburgerMenu = document.getElementById('hamburger-menu');
-            const settingsPanel = document.getElementById('settings-panel');
-            const gridlinesToggle = document.getElementById('gridlines-toggle');
-            const alphabetSelect = document.getElementById('alphabet-select');
-            const speechLanguageDisplay = document.getElementById('speech-language-display');
-
-            const editStrokesBtn = document.getElementById('edit-strokes-btn');
-            const strokeEditorContainer = document.getElementById('stroke-editor-container');
-            const uppercasePathInput = document.getElementById('uppercase-path-input');
-            const lowercasePathInput = document.getElementById('lowercase-path-input');
-            const redrawSvgBtn = document.getElementById('redraw-svg-btn');
-            const closeEditorBtn = document.getElementById('close-editor-btn');
 
             const trainModeBtn = document.getElementById('train-mode-btn');
             const testModeBtn = document.getElementById('test-mode-btn');
@@ -470,110 +340,42 @@ python -m SimpleHTTPServer</code></pre>
             const submitDrawingBtn = document.getElementById('submit-drawing-btn');
 
 
-            // --- 6. STATE MANAGEMENT & LOGGING ---
-            const loggingToggle = document.getElementById('logging-toggle');
-            let isLoggingEnabled = localStorage.getItem('alphabet-loggingEnabled') === 'true';
-
-            const logger = {
-                log: (...args) => isLoggingEnabled && console.log(...args),
-                warn: (...args) => isLoggingEnabled && console.warn(...args),
-                error: (...args) => isLoggingEnabled && console.error(...args),
-            };
-
-            function updateLoggingState(enabled) {
-                isLoggingEnabled = enabled;
-                localStorage.setItem('alphabet-loggingEnabled', enabled);
-                logger.log(`Logging ${enabled ? 'enabled' : 'disabled'}.`);
-            }
-
-            // Define the complete shape of the appState object at initialization
+            // --- 6. STATE MANAGEMENT ---
             let appState = {
                 currentAlphabetId: null,
                 currentMode: 'train', // 'train' or 'test'
-                currentCharForTest: null,
-                caseForTest: null, // 'uppercase' or 'lowercase'
-                incorrectAttempts: 0,
             };
 
             // --- 7. UI RENDERING & LOGIC ---
             async function initializeApp() {
-                try {
-                    gsap.registerPlugin(DrawSVGPlugin);
+                console.log('Initializing application...');
+                await renderAlphabetSelect();
 
-                    // Settings Panel Logic
-                    hamburgerMenu.addEventListener('click', () => {
-                        settingsPanel.classList.toggle('open');
-                    });
-
-                    document.getElementById('main-content').addEventListener('click', () => {
-                        if (settingsPanel.classList.contains('open')) {
-                            settingsPanel.classList.remove('open');
-                        }
-                    });
-
-                    gridlinesToggle.addEventListener('change', (e) => {
-                        drawingCanvas.style.backgroundImage = e.target.checked
-                            ? 'linear-gradient(#ccc 1px, transparent 1px), linear-gradient(90deg, #ccc 1px, transparent 1px)'
-                            : 'none';
-                        drawingCanvas.style.backgroundSize = e.target.checked ? '20px 20px' : 'auto';
-                    });
-
-                    loggingToggle.checked = isLoggingEnabled;
-                    loggingToggle.addEventListener('change', (e) => updateLoggingState(e.target.checked));
-                    logger.log("Application initializing...");
-
-                    await seedDatabase();
-                    await populateAlphabetDropdown();
-
-                    trainModeBtn.addEventListener('click', () => setMode('train'));
-                    testModeBtn.addEventListener('click', () => setMode('test'));
-
-                    // Set canvas dimensions from constants
-                    drawingCanvas.width = CANVAS_WIDTH;
-                    drawingCanvas.height = CANVAS_HEIGHT;
-                } catch (err) {
-                    console.error("Failed to initialize the application:", err);
-                    alert("A critical error occurred during startup. Please refresh the page.");
-                }
+                trainModeBtn.addEventListener('click', () => setMode('train'));
+                testModeBtn.addEventListener('click', () => setMode('test'));
             }
 
-            async function populateAlphabetDropdown() {
-                try {
-                    const alphabets = await db.alphabets.toArray();
-                    alphabetSelect.innerHTML = '<option value="">Select Alphabet</option>';
-                    alphabets.forEach(alphabet => {
-                        const option = document.createElement('option');
-                        option.value = alphabet.id;
-                        option.textContent = alphabet.name;
-                        alphabetSelect.appendChild(option);
-                    });
-
-                    alphabetSelect.addEventListener('change', async (e) => {
-                        const alphabetId = parseInt(e.target.value, 10);
-                        if (alphabetId) {
-                            const alphabet = await db.alphabets.get(alphabetId);
-                            selectAlphabet(alphabet);
-                        }
-                    });
-                } catch (error) {
-                    logger.error("Failed to populate alphabet dropdown:", error);
-                }
+            async function renderAlphabetSelect() {
+                const alphabets = await db.alphabets.toArray();
+                alphabetButtonsContainer.innerHTML = ''; // Clear existing buttons
+                alphabets.forEach(alphabet => {
+                    const button = document.createElement('button');
+                    button.textContent = alphabet.name;
+                    button.addEventListener('click', () => selectAlphabet(alphabet));
+                    alphabetButtonsContainer.appendChild(button);
+                });
             }
 
             async function selectAlphabet(alphabet) {
-                try {
-                    appState.currentAlphabetId = alphabet.id;
-                    logger.log(`Selected alphabet: ${alphabet.name} (ID: ${alphabet.id})`);
+                appState.currentAlphabetId = alphabet.id;
+                console.log(`Selected alphabet: ${alphabet.name}`);
 
-                    const characters = await db.characters
-                        .where('alphabetId')
-                        .equals(alphabet.id)
-                        .sortBy('order');
+                const characters = await db.characters
+                    .where('alphabetId')
+                    .equals(alphabet.id)
+                    .sortBy('order');
 
-                    renderCharacterGrid(characters, alphabet.name);
-                } catch (error) {
-                    logger.error(`Failed to select alphabet ${alphabet.name}:`, error);
-                }
+                renderCharacterGrid(characters, alphabet.name);
             }
 
             function renderCharacterGrid(characters, alphabetName) {
@@ -595,65 +397,43 @@ python -m SimpleHTTPServer</code></pre>
             }
 
             async function displayCharacter(characterId) {
-                try {
-                    const character = await db.characters.get({ characterId });
-                    if (!character) {
-                        logger.warn(`Character with ID ${characterId} not found.`);
-                        return;
-                    };
+                const character = await db.characters.get({ characterId });
+                if (!character) return;
 
-                    const alphabet = await db.alphabets.get(character.alphabetId);
-                    if (!alphabet) {
-                        logger.warn(`Alphabet with ID ${character.alphabetId} not found.`);
-                        return;
-                    }
+                const alphabet = await db.alphabets.get(character.alphabetId);
+                if (!alphabet) return;
 
-                    // Update UI
-                    characterName.textContent = character.name;
-                    charUppercase.textContent = character.uppercase;
-                    charLowercase.textContent = character.lowercase;
 
-                    const performActions = () => {
-                        animateCharacter(handwritingSvgUpper, handwritingSvgLower, character.strokeSVGPaths);
-                        speak(character.pronunciationKey, alphabet.languageCode);
-                    };
+                // Update UI
+                characterName.textContent = character.name;
+                charUppercase.textContent = character.uppercase;
+                charLowercase.textContent = character.lowercase;
 
-                    performActions();
-                    // Use addEventListener instead of onclick
-                    replayAnimationBtn.removeEventListener('click', replayAnimationBtn.handler);
-                    replayAnimationBtn.handler = performActions;
-                    replayAnimationBtn.addEventListener('click', replayAnimationBtn.handler);
+                const performActions = () => {
+                    animateCharacter(handwritingSvg, character.strokeSVGPaths);
+                    speak(character.pronunciationKey, alphabet.languageCode);
+                };
 
-                    editStrokesBtn.removeEventListener('click', editStrokesBtn.handler);
-                    editStrokesBtn.handler = () => openStrokeEditor(character);
-                    editStrokesBtn.addEventListener('click', editStrokesBtn.handler);
+                performActions();
 
-                    // Switch views - keep character grid visible
-                    characterDisplayContainer.classList.remove('hidden');
-                } catch (error) {
-                    logger.error(`Failed to display character ${characterId}:`, error);
-                }
+                replayAnimationBtn.onclick = performActions;
+
+                // Switch views
+                characterGridContainer.classList.add('hidden');
+                characterDisplayContainer.classList.remove('hidden');
             }
 
-            function animateCharacter(upperSvgElement, lowerSvgElement, strokePaths) {
-                upperSvgElement.innerHTML = ''; // Clear previous animations
-                lowerSvgElement.innerHTML = '';
+            function animateCharacter(svgElement, strokePaths) {
+                gsap.registerPlugin(DrawSVGPlugin);
+                svgElement.innerHTML = ''; // Clear previous animation
 
                 const tl = gsap.timeline();
+                const allPaths = [...strokePaths.uppercase, ...strokePaths.lowercase];
 
-                // Animate uppercase strokes
-                strokePaths.uppercase.forEach(pathData => {
+                allPaths.forEach(pathData => {
                     const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
                     path.setAttribute('d', pathData);
-                    upperSvgElement.appendChild(path);
-                    tl.from(path, { drawSVG: 0, duration: 1 }, "+=0.1");
-                });
-
-                // Animate lowercase strokes
-                strokePaths.lowercase.forEach(pathData => {
-                    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-                    path.setAttribute('d', pathData);
-                    lowerSvgElement.appendChild(path);
+                    svgElement.appendChild(path);
                     tl.from(path, { drawSVG: 0, duration: 1 }, "+=0.1");
                 });
             }
@@ -662,7 +442,7 @@ python -m SimpleHTTPServer</code></pre>
             function loadAndCacheVoices() {
                 voices = speechSynthesis.getVoices();
                 if (voices.length > 0) {
-                    logger.log(`Speech synthesis voices loaded (${voices.length} voices).`);
+                    console.log('Speech synthesis voices loaded.');
                 }
             }
 
@@ -673,30 +453,21 @@ python -m SimpleHTTPServer</code></pre>
 
             function speak(text, langCode) {
                 if (!('speechSynthesis' in window)) {
-                    logger.warn('Speech Synthesis not supported.');
-                    speechLanguageDisplay.textContent = 'Not Supported';
+                    console.warn('Speech Synthesis not supported.');
                     return;
                 }
 
-                speechSynthesis.cancel();
+                speechSynthesis.cancel(); // Stop any currently speaking utterance
 
                 const utterance = new SpeechSynthesisUtterance(text);
                 utterance.lang = langCode;
 
-                // Improved voice finding logic
-                const primaryLang = langCode.split('-')[0];
-                let voice = voices.find(v => v.lang === langCode);
-                if (!voice) {
-                    voice = voices.find(v => v.lang.startsWith(primaryLang));
-                }
+                const voice = voices.find(v => v.lang === langCode);
 
                 if (voice) {
                     utterance.voice = voice;
-                    speechLanguageDisplay.textContent = voice.lang;
-                    logger.log(`Using voice: ${voice.name} (${voice.lang})`);
                 } else {
-                    speechLanguageDisplay.textContent = `Default (${langCode})`;
-                    logger.warn(`No specific voice found for lang '${langCode}' or '${primaryLang}'. Using browser default.`);
+                    console.warn(`No specific voice found for lang '${langCode}'. Using browser default.`);
                 }
 
                 speechSynthesis.speak(utterance);
@@ -725,51 +496,44 @@ python -m SimpleHTTPServer</code></pre>
             }
 
             async function startTest() {
-                try {
-                    if (!appState.currentAlphabetId) {
-                        testPrompt.textContent = 'Please select an alphabet first.';
-                        return;
-                    }
-
-                    // Intelligent character selection
-                    const allCharacters = await db.characters.where('alphabetId').equals(appState.currentAlphabetId).toArray();
-                    const characterIds = allCharacters.map(c => c.characterId);
-                    const progressData = await db.userProgress.where('characterId').anyOf(characterIds).toArray();
-                    const progressMap = new Map(progressData.map(p => [p.characterId, p]));
-
-                    let characterToTest;
-                    const untestedChars = allCharacters.filter(c => !progressMap.has(c.characterId));
-
-                    if (untestedChars.length > 0) {
-                        characterToTest = untestedChars[Math.floor(Math.random() * untestedChars.length)];
-                    } else {
-                        allCharacters.sort((a, b) => {
-                            const progressA = progressMap.get(a.characterId);
-                            const progressB = progressMap.get(b.characterId);
-                            const scoreA = (progressA.correctCount || 0) / ((progressA.correctCount || 0) + (progressA.incorrectCount || 0) + 1);
-                            const scoreB = (progressB.correctCount || 0) / ((progressB.correctCount || 0) + (progressB.incorrectCount || 0) + 1);
-                            return scoreA - scoreB;
-                        });
-                        characterToTest = allCharacters[0];
-                    }
-
-                    const alphabet = await db.alphabets.get(characterToTest.alphabetId);
-
-                    appState.currentCharForTest = characterToTest;
-                    appState.incorrectAttempts = 0;
-                    appState.caseForTest = Math.random() < 0.5 ? 'uppercase' : 'lowercase';
-
-                    testPrompt.textContent = `Draw the ${appState.caseForTest} letter: "${characterToTest.name}"`;
-                    speak(characterToTest.pronunciationKey, alphabet.languageCode);
-
-                    setupCanvas();
-                } catch (error) {
-                    logger.error("Failed to start the test:", error);
-                    testPrompt.textContent = "Error starting test. Please try again.";
+                if (!appState.currentAlphabetId) {
+                    testPrompt.textContent = 'Please select an alphabet first.';
+                    return;
                 }
-            }
 
-            let canvasEventHandlers = null;
+                // Intelligent character selection
+                const allCharacters = await db.characters.where('alphabetId').equals(appState.currentAlphabetId).toArray();
+                const progressData = await db.userProgress.where('characterId').startsWith('greek').or('characterId').startsWith('italian').or('characterId').startsWith('spanish').or('characterId').startsWith('turkish').toArray();
+
+                const progressMap = new Map(progressData.map(p => [p.characterId, p]));
+
+                let characterToTest;
+                const untestedChars = allCharacters.filter(c => !progressMap.has(c.characterId));
+
+                if (untestedChars.length > 0) {
+                    characterToTest = untestedChars[Math.floor(Math.random() * untestedChars.length)];
+                } else {
+                    // Find character with the lowest success rate
+                    allCharacters.sort((a, b) => {
+                        const progressA = progressMap.get(a.characterId);
+                        const progressB = progressMap.get(b.characterId);
+                        const scoreA = (progressA.correctCount || 0) / ((progressA.correctCount || 0) + (progressA.incorrectCount || 0) + 1);
+                        const scoreB = (progressB.correctCount || 0) / ((progressB.correctCount || 0) + (progressB.incorrectCount || 0) + 1);
+                        return scoreA - scoreB;
+                    });
+                    characterToTest = allCharacters[0];
+                }
+
+                const alphabet = await db.alphabets.get(characterToTest.alphabetId);
+
+                appState.currentCharForTest = characterToTest;
+                appState.incorrectAttempts = 0; // Reset incorrect attempts
+
+                testPrompt.textContent = `Draw the letter: "${characterToTest.name}"`;
+                speak(characterToTest.pronunciationKey, alphabet.languageCode);
+
+                setupCanvas();
+            }
 
             function setupCanvas() {
                 const ctx = drawingCanvas.getContext('2d');
@@ -783,144 +547,98 @@ python -m SimpleHTTPServer</code></pre>
                 ctx.lineCap = 'round';
                 ctx.lineJoin = 'round';
 
-                // Remove previous listeners if they exist
-                if (canvasEventHandlers) {
-                    drawingCanvas.removeEventListener('mousedown', canvasEventHandlers.start);
-                    drawingCanvas.removeEventListener('mousemove', canvasEventHandlers.draw);
-                    drawingCanvas.removeEventListener('mouseup', canvasEventHandlers.stop);
-                    drawingCanvas.removeEventListener('mouseleave', canvasEventHandlers.stop);
-                    drawingCanvas.removeEventListener('touchstart', canvasEventHandlers.start);
-                    drawingCanvas.removeEventListener('touchmove', canvasEventHandlers.draw);
-                    drawingCanvas.removeEventListener('touchend', canvasEventHandlers.stop);
-                }
-
-                const startDrawing = (e) => {
-                    e.preventDefault();
+                function startDrawing(e) {
                     drawing = true;
                     currentStroke = [];
                     const pos = getMousePos(drawingCanvas, e);
                     ctx.beginPath();
                     ctx.moveTo(pos.x, pos.y);
-                };
+                }
 
-                const draw = (e) => {
-                    e.preventDefault();
+                function draw(e) {
                     if (!drawing) return;
                     const pos = getMousePos(drawingCanvas, e);
                     currentStroke.push(pos);
                     ctx.lineTo(pos.x, pos.y);
                     ctx.stroke();
-                };
+                }
 
-                const stopDrawing = (e) => {
-                    e.preventDefault();
+                function stopDrawing() {
                     if (!drawing) return;
                     drawing = false;
-                    if (currentStroke.length > 1) {
+                    if (currentStroke.length > 0) {
                         userStrokes.push(currentStroke);
                     }
                     ctx.closePath();
-                };
+                }
 
-                // Store handlers to be able to remove them later
-                canvasEventHandlers = { start: startDrawing, draw: draw, stop: stopDrawing };
+                drawingCanvas.onmousedown = startDrawing;
+                drawingCanvas.onmousemove = draw;
+                drawingCanvas.onmouseup = stopDrawing;
+                drawingCanvas.onmouseleave = stopDrawing;
 
-                // Add both mouse and touch event listeners
-                drawingCanvas.addEventListener('mousedown', startDrawing);
-                drawingCanvas.addEventListener('mousemove', draw);
-                drawingCanvas.addEventListener('mouseup', stopDrawing);
-                drawingCanvas.addEventListener('mouseleave', stopDrawing);
-                drawingCanvas.addEventListener('touchstart', startDrawing);
-                drawingCanvas.addEventListener('touchmove', draw);
-                drawingCanvas.addEventListener('touchend', stopDrawing);
-
-                const handleSubmit = async () => {
+                submitDrawingBtn.onclick = async () => {
                     const char = appState.currentCharForTest;
-                    const caseToTest = appState.caseForTest;
 
-                    const isCorrect = validateStrokes(userStrokes, char.strokeSVGPaths[caseToTest]);
+                    // New, improved validation
+                    const isCorrect = validateStrokes(userStrokes, char.strokeSVGPaths.uppercase) ||
+                                      validateStrokes(userStrokes, char.strokeSVGPaths.lowercase);
 
-                    try {
-                        const progress = await db.userProgress.get({ characterId: char.characterId }) || { characterId: char.characterId, correctCount: 0, incorrectCount: 0 };
-                        progress.lastTested = new Date(); // Update lastTested timestamp
+                    const progress = await db.userProgress.get({ characterId: char.characterId }) || { characterId: char.characterId, correctCount: 0, incorrectCount: 0 };
 
-                        if (isCorrect) {
-                            testFeedback.textContent = 'Correct!';
-                            progress.correctCount++;
-                            await db.userProgress.put(progress);
+                    if (isCorrect) {
+                        testFeedback.textContent = 'Correct!';
+                        progress.correctCount++;
+                        await db.userProgress.put(progress);
+                        setTimeout(() => {
+                            testFeedback.textContent = '';
+                            startTest();
+                        }, 1500);
+                    } else {
+                        appState.incorrectAttempts++;
+                        progress.incorrectCount++;
+                        await db.userProgress.put(progress);
+
+                        if (appState.incorrectAttempts >= 3) {
+                            testFeedback.textContent = `Incorrect. Here's a hint.`;
+                            // Show animation hint
+                            characterDisplayContainer.classList.remove('hidden');
+                            testingModeContainer.classList.add('hidden');
+                            displayCharacter(char.characterId);
                             setTimeout(() => {
-                                testFeedback.textContent = '';
-                                startTest();
-                            }, FEEDBACK_TIMEOUT_MS);
+                                setMode('test');
+                                characterDisplayContainer.classList.add('hidden');
+                            }, 4000); // Allow time for animation
                         } else {
-                            appState.incorrectAttempts++;
-                            progress.incorrectCount++;
-                            await db.userProgress.put(progress);
-
-                            if (appState.incorrectAttempts >= MAX_INCORRECT_ATTEMPTS) {
-                                testFeedback.textContent = `Incorrect. Here's a hint.`;
-                                characterDisplayContainer.classList.remove('hidden');
-                                testingModeContainer.classList.add('hidden');
-                                displayCharacter(char.characterId);
-                                setTimeout(() => {
-                                    setMode('test');
-                                    characterDisplayContainer.classList.add('hidden');
-                                }, HINT_TIMEOUT_MS);
-                            } else {
-                               testFeedback.textContent = `Incorrect. Try again.`;
-                               setTimeout(() => {
-                                    testFeedback.textContent = '';
-                                    ctx.clearRect(0, 0, drawingCanvas.width, drawingCanvas.height);
-                                    userStrokes = [];
-                               }, FEEDBACK_TIMEOUT_MS);
-                            }
+                           testFeedback.textContent = `Incorrect. Try again.`;
+                           setTimeout(() => {
+                                testFeedback.textContent = '';
+                                ctx.clearRect(0, 0, drawingCanvas.width, drawingCanvas.height);
+                                userStrokes = [];
+                           }, 1500);
                         }
-                    } catch (error) {
-                        logger.error("Failed to update user progress:", error);
                     }
                 };
-
-                // Remove previous listener before adding a new one
-                submitDrawingBtn.removeEventListener('click', submitDrawingBtn.handler);
-                submitDrawingBtn.handler = handleSubmit;
-                submitDrawingBtn.addEventListener('click', submitDrawingBtn.handler);
             }
 
             function getMousePos(canvas, evt) {
                 const rect = canvas.getBoundingClientRect();
-                const clientX = evt.touches ? evt.touches[0].clientX : evt.clientX;
-                const clientY = evt.touches ? evt.touches[0].clientY : evt.clientY;
                 return {
-                    x: clientX - rect.left,
-                    y: clientY - rect.top
+                    x: evt.clientX - rect.left,
+                    y: evt.clientY - rect.top
                 };
             }
 
             // --- HANDWRITING VALIDATION LOGIC ---
 
             function getStrokeEndpoints(svgPath) {
-                try {
-                    const commands = svgPathParser.parseSVG(svgPath);
-                    if (commands.length === 0) return null;
+                const numbers = svgPath.match(/-?\d+(\.\d+)?/g);
+                if (!numbers || numbers.length < 2) return null;
 
-                    svgPathParser.makeAbsolute(commands);
-
-                    const firstCommand = commands[0];
-                    const lastCommand = commands[commands.length - 1];
-
-                    // For a Z command, the end point is the start point of the subpath
-                    const endPoint = lastCommand.code.toUpperCase() === 'Z'
-                        ? { x: lastCommand.x0, y: lastCommand.y0 }
-                        : { x: lastCommand.x, y: lastCommand.y };
-
-                    return {
-                        start: { x: firstCommand.x0, y: firstCommand.y0 },
-                        end: endPoint
-                    };
-                } catch (error) {
-                    logger.error("Error parsing SVG path:", error);
-                    return null;
-                }
+                return {
+                    start: { x: parseFloat(numbers[0]), y: parseFloat(numbers[1]) },
+                    end: { x: parseFloat(numbers[numbers.length - 2]), y: parseFloat(numbers[numbers.length - 1]) }
+                };
             }
 
             function arePointsClose(p1, p2, threshold) {
@@ -931,67 +649,36 @@ python -m SimpleHTTPServer</code></pre>
 
             function validateStrokes(userStrokes, correctStrokePaths) {
                 if (userStrokes.length !== correctStrokePaths.length) {
-                    logger.log(`Validation failed: Stroke count mismatch. User: ${userStrokes.length}, Correct: ${correctStrokePaths.length}`);
                     return false;
                 }
                 if (userStrokes.length === 0) return false;
 
-                const scaleFactor = CANVAS_WIDTH / SVG_VIEWBOX_SIZE;
+                const threshold = 35; // How close points need to be, in a 100x100 grid
 
                 for (let i = 0; i < userStrokes.length; i++) {
                     const userStroke = userStrokes[i];
-                    if (userStroke.length < 2) {
-                        logger.log(`Validation failed: User stroke ${i} has fewer than 2 points.`);
-                        return false; // Stroke must have start and end
-                    }
+                    if (userStroke.length < 2) return false; // Stroke must have start and end
 
                     const correctEndpoints = getStrokeEndpoints(correctStrokePaths[i]);
-                    if (!correctEndpoints) {
-                        logger.warn(`Could not parse correct endpoints for stroke ${i}: ${correctStrokePaths[i]}`);
-                        return false; // Could not parse correct path
-                    }
+                    if (!correctEndpoints) return false;
 
-                    const userStartPoint = { x: userStroke[0].x / scaleFactor, y: userStroke[0].y / scaleFactor };
-                    const userEndPoint = { x: userStroke[userStroke.length - 1].x / scaleFactor, y: userStroke[userStroke.length - 1].y / scaleFactor };
+                    // Normalize canvas points (400x400) to SVG points (100x100)
+                    const userStartPoint = { x: userStroke[0].x / 4, y: userStroke[0].y / 4 };
+                    const userEndPoint = { x: userStroke[userStroke.length - 1].x / 4, y: userStroke[userStroke.length - 1].y / 4 };
 
-                    const matchForward = arePointsClose(userStartPoint, correctEndpoints.start, STROKE_VALIDATION_THRESHOLD) && arePointsClose(userEndPoint, correctEndpoints.end, STROKE_VALIDATION_THRESHOLD);
-                    const matchReverse = arePointsClose(userStartPoint, correctEndpoints.end, STROKE_VALIDATION_THRESHOLD) && arePointsClose(userEndPoint, correctEndpoints.start, STROKE_VALIDATION_THRESHOLD);
+                    // Allow stroke to be drawn in either direction
+                    const matchForward = arePointsClose(userStartPoint, correctEndpoints.start, threshold) && arePointsClose(userEndPoint, correctEndpoints.end, threshold);
+                    const matchReverse = arePointsClose(userStartPoint, correctEndpoints.end, threshold) && arePointsClose(userEndPoint, correctEndpoints.start, threshold);
 
                     if (!matchForward && !matchReverse) {
-                        logger.log(`Validation failed on stroke ${i}:`);
-                        logger.log('User points (scaled):', { start: userStartPoint, end: userEndPoint });
-                        logger.log('Correct points:', correctEndpoints);
-                        return false;
+                        return false; // This stroke doesn't match
                     }
                 }
 
-                return true;
+                return true; // All strokes matched
             }
 
-            function openStrokeEditor(character) {
-                strokeEditorContainer.classList.remove('hidden');
-                uppercasePathInput.value = character.strokeSVGPaths.uppercase.join('\n');
-                lowercasePathInput.value = character.strokeSVGPaths.lowercase.join('\n');
-
-                const redraw = () => {
-                    const upperPaths = uppercasePathInput.value.split('\n').filter(p => p.trim() !== '');
-                    const lowerPaths = lowercasePathInput.value.split('\n').filter(p => p.trim() !== '');
-                    animateCharacter(handwritingSvgUpper, handwritingSvgLower, { uppercase: upperPaths, lowercase: lowerPaths });
-                };
-
-                const closeEditor = () => {
-                    strokeEditorContainer.classList.add('hidden');
-                    redrawSvgBtn.removeEventListener('click', redraw);
-                    closeEditorBtn.removeEventListener('click', closeEditor);
-                };
-
-                redrawSvgBtn.addEventListener('click', redraw);
-                closeEditorBtn.addEventListener('click', closeEditor);
-            }
-
-            // --- Start the application ---
-            initializeApp();
-        };
+        })();
     </script>
 </body>
 </html>
