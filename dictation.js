@@ -14,6 +14,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const deleteTextBtn = document.getElementById('delete-text-btn');
     const textDisplay = document.getElementById('text-display');
     const speakerIcon = document.getElementById('speaker-icon');
+    const diffDisplay = document.getElementById('diff-display');
     const writingInput = document.getElementById('writing-input');
     const speedSlider = document.getElementById('speed-slider');
     const fontSizeSelect = document.getElementById('font-size-select');
@@ -21,15 +22,19 @@ document.addEventListener('DOMContentLoaded', () => {
     const hideTextCheckbox = document.getElementById('hide-text-checkbox');
     const readNextCheckbox = document.getElementById('read-next-checkbox');
     const readOnCorrectCheckbox = document.getElementById('read-on-correct-checkbox');
+    const ignoreAccentsCheckbox = document.getElementById('ignore-accents-checkbox');
+    const ignorePunctuationCheckbox = document.getElementById('ignore-punctuation-checkbox');
+    const ignoreCaseCheckbox = document.getElementById('ignore-case-checkbox');
     const textTitleInput = document.getElementById('text-title-input');
     const textContentTextarea = document.getElementById('text-content-textarea');
     const saveTextBtn = document.getElementById('save-text-btn');
-    const readAloudBtn = document.getElementById('read-aloud-btn');
+    const readAloudTextBtn = document.getElementById('read-aloud-text-btn');
     const repeatWordBtn = document.getElementById('repeat-word-btn');
     const revealTextBtn = document.getElementById('reveal-text-btn');
     const configToggleBtn = document.getElementById('config-toggle-btn');
     const configPanel = document.getElementById('config-panel');
     const closeConfigBtn = document.getElementById('close-config-btn');
+    const resetSettingsBtn = document.getElementById('reset-settings-btn');
     const notificationArea = document.getElementById('notification-area');
 
     // --- App State ---
@@ -55,10 +60,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const saveSession = () => {
         if (textSelect.value) {
-            sessionStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify({
+            const sessionData = {
                 title: textSelect.value,
                 userInput: writingInput.value
-            }));
+            };
+            console.log('Saving session:', sessionData);
+            sessionStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(sessionData));
         }
     };
 
@@ -87,6 +94,32 @@ document.addEventListener('DOMContentLoaded', () => {
         textContentTextarea.value = '';
         originalTitle = null;
         textTitleInput.focus();
+    };
+
+    const normalizeWord = (word) => {
+        let normalized = word;
+        if (ignoreCaseCheckbox.checked) {
+            normalized = normalized.toLowerCase();
+        }
+        if (ignoreAccentsCheckbox.checked) {
+            normalized = normalized.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+        }
+        if (ignorePunctuationCheckbox.checked) {
+            normalized = normalized.replace(/[\p{P}]/gu, '');
+        }
+        return normalized;
+    };
+
+    const createDiffHtml = (actual, expected) => {
+        const diff = Diff.diffChars(actual, expected);
+        const fragment = document.createDocumentFragment();
+        diff.forEach((part) => {
+            const span = document.createElement('span');
+            span.className = part.added ? 'diff-added' : part.removed ? 'diff-removed' : 'diff-correct';
+            span.appendChild(document.createTextNode(part.value));
+            fragment.appendChild(span);
+        });
+        return fragment;
     };
 
     // ** Level 2: Dependencies on Level 1 **
@@ -165,30 +198,52 @@ document.addEventListener('DOMContentLoaded', () => {
         const sourceSpans = Array.from(textDisplay.querySelectorAll('span'));
         const inputValue = writingInput.value;
         const inputWords = inputValue.split(/[\s\n]+/).filter(w => w.length > 0);
-        // A word is considered "complete" if there's trailing whitespace.
-        // An empty input is also considered "complete" to reset the state.
         const isInputComplete = /[\s\n]$/.test(inputValue) || inputValue.length === 0;
+        const isHiddenMode = hideTextCheckbox.checked;
 
         let lastCorrectIndex = -1;
+        let diffShown = false;
+
+        // At the start of each check, reset the diff/speaker icon state in hidden mode.
+        if (isHiddenMode) {
+            diffDisplay.classList.add('hidden');
+            speakerIcon.classList.remove('hidden');
+        }
 
         sourceSpans.forEach(span => span.classList.remove('correct', 'incorrect', 'current'));
 
         sourceSpans.forEach((span, index) => {
             if (index < inputWords.length) {
                 const isLastWord = index === inputWords.length - 1;
+                const normalizedSource = normalizeWord(sourceWords[index]);
+                const normalizedInput = normalizeWord(inputWords[index]);
 
+                let isIncorrect = false;
                 if (isLastWord && !isInputComplete) {
-                    // Word is being typed, check for prefix match
-                    if (!sourceWords[index].startsWith(inputWords[index])) {
-                        span.classList.add('incorrect');
+                    if (!normalizedSource.startsWith(normalizedInput)) {
+                        isIncorrect = true;
                     }
                 } else {
-                    // Word is complete, check for exact match
-                    if (inputWords[index] === sourceWords[index]) {
+                    if (normalizedInput !== normalizedSource) {
+                        isIncorrect = true;
+                    }
+                }
+
+                if (isIncorrect) {
+                    span.classList.add('incorrect');
+                    // If it's the first error and we're hidden, show the diff.
+                    if (isHiddenMode && !diffShown) {
+                        const diffHtml = createDiffHtml(inputWords[index], sourceWords[index]);
+                        diffDisplay.innerHTML = '';
+                        diffDisplay.appendChild(diffHtml);
+                        diffDisplay.classList.remove('hidden');
+                        speakerIcon.classList.add('hidden');
+                        diffShown = true;
+                    }
+                } else {
+                    if (!isLastWord || isInputComplete) {
                         span.classList.add('correct');
                         lastCorrectIndex = index;
-                    } else {
-                        span.classList.add('incorrect');
                     }
                 }
             }
@@ -196,7 +251,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const newWordIndex = lastCorrectIndex + 1;
         const hasAdvanced = newWordIndex > currentWordIndex;
-
         currentWordIndex = newWordIndex;
 
         if (hasAdvanced) {
@@ -224,6 +278,10 @@ document.addEventListener('DOMContentLoaded', () => {
     const displayText = async (savedInput = '') => {
         const title = textSelect.value;
         if (title && texts[title]) {
+            // Clear any previous diff display when loading new text
+            diffDisplay.innerHTML = '';
+            diffDisplay.classList.add('hidden');
+
             sourceWords = texts[title].split(' ').filter(w => w.length > 0);
             currentWordIndex = 0;
             tabKeyPressCount = 0;
@@ -270,10 +328,17 @@ document.addEventListener('DOMContentLoaded', () => {
     const toggleHideText = () => {
         const isHidden = hideTextCheckbox.checked;
         textDisplay.classList.toggle('hidden', isHidden);
-        speakerIcon.classList.toggle('hidden', !isHidden);
         revealTextBtn.classList.toggle('hidden', !isHidden);
+
+        // When hiding text, show the speaker icon and hide the diff display.
+        // When showing text, hide both.
+        speakerIcon.classList.toggle('hidden', !isHidden);
+        diffDisplay.classList.toggle('hidden', true); // Always hide diff on toggle
+
         if (isHidden) {
             writingInput.focus();
+            // We re-run input handler to check if a diff should be shown immediately
+            handleContinuousInput();
             speakNextWord();
         }
     };
@@ -311,6 +376,9 @@ document.addEventListener('DOMContentLoaded', () => {
             speed: speedSlider.value,
             readNext: readNextCheckbox.checked,
             readOnCorrect: readOnCorrectCheckbox.checked,
+            ignoreAccents: ignoreAccentsCheckbox.checked,
+            ignorePunctuation: ignorePunctuationCheckbox.checked,
+            ignoreCase: ignoreCaseCheckbox.checked,
         };
         await idb.set(DB_CONFIG_KEY, config);
     };
@@ -321,8 +389,11 @@ document.addEventListener('DOMContentLoaded', () => {
         fontFamilySelect.value = config.fontFamily || 'font-family-arial';
         speedSlider.value = config.speed || '1';
         hideTextCheckbox.checked = config.hideText || false;
-        readNextCheckbox.checked = config.readNext !== false; // Default to true
-        readOnCorrectCheckbox.checked = config.readOnCorrect !== false; // Default to true
+        readNextCheckbox.checked = config.readNext !== false;
+        readOnCorrectCheckbox.checked = config.readOnCorrect !== false;
+        ignoreAccentsCheckbox.checked = config.ignoreAccents !== false;
+        ignorePunctuationCheckbox.checked = config.ignorePunctuation !== false;
+        ignoreCaseCheckbox.checked = config.ignoreCase !== false;
 
         applyConfig({ fontSize: fontSizeSelect.value, fontFamily: fontFamilySelect.value });
         toggleHideText();
@@ -333,8 +404,33 @@ document.addEventListener('DOMContentLoaded', () => {
         saveConfig();
     };
 
+    const resetSettings = () => {
+        // Set UI elements to default values
+        fontSizeSelect.value = 'font-size-28';
+        fontFamilySelect.value = 'font-family-arial';
+        speedSlider.value = '1';
+        hideTextCheckbox.checked = false;
+        readNextCheckbox.checked = true;
+        readOnCorrectCheckbox.checked = true;
+        ignoreAccentsCheckbox.checked = true;
+        ignorePunctuationCheckbox.checked = true;
+        ignoreCaseCheckbox.checked = true;
+
+        // Apply visual changes
+        applyConfig({
+            fontSize: fontSizeSelect.value,
+            fontFamily: fontFamilySelect.value,
+        });
+        toggleHideText();
+
+        // Save the new default config and notify the user
+        saveConfig();
+        showNotification('Display settings have been reset.');
+    };
+
     // --- Event Listeners & Initial Load ---
 
+    resetSettingsBtn.addEventListener('click', resetSettings);
     newTextBtn.addEventListener('click', clearEditor);
     deleteTextBtn.addEventListener('click', deleteText);
     saveTextBtn.addEventListener('click', saveText);
@@ -350,9 +446,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     writingInput.addEventListener('input', handleContinuousInput);
-    if (readAloudBtn) {
-        readAloudBtn.addEventListener('click', speakText);
-    }
+    readAloudTextBtn.addEventListener('click', speakText);
     repeatWordBtn.addEventListener('click', repeatCurrentWord);
 
     textDisplay.addEventListener('click', (event) => {
@@ -377,6 +471,9 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     readNextCheckbox.addEventListener('change', saveConfig);
     readOnCorrectCheckbox.addEventListener('change', saveConfig);
+    ignoreAccentsCheckbox.addEventListener('change', saveConfig);
+    ignorePunctuationCheckbox.addEventListener('change', saveConfig);
+    ignoreCaseCheckbox.addEventListener('change', saveConfig);
 
     writingInput.addEventListener('keydown', (event) => {
         if (event.key === 'Tab') {
@@ -411,10 +508,16 @@ document.addEventListener('DOMContentLoaded', () => {
         await loadConfig();
         await loadTexts();
 
+        // Restore the previous session if it exists
         const savedSession = loadSession();
+        console.log('Loaded session from sessionStorage:', savedSession);
         if (savedSession && texts[savedSession.title]) {
+            console.log('Session is valid, restoring for text:', savedSession.title);
             textSelect.value = savedSession.title;
+            // Directly call displayText with the saved user input to restore the state
             await displayText(savedSession.userInput);
+        } else {
+            console.log('No valid session found to restore.');
         }
     };
 

@@ -38,19 +38,19 @@ body {
     flex-direction: column;
     padding: 20px;
     background-color: #fdfdfd;
+    gap: 20px;
 }
 
 #text-display-container {
-    flex-grow: 1;
+    flex: 1;
     border: 1px solid var(--medium-gray);
     border-radius: 8px;
     padding: 20px;
     overflow-y: auto;
-    margin-bottom: 20px;
 }
 
 #input-container {
-    flex-basis: 30%; /* Input takes up a portion of the space */
+    flex: 1;
     display: flex;
     flex-direction: column;
 }
@@ -217,7 +217,26 @@ body {
     font-size: 5em;
     text-align: center;
     color: var(--medium-gray);
-    padding-top: 50px;
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+}
+
+#text-display-container {
+    position: relative; /* Needed for absolute positioning of speaker icon */
+}
+
+#diff-display .diff-added {
+    background-color: var(--success-message-bg);
+    color: var(--success-message-text);
+    text-decoration: none;
+}
+
+#diff-display .diff-removed {
+    background-color: var(--danger-message-bg);
+    color: var(--danger-message-text);
+    text-decoration: line-through;
 }
 
 /* Font size classes */
