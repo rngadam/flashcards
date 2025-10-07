@@ -1,0 +1,684 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Alphabet Learning App</title>
+    <script src="https://cdn.jsdelivr.net/npm/dexie@4.0.1/dist/dexie.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/DrawSVGPlugin.min.js"></script>
+    <style>
+        body {
+            font-family: sans-serif;
+            background-color: #f0f0f0;
+            color: #333;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+        }
+
+        #app-container {
+            width: 90%;
+            max-width: 800px;
+            background-color: #fff;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        }
+
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid #ddd;
+            padding-bottom: 10px;
+            margin-bottom: 20px;
+        }
+
+        h1, h2 {
+            color: #555;
+        }
+
+        button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+
+        button:hover {
+            background-color: #0056b3;
+        }
+
+        button.active {
+            background-color: #0056b3;
+        }
+
+        #alphabet-buttons, #character-grid {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+
+        .character-grid button {
+            width: 60px;
+            height: 60px;
+            font-size: 1.5em;
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        #character-display-container {
+            display: flex;
+            gap: 20px;
+        }
+
+        #animation-container {
+            width: 200px;
+            height: 200px;
+            border: 1px solid #ddd;
+        }
+
+        #handwriting-svg path {
+            stroke: #333;
+            stroke-width: 5;
+            fill: none;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+        }
+
+        #drawing-canvas {
+            border: 1px solid #333;
+            cursor: crosshair;
+        }
+    </style>
+</head>
+<body>
+    <div id="app-container">
+        <header>
+            <h1>Alphabet Learning App</h1>
+            <div id="mode-selector">
+                <button id="train-mode-btn" class="active">Train</button>
+                <button id="test-mode-btn">Test</button>
+            </div>
+        </header>
+
+        <main id="main-content">
+            <section id="alphabet-selection-container">
+                <h2>Select an Alphabet</h2>
+                <div id="alphabet-buttons"></div>
+            </section>
+
+            <section id="character-grid-container" class="hidden">
+                <h2 id="character-grid-title"></h2>
+                <div id="character-grid"></div>
+            </section>
+
+            <section id="character-display-container" class="hidden">
+                <div id="character-info">
+                    <h2 id="character-name"></h2>
+                    <p>Uppercase: <span id="char-uppercase"></span></p>
+                    <p>Lowercase: <span id="char-lowercase"></span></p>
+                </div>
+                <div id="animation-container">
+                    <svg id="handwriting-svg" viewBox="0 0 100 100"></svg>
+                </div>
+                <button id="replay-animation-btn">Replay Animation</button>
+            </section>
+
+            <section id="testing-mode-container" class="hidden">
+                <h2 id="test-prompt"></h2>
+                <canvas id="drawing-canvas" width="400" height="400"></canvas>
+                <div id="test-feedback"></div>
+                <button id="submit-drawing-btn">Submit</button>
+            </section>
+        </main>
+    </div>
+
+    <script>
+        (function() {
+            'use strict';
+
+            // --- 1. DATABASE SETUP ---
+            const db = new Dexie('AlphabetDB');
+            db.version(1).stores({
+                alphabets: '++id, name, languageCode',
+                characters: '++id, &characterId, alphabetId, name, order',
+                userProgress: '++id, characterId, lastTested, correctCount, incorrectCount'
+            });
+
+            // --- 2. DATA DEFINITION ---
+            // This is the pre-authored data for the application.
+            const alphabetsData = [
+                { id: 1, name: 'Greek', languageCode: 'el-GR' },
+                { id: 2, name: 'Italian', languageCode: 'it-IT' },
+                { id: 3, name: 'Spanish', languageCode: 'es-ES' },
+                { id: 4, name: 'Turkish', languageCode: 'tr-TR' }
+            ];
+
+            const charactersData = [
+                // --- Greek Characters (24) ---
+                { characterId: 'greek-alpha', alphabetName: 'Greek', name: 'Alpha', order: 1, uppercase: 'Α', lowercase: 'α', pronunciationKey: 'Alpha', strokeSVGPaths: { uppercase: ["M50,10 L10,90", "M90,90 L50,10", "M30,60 L70,60"], lowercase: ["M70,40 C70,20 40,20 40,50 C40,80 70,80 70,60 L30,90"] } },
+                { characterId: 'greek-beta', alphabetName: 'Greek', name: 'Beta', order: 2, uppercase: 'Β', lowercase: 'β', pronunciationKey: 'Beta', strokeSVGPaths: { uppercase: ["M20,10 L20,90", "M20,10 C80,10 80,50 20,50", "M20,50 C80,50 80,90 20,90"], lowercase: ["M40,10 L40,90", "M40,50 C80,50 80,90 40,90"] } },
+                { characterId: 'greek-gamma', alphabetName: 'Greek', name: 'Gamma', order: 3, uppercase: 'Γ', lowercase: 'γ', pronunciationKey: 'Gamma', strokeSVGPaths: { uppercase: ["M80,10 L20,10 L20,90"], lowercase: ["M20,20 L80,80", "M80,20 L20,80"] } },
+                { characterId: 'greek-delta', alphabetName: 'Greek', name: 'Delta', order: 4, uppercase: 'Δ', lowercase: 'δ', pronunciationKey: 'Delta', strokeSVGPaths: { uppercase: ["M50,10 L10,90 L90,90 Z"], lowercase: ["M50,20 C20,20 20,80 50,80 C80,80 80,20 50,20 Z", "M50,20 L50,90"] } },
+                { characterId: 'greek-epsilon', alphabetName: 'Greek', name: 'Epsilon', order: 5, uppercase: 'Ε', lowercase: 'ε', pronunciationKey: 'Epsilon', strokeSVGPaths: { uppercase: ["M20,10 L20,90", "M80,10 L20,10", "M80,50 L20,50", "M80,90 L20,90"], lowercase: ["M80,50 C20,50 20,80 80,80"] } },
+                { characterId: 'greek-zeta', alphabetName: 'Greek', name: 'Zeta', order: 6, uppercase: 'Ζ', lowercase: 'ζ', pronunciationKey: 'Zeta', strokeSVGPaths: { uppercase: ["M20,10 L80,10", "M20,90 L80,90", "M80,10 L20,90"], lowercase: ["M20,20 C80,20 80,50 20,50 C80,50 80,80 20,80 L20,90"] } },
+                { characterId: 'greek-eta', alphabetName: 'Greek', name: 'Eta', order: 7, uppercase: 'Η', lowercase: 'η', pronunciationKey: 'Eta', strokeSVGPaths: { uppercase: ["M20,10 L20,90", "M80,10 L80,90", "M20,50 L80,50"], lowercase: ["M20,20 L20,80", "M20,40 C80,40 80,80 20,80"] } },
+                { characterId: 'greek-theta', alphabetName: 'Greek', name: 'Theta', order: 8, uppercase: 'Θ', lowercase: 'θ', pronunciationKey: 'Theta', strokeSVGPaths: { uppercase: ["M50,10 C10,10 10,90 50,90 C90,90 90,10 50,10 Z", "M20,50 L80,50"], lowercase: ["M50,20 C20,20 20,80 50,80 C80,80 80,20 50,20 Z", "M30,50 L70,50"] } },
+                { characterId: 'greek-iota', alphabetName: 'Greek', name: 'Iota', order: 9, uppercase: 'Ι', lowercase: 'ι', pronunciationKey: 'Iota', strokeSVGPaths: { uppercase: ["M20,10 L80,10", "M50,10 L50,90", "M20,90 L80,90"], lowercase: ["M50,20 L50,80"] } },
+                { characterId: 'greek-kappa', alphabetName: 'Greek', name: 'Kappa', order: 10, uppercase: 'Κ', lowercase: 'κ', pronunciationKey: 'Kappa', strokeSVGPaths: { uppercase: ["M20,10 L20,90", "M80,10 L20,50", "M20,50 L80,90"], lowercase: ["M20,20 L20,80", "M60,20 L20,50", "M20,50 L60,80"] } },
+                { characterId: 'greek-lambda', alphabetName: 'Greek', name: 'Lambda', order: 11, uppercase: 'Λ', lowercase: 'λ', pronunciationKey: 'Lambda', strokeSVGPaths: { uppercase: ["M10,90 L50,10", "M50,10 L90,90"], lowercase: ["M30,20 L70,80", "M70,20 L30,80"] } },
+                { characterId: 'greek-mu', alphabetName: 'Greek', name: 'Mu', order: 12, uppercase: 'Μ', lowercase: 'μ', pronunciationKey: 'Mu', strokeSVGPaths: { uppercase: ["M20,90 L20,10 L50,50 L80,10 L80,90"], lowercase: ["M20,80 L20,20", "M20,40 C80,40 80,80 20,80"] } },
+                { characterId: 'greek-nu', alphabetName: 'Greek', name: 'Nu', order: 13, uppercase: 'Ν', lowercase: 'ν', pronunciationKey: 'Nu', strokeSVGPaths: { uppercase: ["M20,90 L20,10 L80,90 L80,10"], lowercase: ["M20,20 L80,80"] } },
+                { characterId: 'greek-xi', alphabetName: 'Greek', name: 'Xi', order: 14, uppercase: 'Ξ', lowercase: 'ξ', pronunciationKey: 'Xi', strokeSVGPaths: { uppercase: ["M20,10 L80,10", "M20,50 L80,50", "M20,90 L80,90"], lowercase: ["M20,20 C80,20 80,50 20,50 C80,50 80,80 20,80"] } },
+                { characterId: 'greek-omicron', alphabetName: 'Greek', name: 'Omicron', order: 15, uppercase: 'Ο', lowercase: 'ο', pronunciationKey: 'Omicron', strokeSVGPaths: { uppercase: ["M50,10 C10,10 10,90 50,90 C90,90 90,10 50,10 Z"], lowercase: ["M50,30 C30,30 30,70 50,70 C70,70 70,30 50,30 Z"] } },
+                { characterId: 'greek-pi', alphabetName: 'Greek', name: 'Pi', order: 16, uppercase: 'Π', lowercase: 'π', pronunciationKey: 'Pi', strokeSVGPaths: { uppercase: ["M20,10 L80,10", "M20,10 L20,90", "M80,10 L80,90"], lowercase: ["M20,20 L80,20", "M30,20 L30,80", "M70,20 L70,80"] } },
+                { characterId: 'greek-rho', alphabetName: 'Greek', name: 'Rho', order: 17, uppercase: 'Ρ', lowercase: 'ρ', pronunciationKey: 'Rho', strokeSVGPaths: { uppercase: ["M20,10 L20,90", "M20,10 C80,10 80,50 20,50"], lowercase: ["M20,20 L20,80", "M20,20 C60,20 60,50 20,50"] } },
+                { characterId: 'greek-sigma', alphabetName: 'Greek', name: 'Sigma', order: 18, uppercase: 'Σ', lowercase: 'σ', pronunciationKey: 'Sigma', strokeSVGPaths: { uppercase: ["M20,10 L80,10 L50,50 L80,90 L20,90"], lowercase: ["M70,30 C30,30 30,70 70,70"] } },
+                { characterId: 'greek-tau', alphabetName: 'Greek', name: 'Tau', order: 19, uppercase: 'Τ', lowercase: 'τ', pronunciationKey: 'Tau', strokeSVGPaths: { uppercase: ["M20,10 L80,10", "M50,10 L50,90"], lowercase: ["M20,20 L80,20", "M50,20 L50,80 C50,80 20,80 20,50"] } },
+                { characterId: 'greek-upsilon', alphabetName: 'Greek', name: 'Upsilon', order: 20, uppercase: 'Υ', lowercase: 'υ', pronunciationKey: 'Upsilon', strokeSVGPaths: { uppercase: ["M20,10 L50,50", "M80,10 L50,50", "M50,50 L50,90"], lowercase: ["M20,20 L40,80", "M80,20 L60,80"] } },
+                { characterId: 'greek-phi', alphabetName: 'Greek', name: 'Phi', order: 21, uppercase: 'Φ', lowercase: 'φ', pronunciationKey: 'Phi', strokeSVGPaths: { uppercase: ["M50,10 C10,10 10,90 50,90 C90,90 90,10 50,10 Z", "M50,10 L50,90"], lowercase: ["M50,20 C20,20 20,80 50,80 C80,80 80,20 50,20 Z", "M50,20 L50,90"] } },
+                { characterId: 'greek-chi', alphabetName: 'Greek', name: 'Chi', order: 22, uppercase: 'Χ', lowercase: 'χ', pronunciationKey: 'Chi', strokeSVGPaths: { uppercase: ["M20,10 L80,90", "M80,10 L20,90"], lowercase: ["M20,20 L80,80", "M80,20 L20,80"] } },
+                { characterId: 'greek-psi', alphabetName: 'Greek', name: 'Psi', order: 23, uppercase: 'Ψ', lowercase: 'ψ', pronunciationKey: 'Psi', strokeSVGPaths: { uppercase: ["M20,50 L50,10", "M80,50 L50,10", "M50,10 L50,90"], lowercase: ["M20,50 C50,20 80,50 80,50", "M50,20 L50,80"] } },
+                { characterId: 'greek-omega', alphabetName: 'Greek', name: 'Omega', order: 24, uppercase: 'Ω', lowercase: 'ω', pronunciationKey: 'Omega', strokeSVGPaths: { uppercase: ["M20,80 C20,20 80,20 80,80", "M20,80 L20,90", "M80,80 L80,90"], lowercase: ["M20,50 C20,30 80,30 80,50 C80,70 20,70 20,50 Z"] } },
+
+                // --- Italian Characters (21) ---
+                { characterId: 'italian-a', alphabetName: 'Italian', name: 'A', order: 1, uppercase: 'A', lowercase: 'a', pronunciationKey: 'A', strokeSVGPaths: { uppercase: ["M50,10 L10,90", "M50,10 L90,90", "M30,60 L70,60"], lowercase: ["M70,40 C70,20 40,20 40,50 L40,80", "M40,50 C70,50 70,80 40,80"] } },
+                { characterId: 'italian-b', alphabetName: 'Italian', name: 'B', order: 2, uppercase: 'B', lowercase: 'b', pronunciationKey: 'B', strokeSVGPaths: { uppercase: ["M20,10 L20,90", "M20,10 C80,10 80,50 20,50", "M20,50 C80,50 80,90 20,90"], lowercase: ["M20,10 L20,80", "M20,40 C60,40 60,80 20,80"] } },
+                { characterId: 'italian-c', alphabetName: 'Italian', name: 'C', order: 3, uppercase: 'C', lowercase: 'c', pronunciationKey: 'C', strokeSVGPaths: { uppercase: ["M80,20 C20,20 20,80 80,80"], lowercase: ["M70,30 C30,30 30,70 70,70"] } },
+                { characterId: 'italian-d', alphabetName: 'Italian', name: 'D', order: 4, uppercase: 'D', lowercase: 'd', pronunciationKey: 'D', strokeSVGPaths: { uppercase: ["M20,10 L20,90", "M20,10 C90,10 90,90 20,90"], lowercase: ["M80,10 L80,80", "M80,40 C40,40 40,80 80,80"] } },
+                { characterId: 'italian-e', alphabetName: 'Italian', name: 'E', order: 5, uppercase: 'E', lowercase: 'e', pronunciationKey: 'E', strokeSVGPaths: { uppercase: ["M20,10 L20,90", "M80,10 L20,10", "M80,50 L20,50", "M80,90 L20,90"], lowercase: ["M20,50 L80,50", "M80,50 C20,50 20,80 80,80"] } },
+                { characterId: 'italian-f', alphabetName: 'Italian', name: 'F', order: 6, uppercase: 'F', lowercase: 'f', pronunciationKey: 'F', strokeSVGPaths: { uppercase: ["M20,10 L20,90", "M80,10 L20,10", "M80,50 L20,50"], lowercase: ["M60,10 C40,10 40,80 60,80", "M40,40 L80,40"] } },
+                { characterId: 'italian-g', alphabetName: 'Italian', name: 'G', order: 7, uppercase: 'G', lowercase: 'g', pronunciationKey: 'G', strokeSVGPaths: { uppercase: ["M80,20 C20,20 20,80 80,80 L80,50 L50,50"], lowercase: ["M70,30 C30,30 30,70 70,70 L70,90 C30,90 30,70 70,70"] } },
+                { characterId: 'italian-h', alphabetName: 'Italian', name: 'H', order: 8, uppercase: 'H', lowercase: 'h', pronunciationKey: 'H', strokeSVGPaths: { uppercase: ["M20,10 L20,90", "M80,10 L80,90", "M20,50 L80,50"], lowercase: ["M20,10 L20,80", "M20,40 C60,40 60,80 20,80"] } },
+                { characterId: 'italian-i', alphabetName: 'Italian', name: 'I', order: 9, uppercase: 'I', lowercase: 'i', pronunciationKey: 'I', strokeSVGPaths: { uppercase: ["M20,10 L80,10", "M50,10 L50,90", "M20,90 L80,90"], lowercase: ["M50,40 L50,80", "M50,20 L50,30"] } },
+                { characterId: 'italian-l', alphabetName: 'Italian', name: 'L', order: 10, uppercase: 'L', lowercase: 'l', pronunciationKey: 'L', strokeSVGPaths: { uppercase: ["M20,10 L20,90 L80,90"], lowercase: ["M50,10 L50,80"] } },
+                { characterId: 'italian-m', alphabetName: 'Italian', name: 'M', order: 11, uppercase: 'M', lowercase: 'm', pronunciationKey: 'M', strokeSVGPaths: { uppercase: ["M20,90 L20,10 L50,50 L80,10 L80,90"], lowercase: ["M20,80 L20,40", "M20,40 C40,40 40,80 20,80", "M50,40 C70,40 70,80 50,80"] } },
+                { characterId: 'italian-n', alphabetName: 'Italian', name: 'N', order: 12, uppercase: 'N', lowercase: 'n', pronunciationKey: 'N', strokeSVGPaths: { uppercase: ["M20,90 L20,10 L80,90 L80,10"], lowercase: ["M20,80 L20,40", "M20,40 C60,40 60,80 20,80"] } },
+                { characterId: 'italian-o', alphabetName: 'Italian', name: 'O', order: 13, uppercase: 'O', lowercase: 'o', pronunciationKey: 'O', strokeSVGPaths: { uppercase: ["M50,10 C10,10 10,90 50,90 C90,90 90,10 50,10 Z"], lowercase: ["M50,40 C30,40 30,80 50,80 C70,80 70,40 50,40 Z"] } },
+                { characterId: 'italian-p', alphabetName: 'Italian', name: 'P', order: 14, uppercase: 'P', lowercase: 'p', pronunciationKey: 'P', strokeSVGPaths: { uppercase: ["M20,10 L20,90", "M20,10 C80,10 80,50 20,50"], lowercase: ["M20,20 L20,90", "M20,20 C60,20 60,50 20,50"] } },
+                { characterId: 'italian-q', alphabetName: 'Italian', name: 'Q', order: 15, uppercase: 'Q', lowercase: 'q', pronunciationKey: 'Q', strokeSVGPaths: { uppercase: ["M50,10 C10,10 10,90 50,90 C90,90 90,10 50,10 Z", "M70,70 L90,90"], lowercase: ["M80,20 L80,90", "M80,20 C40,20 40,50 80,50"] } },
+                { characterId: 'italian-r', alphabetName: 'Italian', name: 'R', order: 16, uppercase: 'R', lowercase: 'r', pronunciationKey: 'R', strokeSVGPaths: { uppercase: ["M20,10 L20,90", "M20,10 C80,10 80,50 20,50", "M50,50 L80,90"], lowercase: ["M20,80 L20,40", "M20,40 C60,40 60,60 20,60"] } },
+                { characterId: 'italian-s', alphabetName: 'Italian', name: 'S', order: 17, uppercase: 'S', lowercase: 's', pronunciationKey: 'S', strokeSVGPaths: { uppercase: ["M80,20 C20,20 20,50 50,50 C80,50 80,80 20,80"], lowercase: ["M70,30 C30,30 30,50 50,50 C70,50 70,70 30,70"] } },
+                { characterId: 'italian-t', alphabetName: 'Italian', name: 'T', order: 18, uppercase: 'T', lowercase: 't', pronunciationKey: 'T', strokeSVGPaths: { uppercase: ["M20,10 L80,10", "M50,10 L50,90"], lowercase: ["M50,20 L50,80", "M30,80 L70,80", "M50,20 C20,20 20,50 50,50"] } },
+                { characterId: 'italian-u', alphabetName: 'Italian', name: 'U', order: 19, uppercase: 'U', lowercase: 'u', pronunciationKey: 'U', strokeSVGPaths: { uppercase: ["M20,10 L20,70 C20,90 80,90 80,70 L80,10"], lowercase: ["M20,40 L20,70 C20,80 60,80 60,70 L60,40"] } },
+                { characterId: 'italian-v', alphabetName: 'Italian', name: 'V', order: 20, uppercase: 'V', lowercase: 'v', pronunciationKey: 'V', strokeSVGPaths: { uppercase: ["M10,10 L50,90 L90,10"], lowercase: ["M20,40 L50,80 L80,40"] } },
+                { characterId: 'italian-z', alphabetName: 'Italian', name: 'Z', order: 21, uppercase: 'Z', lowercase: 'z', pronunciationKey: 'Z', strokeSVGPaths: { uppercase: ["M20,10 L80,10 L20,90 L80,90"], lowercase: ["M20,40 L80,40 L20,80 L80,80"] } },
+
+                // --- Spanish Characters (27) ---
+                { characterId: 'spanish-a', alphabetName: 'Spanish', name: 'A', order: 1, uppercase: 'A', lowercase: 'a', pronunciationKey: 'A', strokeSVGPaths: { uppercase: ["M50,10 L10,90", "M50,10 L90,90", "M30,60 L70,60"], lowercase: ["M70,40 C70,20 40,20 40,50 L40,80", "M40,50 C70,50 70,80 40,80"] } },
+                { characterId: 'spanish-b', alphabetName: 'Spanish', name: 'B', order: 2, uppercase: 'B', lowercase: 'b', pronunciationKey: 'B', strokeSVGPaths: { uppercase: ["M20,10 L20,90", "M20,10 C80,10 80,50 20,50", "M20,50 C80,50 80,90 20,90"], lowercase: ["M20,10 L20,80", "M20,40 C60,40 60,80 20,80"] } },
+                { characterId: 'spanish-c', alphabetName: 'Spanish', name: 'C', order: 3, uppercase: 'C', lowercase: 'c', pronunciationKey: 'C', strokeSVGPaths: { uppercase: ["M80,20 C20,20 20,80 80,80"], lowercase: ["M70,30 C30,30 30,70 70,70"] } },
+                { characterId: 'spanish-d', alphabetName: 'Spanish', name: 'D', order: 4, uppercase: 'D', lowercase: 'd', pronunciationKey: 'D', strokeSVGPaths: { uppercase: ["M20,10 L20,90", "M20,10 C90,10 90,90 20,90"], lowercase: ["M80,10 L80,80", "M80,40 C40,40 40,80 80,80"] } },
+                { characterId: 'spanish-e', alphabetName: 'Spanish', name: 'E', order: 5, uppercase: 'E', lowercase: 'e', pronunciationKey: 'E', strokeSVGPaths: { uppercase: ["M20,10 L20,90", "M80,10 L20,10", "M80,50 L20,50", "M80,90 L20,90"], lowercase: ["M20,50 L80,50", "M80,50 C20,50 20,80 80,80"] } },
+                { characterId: 'spanish-f', alphabetName: 'Spanish', name: 'F', order: 6, uppercase: 'F', lowercase: 'f', pronunciationKey: 'F', strokeSVGPaths: { uppercase: ["M20,10 L20,90", "M80,10 L20,10", "M80,50 L20,50"], lowercase: ["M60,10 C40,10 40,80 60,80", "M40,40 L80,40"] } },
+                { characterId: 'spanish-g', alphabetName: 'Spanish', name: 'G', order: 7, uppercase: 'G', lowercase: 'g', pronunciationKey: 'G', strokeSVGPaths: { uppercase: ["M80,20 C20,20 20,80 80,80 L80,50 L50,50"], lowercase: ["M70,30 C30,30 30,70 70,70 L70,90 C30,90 30,70 70,70"] } },
+                { characterId: 'spanish-h', alphabetName: 'Spanish', name: 'H', order: 8, uppercase: 'H', lowercase: 'h', pronunciationKey: 'H', strokeSVGPaths: { uppercase: ["M20,10 L20,90", "M80,10 L80,90", "M20,50 L80,50"], lowercase: ["M20,10 L20,80", "M20,40 C60,40 60,80 20,80"] } },
+                { characterId: 'spanish-i', alphabetName: 'Spanish', name: 'I', order: 9, uppercase: 'I', lowercase: 'i', pronunciationKey: 'I', strokeSVGPaths: { uppercase: ["M20,10 L80,10", "M50,10 L50,90", "M20,90 L80,90"], lowercase: ["M50,40 L50,80", "M50,20 L50,30"] } },
+                { characterId: 'spanish-j', alphabetName: 'Spanish', name: 'J', order: 10, uppercase: 'J', lowercase: 'j', pronunciationKey: 'Jota', strokeSVGPaths: { uppercase: ["M20,10 L80,10", "M50,10 L50,90 C50,90 20,90 20,60"], lowercase: ["M50,40 L50,90 C50,90 20,90 20,60", "M50,20 L50,30"] } },
+                { characterId: 'spanish-k', alphabetName: 'Spanish', name: 'K', order: 11, uppercase: 'K', lowercase: 'k', pronunciationKey: 'K', strokeSVGPaths: { uppercase: ["M20,10 L20,90", "M80,10 L20,50", "M20,50 L80,90"], lowercase: ["M20,20 L20,80", "M60,20 L20,50", "M20,50 L60,80"] } },
+                { characterId: 'spanish-l', alphabetName: 'Spanish', name: 'L', order: 12, uppercase: 'L', lowercase: 'l', pronunciationKey: 'L', strokeSVGPaths: { uppercase: ["M20,10 L20,90 L80,90"], lowercase: ["M50,10 L50,80"] } },
+                { characterId: 'spanish-m', alphabetName: 'Spanish', name: 'M', order: 13, uppercase: 'M', lowercase: 'm', pronunciationKey: 'M', strokeSVGPaths: { uppercase: ["M20,90 L20,10 L50,50 L80,10 L80,90"], lowercase: ["M20,80 L20,40", "M20,40 C40,40 40,80 20,80", "M50,40 C70,40 70,80 50,80"] } },
+                { characterId: 'spanish-n', alphabetName: 'Spanish', name: 'N', order: 14, uppercase: 'N', lowercase: 'n', pronunciationKey: 'N', strokeSVGPaths: { uppercase: ["M20,90 L20,10 L80,90 L80,10"], lowercase: ["M20,80 L20,40", "M20,40 C60,40 60,80 20,80"] } },
+                { characterId: 'spanish-ntilde', alphabetName: 'Spanish', name: 'Ñ', order: 15, uppercase: 'Ñ', lowercase: 'ñ', pronunciationKey: 'Eñe', strokeSVGPaths: { uppercase: ["M20,90 L20,10 L80,90 L80,10", "M20,5 C80,5 80,15 20,15"], lowercase: ["M20,80 L20,40", "M20,40 C60,40 60,80 20,80", "M20,35 C80,35 80,45 20,45"] } },
+                { characterId: 'spanish-o', alphabetName: 'Spanish', name: 'O', order: 16, uppercase: 'O', lowercase: 'o', pronunciationKey: 'O', strokeSVGPaths: { uppercase: ["M50,10 C10,10 10,90 50,90 C90,90 90,10 50,10 Z"], lowercase: ["M50,40 C30,40 30,80 50,80 C70,80 70,40 50,40 Z"] } },
+                { characterId: 'spanish-p', alphabetName: 'Spanish', name: 'P', order: 17, uppercase: 'P', lowercase: 'p', pronunciationKey: 'P', strokeSVGPaths: { uppercase: ["M20,10 L20,90", "M20,10 C80,10 80,50 20,50"], lowercase: ["M20,20 L20,90", "M20,20 C60,20 60,50 20,50"] } },
+                { characterId: 'spanish-q', alphabetName: 'Spanish', name: 'Q', order: 18, uppercase: 'Q', lowercase: 'q', pronunciationKey: 'Q', strokeSVGPaths: { uppercase: ["M50,10 C10,10 10,90 50,90 C90,90 90,10 50,10 Z", "M70,70 L90,90"], lowercase: ["M80,20 L80,90", "M80,20 C40,20 40,50 80,50"] } },
+                { characterId: 'spanish-r', alphabetName: 'Spanish', name: 'R', order: 19, uppercase: 'R', lowercase: 'r', pronunciationKey: 'R', strokeSVGPaths: { uppercase: ["M20,10 L20,90", "M20,10 C80,10 80,50 20,50", "M50,50 L80,90"], lowercase: ["M20,80 L20,40", "M20,40 C60,40 60,60 20,60"] } },
+                { characterId: 'spanish-s', alphabetName: 'Spanish', name: 'S', order: 20, uppercase: 'S', lowercase: 's', pronunciationKey: 'S', strokeSVGPaths: { uppercase: ["M80,20 C20,20 20,50 50,50 C80,50 80,80 20,80"], lowercase: ["M70,30 C30,30 30,50 50,50 C70,50 70,70 30,70"] } },
+                { characterId: 'spanish-t', alphabetName: 'Spanish', name: 'T', order: 21, uppercase: 'T', lowercase: 't', pronunciationKey: 'T', strokeSVGPaths: { uppercase: ["M20,10 L80,10", "M50,10 L50,90"], lowercase: ["M50,20 L50,80", "M30,80 L70,80", "M50,20 C20,20 20,50 50,50"] } },
+                { characterId: 'spanish-u', alphabetName: 'Spanish', name: 'U', order: 22, uppercase: 'U', lowercase: 'u', pronunciationKey: 'U', strokeSVGPaths: { uppercase: ["M20,10 L20,70 C20,90 80,90 80,70 L80,10"], lowercase: ["M20,40 L20,70 C20,80 60,80 60,70 L60,40"] } },
+                { characterId: 'spanish-v', alphabetName: 'Spanish', name: 'V', order: 23, uppercase: 'V', lowercase: 'v', pronunciationKey: 'V', strokeSVGPaths: { uppercase: ["M10,10 L50,90 L90,10"], lowercase: ["M20,40 L50,80 L80,40"] } },
+                { characterId: 'spanish-w', alphabetName: 'Spanish', name: 'W', order: 24, uppercase: 'W', lowercase: 'w', pronunciationKey: 'Doble U', strokeSVGPaths: { uppercase: ["M10,10 L30,90 L50,10 L70,90 L90,10"], lowercase: ["M20,40 L40,80 L50,40 L60,80 L80,40"] } },
+                { characterId: 'spanish-x', alphabetName: 'Spanish', name: 'X', order: 25, uppercase: 'X', lowercase: 'x', pronunciationKey: 'Equis', strokeSVGPaths: { uppercase: ["M20,10 L80,90", "M80,10 L20,90"], lowercase: ["M20,40 L80,80", "M80,40 L20,80"] } },
+                { characterId: 'spanish-y', alphabetName: 'Spanish', name: 'Y', order: 26, uppercase: 'Y', lowercase: 'y', pronunciationKey: 'I Griega', strokeSVGPaths: { uppercase: ["M20,10 L50,50", "M80,10 L50,50", "M50,50 L50,90"], lowercase: ["M20,40 L50,80", "M80,40 L20,80"] } },
+                { characterId: 'spanish-z', alphabetName: 'Spanish', name: 'Z', order: 27, uppercase: 'Z', lowercase: 'z', pronunciationKey: 'Zeta', strokeSVGPaths: { uppercase: ["M20,10 L80,10 L20,90 L80,90"], lowercase: ["M20,40 L80,40 L20,80 L80,80"] } },
+
+                // --- Turkish Characters (29) ---
+                { characterId: 'turkish-a', alphabetName: 'Turkish', name: 'A', order: 1, uppercase: 'A', lowercase: 'a', pronunciationKey: 'A', strokeSVGPaths: { uppercase: ["M50,10 L10,90", "M50,10 L90,90", "M30,60 L70,60"], lowercase: ["M70,40 C70,20 40,20 40,50 L40,80", "M40,50 C70,50 70,80 40,80"] } },
+                { characterId: 'turkish-b', alphabetName: 'Turkish', name: 'B', order: 2, uppercase: 'B', lowercase: 'b', pronunciationKey: 'B', strokeSVGPaths: { uppercase: ["M20,10 L20,90", "M20,10 C80,10 80,50 20,50", "M20,50 C80,50 80,90 20,90"], lowercase: ["M20,10 L20,80", "M20,40 C60,40 60,80 20,80"] } },
+                { characterId: 'turkish-c', alphabetName: 'Turkish', name: 'C', order: 3, uppercase: 'C', lowercase: 'c', pronunciationKey: 'C', strokeSVGPaths: { uppercase: ["M80,20 C20,20 20,80 80,80"], lowercase: ["M70,30 C30,30 30,70 70,70"] } },
+                { characterId: 'turkish-c-cedilla', alphabetName: 'Turkish', name: 'Ç', order: 4, uppercase: 'Ç', lowercase: 'ç', pronunciationKey: 'Çe', strokeSVGPaths: { uppercase: ["M80,20 C20,20 20,80 80,80", "M50,90 C40,95 60,95 50,90"], lowercase: ["M70,30 C30,30 30,70 70,70", "M50,80 C40,85 60,85 50,80"] } },
+                { characterId: 'turkish-d', alphabetName: 'Turkish', name: 'D', order: 5, uppercase: 'D', lowercase: 'd', pronunciationKey: 'D', strokeSVGPaths: { uppercase: ["M20,10 L20,90", "M20,10 C90,10 90,90 20,90"], lowercase: ["M80,10 L80,80", "M80,40 C40,40 40,80 80,80"] } },
+                { characterId: 'turkish-e', alphabetName: 'Turkish', name: 'E', order: 6, uppercase: 'E', lowercase: 'e', pronunciationKey: 'E', strokeSVGPaths: { uppercase: ["M20,10 L20,90", "M80,10 L20,10", "M80,50 L20,50", "M80,90 L20,90"], lowercase: ["M20,50 L80,50", "M80,50 C20,50 20,80 80,80"] } },
+                { characterId: 'turkish-f', alphabetName: 'Turkish', name: 'F', order: 7, uppercase: 'F', lowercase: 'f', pronunciationKey: 'F', strokeSVGPaths: { uppercase: ["M20,10 L20,90", "M80,10 L20,10", "M80,50 L20,50"], lowercase: ["M60,10 C40,10 40,80 60,80", "M40,40 L80,40"] } },
+                { characterId: 'turkish-g', alphabetName: 'Turkish', name: 'G', order: 8, uppercase: 'G', lowercase: 'g', pronunciationKey: 'G', strokeSVGPaths: { uppercase: ["M80,20 C20,20 20,80 80,80 L80,50 L50,50"], lowercase: ["M70,30 C30,30 30,70 70,70 L70,90 C30,90 30,70 70,70"] } },
+                { characterId: 'turkish-g-breve', alphabetName: 'Turkish', name: 'Ğ', order: 9, uppercase: 'Ğ', lowercase: 'ğ', pronunciationKey: 'Yumuşak G', strokeSVGPaths: { uppercase: ["M80,20 C20,20 20,80 80,80 L80,50 L50,50", "M40,5 C60,5 60,15 40,15"], lowercase: ["M70,30 C30,30 30,70 70,70 L70,90 C30,90 30,70 70,70", "M40,20 C60,20 60,30 40,30"] } },
+                { characterId: 'turkish-h', alphabetName: 'Turkish', name: 'H', order: 10, uppercase: 'H', lowercase: 'h', pronunciationKey: 'H', strokeSVGPaths: { uppercase: ["M20,10 L20,90", "M80,10 L80,90", "M20,50 L80,50"], lowercase: ["M20,10 L20,80", "M20,40 C60,40 60,80 20,80"] } },
+                { characterId: 'turkish-i-dotless', alphabetName: 'Turkish', name: 'I', order: 11, uppercase: 'I', lowercase: 'ı', pronunciationKey: 'I', strokeSVGPaths: { uppercase: ["M20,10 L80,10", "M50,10 L50,90", "M20,90 L80,90"], lowercase: ["M50,40 L50,80"] } },
+                { characterId: 'turkish-i-dotted', alphabetName: 'Turkish', name: 'İ', order: 12, uppercase: 'İ', lowercase: 'i', pronunciationKey: 'İ', strokeSVGPaths: { uppercase: ["M20,10 L80,10", "M50,10 L50,90", "M20,90 L80,90", "M50,-5 L50,5"], lowercase: ["M50,40 L50,80", "M50,20 L50,30"] } },
+                { characterId: 'turkish-j', alphabetName: 'Turkish', name: 'J', order: 13, uppercase: 'J', lowercase: 'j', pronunciationKey: 'J', strokeSVGPaths: { uppercase: ["M20,10 L80,10", "M50,10 L50,90 C50,90 20,90 20,60"], lowercase: ["M50,40 L50,90 C50,90 20,90 20,60", "M50,20 L50,30"] } },
+                { characterId: 'turkish-k', alphabetName: 'Turkish', name: 'K', order: 14, uppercase: 'K', lowercase: 'k', pronunciationKey: 'K', strokeSVGPaths: { uppercase: ["M20,10 L20,90", "M80,10 L20,50", "M20,50 L80,90"], lowercase: ["M20,20 L20,80", "M60,20 L20,50", "M20,50 L60,80"] } },
+                { characterId: 'turkish-l', alphabetName: 'Turkish', name: 'L', order: 15, uppercase: 'L', lowercase: 'l', pronunciationKey: 'L', strokeSVGPaths: { uppercase: ["M20,10 L20,90 L80,90"], lowercase: ["M50,10 L50,80"] } },
+                { characterId: 'turkish-m', alphabetName: 'Turkish', name: 'M', order: 16, uppercase: 'M', lowercase: 'm', pronunciationKey: 'M', strokeSVGPaths: { uppercase: ["M20,90 L20,10 L50,50 L80,10 L80,90"], lowercase: ["M20,80 L20,40", "M20,40 C40,40 40,80 20,80", "M50,40 C70,40 70,80 50,80"] } },
+                { characterId: 'turkish-n', alphabetName: 'Turkish', name: 'N', order: 17, uppercase: 'N', lowercase: 'n', pronunciationKey: 'N', strokeSVGPaths: { uppercase: ["M20,90 L20,10 L80,90 L80,10"], lowercase: ["M20,80 L20,40", "M20,40 C60,40 60,80 20,80"] } },
+                { characterId: 'turkish-o', alphabetName: 'Turkish', name: 'O', order: 18, uppercase: 'O', lowercase: 'o', pronunciationKey: 'O', strokeSVGPaths: { uppercase: ["M50,10 C10,10 10,90 50,90 C90,90 90,10 50,10 Z"], lowercase: ["M50,40 C30,40 30,80 50,80 C70,80 70,40 50,40 Z"] } },
+                { characterId: 'turkish-o-diaeresis', alphabetName: 'Turkish', name: 'Ö', order: 19, uppercase: 'Ö', lowercase: 'ö', pronunciationKey: 'Ö', strokeSVGPaths: { uppercase: ["M50,10 C10,10 10,90 50,90 C90,90 90,10 50,10 Z", "M30,-5 L30,5", "M70,-5 L70,5"], lowercase: ["M50,40 C30,40 30,80 50,80 C70,80 70,40 50,40 Z", "M30,25 L30,35", "M70,25 L70,35"] } },
+                { characterId: 'turkish-p', alphabetName: 'Turkish', name: 'P', order: 20, uppercase: 'P', lowercase: 'p', pronunciationKey: 'P', strokeSVGPaths: { uppercase: ["M20,10 L20,90", "M20,10 C80,10 80,50 20,50"], lowercase: ["M20,20 L20,90", "M20,20 C60,20 60,50 20,50"] } },
+                { characterId: 'turkish-r', alphabetName: 'Turkish', name: 'R', order: 21, uppercase: 'R', lowercase: 'r', pronunciationKey: 'R', strokeSVGPaths: { uppercase: ["M20,10 L20,90", "M20,10 C80,10 80,50 20,50", "M50,50 L80,90"], lowercase: ["M20,80 L20,40", "M20,40 C60,40 60,60 20,60"] } },
+                { characterId: 'turkish-s', alphabetName: 'Turkish', name: 'S', order: 22, uppercase: 'S', lowercase: 's', pronunciationKey: 'S', strokeSVGPaths: { uppercase: ["M80,20 C20,20 20,50 50,50 C80,50 80,80 20,80"], lowercase: ["M70,30 C30,30 30,50 50,50 C70,50 70,70 30,70"] } },
+                { characterId: 'turkish-s-cedilla', alphabetName: 'Turkish', name: 'Ş', order: 23, uppercase: 'Ş', lowercase: 'ş', pronunciationKey: 'Şe', strokeSVGPaths: { uppercase: ["M80,20 C20,20 20,50 50,50 C80,50 80,80 20,80", "M50,90 C40,95 60,95 50,90"], lowercase: ["M70,30 C30,30 30,50 50,50 C70,50 70,70 30,70", "M50,80 C40,85 60,85 50,80"] } },
+                { characterId: 'turkish-t', alphabetName: 'Turkish', name: 'T', order: 24, uppercase: 'T', lowercase: 't', pronunciationKey: 'T', strokeSVGPaths: { uppercase: ["M20,10 L80,10", "M50,10 L50,90"], lowercase: ["M50,20 L50,80", "M30,80 L70,80", "M50,20 C20,20 20,50 50,50"] } },
+                { characterId: 'turkish-u', alphabetName: 'Turkish', name: 'U', order: 25, uppercase: 'U', lowercase: 'u', pronunciationKey: 'U', strokeSVGPaths: { uppercase: ["M20,10 L20,70 C20,90 80,90 80,70 L80,10"], lowercase: ["M20,40 L20,70 C20,80 60,80 60,70 L60,40"] } },
+                { characterId: 'turkish-u-diaeresis', alphabetName: 'Turkish', name: 'Ü', order: 26, uppercase: 'Ü', lowercase: 'ü', pronunciationKey: 'Ü', strokeSVGPaths: { uppercase: ["M20,10 L20,70 C20,90 80,90 80,70 L80,10", "M30,-5 L30,5", "M70,-5 L70,5"], lowercase: ["M20,40 L20,70 C20,80 60,80 60,70 L60,40", "M30,25 L30,35", "M70,25 L70,35"] } },
+                { characterId: 'turkish-v', alphabetName: 'Turkish', name: 'V', order: 27, uppercase: 'V', lowercase: 'v', pronunciationKey: 'V', strokeSVGPaths: { uppercase: ["M10,10 L50,90 L90,10"], lowercase: ["M20,40 L50,80 L80,40"] } },
+                { characterId: 'turkish-y', alphabetName: 'Turkish', name: 'Y', order: 28, uppercase: 'Y', lowercase: 'y', pronunciationKey: 'Y', strokeSVGPaths: { uppercase: ["M20,10 L50,50", "M80,10 L50,50", "M50,50 L50,90"], lowercase: ["M20,40 L50,80", "M80,40 L20,80"] } },
+                { characterId: 'turkish-z', alphabetName: 'Turkish', name: 'Z', order: 29, uppercase: 'Z', lowercase: 'z', pronunciationKey: 'Z', strokeSVGPaths: { uppercase: ["M20,10 L80,10 L20,90 L80,90"], lowercase: ["M20,40 L80,40 L20,80 L80,80"] } }
+            ];
+
+            // --- 3. DATA SEEDING LOGIC ---
+            async function seedDatabase() {
+                const alphabetCount = await db.alphabets.count();
+                if (alphabetCount > 0) {
+                    console.log('Database already seeded.');
+                    return; // Don't re-seed
+                }
+
+                console.log('Seeding database...');
+                try {
+                    await db.transaction('rw', db.alphabets, db.characters, async () => {
+                        // Use allKeys: true to get the generated primary keys
+                        const alphabetIds = await db.alphabets.bulkAdd(alphabetsData, { allKeys: true });
+
+                        // Create a map of alphabet names to their new IDs
+                        const nameToIdMap = {};
+                        alphabetsData.forEach((alphabet, index) => {
+                            nameToIdMap[alphabet.name] = alphabetIds[index];
+                        });
+
+                        // Prepare character data with the correct foreign keys
+                        const charactersToSeed = charactersData.map(char => {
+                            const newChar = { ...char };
+                            newChar.alphabetId = nameToIdMap[char.alphabetName];
+                            delete newChar.alphabetName; // Clean up the temporary property
+                            return newChar;
+                        });
+
+                        await db.characters.bulkAdd(charactersToSeed);
+                    });
+                    console.log('Database seeded successfully.');
+                } catch (error) {
+                    console.error('Error seeding database:', error);
+                }
+            }
+
+            // --- 4. INITIALIZATION ---
+            // When the DOM is ready, seed the database and initialize the app
+            document.addEventListener('DOMContentLoaded', () => {
+                seedDatabase().then(initializeApp).catch(err => {
+                    console.error("Failed to initialize database:", err);
+                });
+            });
+
+            // --- 5. DOM ELEMENT REFERENCES ---
+            const alphabetSelectionContainer = document.getElementById('alphabet-selection-container');
+            const alphabetButtonsContainer = document.getElementById('alphabet-buttons');
+            const characterGridContainer = document.getElementById('character-grid-container');
+            const characterGridTitle = document.getElementById('character-grid-title');
+            const characterGrid = document.getElementById('character-grid');
+            const characterDisplayContainer = document.getElementById('character-display-container');
+            const characterName = document.getElementById('character-name');
+            const charUppercase = document.getElementById('char-uppercase');
+            const charLowercase = document.getElementById('char-lowercase');
+            const handwritingSvg = document.getElementById('handwriting-svg');
+            const replayAnimationBtn = document.getElementById('replay-animation-btn');
+
+            const trainModeBtn = document.getElementById('train-mode-btn');
+            const testModeBtn = document.getElementById('test-mode-btn');
+            const testingModeContainer = document.getElementById('testing-mode-container');
+            const testPrompt = document.getElementById('test-prompt');
+            const drawingCanvas = document.getElementById('drawing-canvas');
+            const testFeedback = document.getElementById('test-feedback');
+            const submitDrawingBtn = document.getElementById('submit-drawing-btn');
+
+
+            // --- 6. STATE MANAGEMENT ---
+            let appState = {
+                currentAlphabetId: null,
+                currentMode: 'train', // 'train' or 'test'
+            };
+
+            // --- 7. UI RENDERING & LOGIC ---
+            async function initializeApp() {
+                console.log('Initializing application...');
+                await renderAlphabetSelect();
+
+                trainModeBtn.addEventListener('click', () => setMode('train'));
+                testModeBtn.addEventListener('click', () => setMode('test'));
+            }
+
+            async function renderAlphabetSelect() {
+                const alphabets = await db.alphabets.toArray();
+                alphabetButtonsContainer.innerHTML = ''; // Clear existing buttons
+                alphabets.forEach(alphabet => {
+                    const button = document.createElement('button');
+                    button.textContent = alphabet.name;
+                    button.addEventListener('click', () => selectAlphabet(alphabet));
+                    alphabetButtonsContainer.appendChild(button);
+                });
+            }
+
+            async function selectAlphabet(alphabet) {
+                appState.currentAlphabetId = alphabet.id;
+                console.log(`Selected alphabet: ${alphabet.name}`);
+
+                const characters = await db.characters
+                    .where('alphabetId')
+                    .equals(alphabet.id)
+                    .sortBy('order');
+
+                renderCharacterGrid(characters, alphabet.name);
+            }
+
+            function renderCharacterGrid(characters, alphabetName) {
+                characterGridTitle.textContent = `${alphabetName} Characters`;
+                characterGrid.innerHTML = ''; // Clear existing grid
+
+                characters.forEach(char => {
+                    const button = document.createElement('button');
+                    button.innerHTML = `${char.uppercase}<br>${char.lowercase}`;
+                    button.classList.add('character-grid-button');
+                    button.addEventListener('click', () => displayCharacter(char.characterId));
+                    characterGrid.appendChild(button);
+                });
+
+                // Switch views
+                alphabetSelectionContainer.classList.add('hidden');
+                characterGridContainer.classList.remove('hidden');
+                characterDisplayContainer.classList.add('hidden');
+            }
+
+            async function displayCharacter(characterId) {
+                const character = await db.characters.get({ characterId });
+                if (!character) return;
+
+                const alphabet = await db.alphabets.get(character.alphabetId);
+                if (!alphabet) return;
+
+
+                // Update UI
+                characterName.textContent = character.name;
+                charUppercase.textContent = character.uppercase;
+                charLowercase.textContent = character.lowercase;
+
+                const performActions = () => {
+                    animateCharacter(handwritingSvg, character.strokeSVGPaths);
+                    speak(character.pronunciationKey, alphabet.languageCode);
+                };
+
+                performActions();
+
+                replayAnimationBtn.onclick = performActions;
+
+                // Switch views
+                characterGridContainer.classList.add('hidden');
+                characterDisplayContainer.classList.remove('hidden');
+            }
+
+            function animateCharacter(svgElement, strokePaths) {
+                gsap.registerPlugin(DrawSVGPlugin);
+                svgElement.innerHTML = ''; // Clear previous animation
+
+                const tl = gsap.timeline();
+                const allPaths = [...strokePaths.uppercase, ...strokePaths.lowercase];
+
+                allPaths.forEach(pathData => {
+                    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                    path.setAttribute('d', pathData);
+                    svgElement.appendChild(path);
+                    tl.from(path, { drawSVG: 0, duration: 1 }, "+=0.1");
+                });
+            }
+
+            let voices = [];
+            function loadAndCacheVoices() {
+                voices = speechSynthesis.getVoices();
+                if (voices.length > 0) {
+                    console.log('Speech synthesis voices loaded.');
+                }
+            }
+
+            loadAndCacheVoices();
+            if (speechSynthesis.onvoiceschanged !== undefined) {
+                speechSynthesis.onvoiceschanged = loadAndCacheVoices;
+            }
+
+            function speak(text, langCode) {
+                if (!('speechSynthesis' in window)) {
+                    console.warn('Speech Synthesis not supported.');
+                    return;
+                }
+
+                speechSynthesis.cancel(); // Stop any currently speaking utterance
+
+                const utterance = new SpeechSynthesisUtterance(text);
+                utterance.lang = langCode;
+
+                const voice = voices.find(v => v.lang === langCode);
+
+                if (voice) {
+                    utterance.voice = voice;
+                } else {
+                    console.warn(`No specific voice found for lang '${langCode}'. Using browser default.`);
+                }
+
+                speechSynthesis.speak(utterance);
+            }
+
+            function setMode(mode) {
+                appState.currentMode = mode;
+
+                trainModeBtn.classList.toggle('active', mode === 'train');
+                testModeBtn.classList.toggle('active', mode === 'test');
+
+                if (mode === 'test') {
+                    characterGridContainer.classList.add('hidden');
+                    characterDisplayContainer.classList.add('hidden');
+                    testingModeContainer.classList.remove('hidden');
+                    startTest();
+                } else {
+                    testingModeContainer.classList.add('hidden');
+                    // Show the character grid if an alphabet is selected
+                    if (appState.currentAlphabetId) {
+                        characterGridContainer.classList.remove('hidden');
+                    } else {
+                        alphabetSelectionContainer.classList.remove('hidden');
+                    }
+                }
+            }
+
+            async function startTest() {
+                if (!appState.currentAlphabetId) {
+                    testPrompt.textContent = 'Please select an alphabet first.';
+                    return;
+                }
+
+                // Intelligent character selection
+                const allCharacters = await db.characters.where('alphabetId').equals(appState.currentAlphabetId).toArray();
+                const progressData = await db.userProgress.where('characterId').startsWith('greek').or('characterId').startsWith('italian').or('characterId').startsWith('spanish').or('characterId').startsWith('turkish').toArray();
+
+                const progressMap = new Map(progressData.map(p => [p.characterId, p]));
+
+                let characterToTest;
+                const untestedChars = allCharacters.filter(c => !progressMap.has(c.characterId));
+
+                if (untestedChars.length > 0) {
+                    characterToTest = untestedChars[Math.floor(Math.random() * untestedChars.length)];
+                } else {
+                    // Find character with the lowest success rate
+                    allCharacters.sort((a, b) => {
+                        const progressA = progressMap.get(a.characterId);
+                        const progressB = progressMap.get(b.characterId);
+                        const scoreA = (progressA.correctCount || 0) / ((progressA.correctCount || 0) + (progressA.incorrectCount || 0) + 1);
+                        const scoreB = (progressB.correctCount || 0) / ((progressB.correctCount || 0) + (progressB.incorrectCount || 0) + 1);
+                        return scoreA - scoreB;
+                    });
+                    characterToTest = allCharacters[0];
+                }
+
+                const alphabet = await db.alphabets.get(characterToTest.alphabetId);
+
+                appState.currentCharForTest = characterToTest;
+                appState.incorrectAttempts = 0; // Reset incorrect attempts
+
+                testPrompt.textContent = `Draw the letter: "${characterToTest.name}"`;
+                speak(characterToTest.pronunciationKey, alphabet.languageCode);
+
+                setupCanvas();
+            }
+
+            function setupCanvas() {
+                const ctx = drawingCanvas.getContext('2d');
+                let drawing = false;
+                let userStrokes = [];
+                let currentStroke = [];
+
+                ctx.clearRect(0, 0, drawingCanvas.width, drawingCanvas.height);
+                ctx.strokeStyle = '#000';
+                ctx.lineWidth = 5;
+                ctx.lineCap = 'round';
+                ctx.lineJoin = 'round';
+
+                function startDrawing(e) {
+                    drawing = true;
+                    currentStroke = [];
+                    const pos = getMousePos(drawingCanvas, e);
+                    ctx.beginPath();
+                    ctx.moveTo(pos.x, pos.y);
+                }
+
+                function draw(e) {
+                    if (!drawing) return;
+                    const pos = getMousePos(drawingCanvas, e);
+                    currentStroke.push(pos);
+                    ctx.lineTo(pos.x, pos.y);
+                    ctx.stroke();
+                }
+
+                function stopDrawing() {
+                    if (!drawing) return;
+                    drawing = false;
+                    if (currentStroke.length > 0) {
+                        userStrokes.push(currentStroke);
+                    }
+                    ctx.closePath();
+                }
+
+                drawingCanvas.onmousedown = startDrawing;
+                drawingCanvas.onmousemove = draw;
+                drawingCanvas.onmouseup = stopDrawing;
+                drawingCanvas.onmouseleave = stopDrawing;
+
+                submitDrawingBtn.onclick = async () => {
+                    const char = appState.currentCharForTest;
+
+                    // New, improved validation
+                    const isCorrect = validateStrokes(userStrokes, char.strokeSVGPaths.uppercase) ||
+                                      validateStrokes(userStrokes, char.strokeSVGPaths.lowercase);
+
+                    const progress = await db.userProgress.get({ characterId: char.characterId }) || { characterId: char.characterId, correctCount: 0, incorrectCount: 0 };
+
+                    if (isCorrect) {
+                        testFeedback.textContent = 'Correct!';
+                        progress.correctCount++;
+                        await db.userProgress.put(progress);
+                        setTimeout(() => {
+                            testFeedback.textContent = '';
+                            startTest();
+                        }, 1500);
+                    } else {
+                        appState.incorrectAttempts++;
+                        progress.incorrectCount++;
+                        await db.userProgress.put(progress);
+
+                        if (appState.incorrectAttempts >= 3) {
+                            testFeedback.textContent = `Incorrect. Here's a hint.`;
+                            // Show animation hint
+                            characterDisplayContainer.classList.remove('hidden');
+                            testingModeContainer.classList.add('hidden');
+                            displayCharacter(char.characterId);
+                            setTimeout(() => {
+                                setMode('test');
+                                characterDisplayContainer.classList.add('hidden');
+                            }, 4000); // Allow time for animation
+                        } else {
+                           testFeedback.textContent = `Incorrect. Try again.`;
+                           setTimeout(() => {
+                                testFeedback.textContent = '';
+                                ctx.clearRect(0, 0, drawingCanvas.width, drawingCanvas.height);
+                                userStrokes = [];
+                           }, 1500);
+                        }
+                    }
+                };
+            }
+
+            function getMousePos(canvas, evt) {
+                const rect = canvas.getBoundingClientRect();
+                return {
+                    x: evt.clientX - rect.left,
+                    y: evt.clientY - rect.top
+                };
+            }
+
+            // --- HANDWRITING VALIDATION LOGIC ---
+
+            function getStrokeEndpoints(svgPath) {
+                const numbers = svgPath.match(/-?\d+(\.\d+)?/g);
+                if (!numbers || numbers.length < 2) return null;
+
+                return {
+                    start: { x: parseFloat(numbers[0]), y: parseFloat(numbers[1]) },
+                    end: { x: parseFloat(numbers[numbers.length - 2]), y: parseFloat(numbers[numbers.length - 1]) }
+                };
+            }
+
+            function arePointsClose(p1, p2, threshold) {
+                const dx = p1.x - p2.x;
+                const dy = p1.y - p2.y;
+                return (dx * dx + dy * dy) < (threshold * threshold);
+            }
+
+            function validateStrokes(userStrokes, correctStrokePaths) {
+                if (userStrokes.length !== correctStrokePaths.length) {
+                    return false;
+                }
+                if (userStrokes.length === 0) return false;
+
+                const threshold = 35; // How close points need to be, in a 100x100 grid
+
+                for (let i = 0; i < userStrokes.length; i++) {
+                    const userStroke = userStrokes[i];
+                    if (userStroke.length < 2) return false; // Stroke must have start and end
+
+                    const correctEndpoints = getStrokeEndpoints(correctStrokePaths[i]);
+                    if (!correctEndpoints) return false;
+
+                    // Normalize canvas points (400x400) to SVG points (100x100)
+                    const userStartPoint = { x: userStroke[0].x / 4, y: userStroke[0].y / 4 };
+                    const userEndPoint = { x: userStroke[userStroke.length - 1].x / 4, y: userStroke[userStroke.length - 1].y / 4 };
+
+                    // Allow stroke to be drawn in either direction
+                    const matchForward = arePointsClose(userStartPoint, correctEndpoints.start, threshold) && arePointsClose(userEndPoint, correctEndpoints.end, threshold);
+                    const matchReverse = arePointsClose(userStartPoint, correctEndpoints.end, threshold) && arePointsClose(userEndPoint, correctEndpoints.start, threshold);
+
+                    if (!matchForward && !matchReverse) {
+                        return false; // This stroke doesn't match
+                    }
+                }
+
+                return true; // All strokes matched
+            }
+
+        })();
+    </script>
+</body>
+</html>
