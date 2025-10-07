@@ -237,13 +237,40 @@ sequenceDiagram
     BusinessLogic->>UI: Display next card
 ```
 
-## 9. Implementation Plan
+## 9. Testing Strategy
+
+A multi-layered testing strategy will be crucial to ensure the reliability of this architecture. We will use the existing `mocha` and `chai` frameworks.
+
+- **Unit Tests:**
+  - The shared, isomorphic modules (`card-logic.js`, `skill-manager.js`, etc.) will be tested extensively with unit tests. Since these are designed as pure, environment-agnostic modules, they can be tested easily in a Node.js test environment without any browser-specific APIs.
+  - Focus will be on testing business logic, validation rules, and data transformations.
+
+- **Adapter Tests:**
+  - Each adapter will be tested in isolation.
+  - **`IndexedDBAdapter`:** We will use an in-memory mock of IndexedDB, such as `fake-indexeddb`, to test the adapter's ability to correctly perform CRUD operations without relying on a real browser environment.
+  - **`HTTPAdapter`:** We will use a library like `sinon` to mock the `fetch` API. This will allow us to simulate various server responses (success, network errors, server errors, conflict responses) and verify that the adapter handles them correctly.
+
+- **Integration Tests:**
+  - These tests will verify that the DAL, Message Bus, and adapters work correctly together.
+  - We will create a test environment where we can programmatically switch the application's state between `online` and `offline`.
+  - Tests will assert that the DAL dispatches messages correctly and that the appropriate adapter (and only that adapter) responds to them based on the current mode.
+
+- **End-to-End (E2E) Tests:**
+  - A high-level E2E testing plan will use a browser automation framework like Playwright or Cypress.
+  - These tests will simulate real user scenarios:
+    1.  **Offline-first workflow:** Load the app, go offline, make changes, go back online, and verify that the data syncs correctly.
+    2.  **Conflict resolution workflow:** Set up a conflict scenario on the backend, go online, and verify that the conflict resolution UI appears and functions as expected.
+  - These tests will leverage the browser's built-in developer tools (via the testing framework) to simulate offline conditions.
+
+## 10. Implementation Plan
 
 1. **Create a `lib/shared` directory for isomorphic modules.**
 2. **Refactor existing logic from `lib/core` into the new shared modules.**
-3. **Create the Data Abstraction Layer (DAL).**
-4. **Implement the Message Bus.**
-5. **Create Data Store Adapters (IndexedDB and HTTP).**
-6. **Refactor Business Logic to use the DAL.**
-7. **Update Server-side Logic to handle data versioning and the new conflict response.**
-8. **Implement the conflict resolution UI and client-side logic.**
+3. **Write unit tests for all shared modules.**
+4. **Create the Data Abstraction Layer (DAL) and Message Bus.**
+5. **Create and test the Data Store Adapters (IndexedDB and HTTP).**
+6. **Write integration tests for the DAL and adapters.**
+7. **Refactor the UI and business logic to use the DAL.**
+8. **Update Server-side Logic to handle data versioning and the new conflict response.**
+9. **Implement the conflict resolution UI and client-side logic.**
+10. **Develop E2E tests for offline mode and conflict resolution.**
