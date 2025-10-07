@@ -9,12 +9,6 @@ The core of this proposal is the introduction of a **Data Abstraction Layer (DAL
 
 ## 1. High-Level Architecture
 
-The new architecture will be composed of three main parts:
-
-*   **Core Business Logic:** This contains the application's rules, data processing, and state management. It is environment-agnostic.
-*   **Data Abstraction Layer (DAL):** A unified interface for all data operations (CRUD). It acts as a "switch" that directs requests to the appropriate data source based on the current mode (online/offline).
-*   **Data Stores:** These are the actual storage mechanisms. Initially, this will be IndexedDB for the client and the existing SQLite database on the server.
-
 ### Component Diagram
 
 This diagram illustrates the major components and their relationships.
@@ -51,125 +45,117 @@ graph TD
     style C fill:#c8e6c9,stroke:#333,stroke-width:2px
 ```
 
-**Components:**
+## 2. Message Bus and Definitions
 
-*   **UI Components:** The user interface of the application.
-*   **Core Business Logic:** The "brains" of the application, responsible for managing application state and logic (e.g., card logic, skill management).
-*   **Data Abstraction Layer (DAL):** Provides a simple, consistent API (e.g., `getData()`, `saveData()`) for the business logic to interact with.
-*   **Message Bus:** An internal event bus on the client. The DAL dispatches events to this bus.
-*   **Adapters (IndexedDB, WebSocket/HTTP):** These adapters listen to the message bus and handle the actual data storage/retrieval. Only the active adapter will process the request.
-*   **IndexedDB:** The in-browser, key-value database for offline storage.
-*   **NodeJS API Server:** The existing backend server.
-*   **Data Access Logic:** Server-side logic to interact with the database.
-*   **Relational Database:** The server's database (e.g., SQLite).
+Communication between the DAL and the data adapters is handled via a namespaced message bus. This ensures clarity and prevents event collisions.
 
-## 2. Data Flow and Messages
+| Message Name                 | Direction      | Payload                                     | Description                                                                    |
+| ---------------------------- | -------------- | ------------------------------------------- | ------------------------------------------------------------------------------ |
+| `data:config:load`           | DAL -> Adapter | `{ key: string }`                           | Request to load a specific configuration object.                               |
+| `data:config:load:success`   | Adapter -> DAL | `{ key: string, value: object }`            | Response when a configuration is loaded successfully.                          |
+| `data:config:save`           | DAL -> Adapter | `{ key: string, value: object }`            | Request to save a specific configuration object.                               |
+| `data:config:save:success`   | Adapter -> DAL | `{ key: string, value: object }`            | Response when a configuration is saved successfully.                           |
+| `data:card:stats:load`       | DAL -> Adapter | `{ key: string }`                           | Request to load the statistics for a specific card.                            |
+| `data:card:stats:load:success`| Adapter -> DAL | `{ key: string, value: object }`            | Response when card stats are loaded successfully.                            |
+| `data:card:stats:save`       | DAL -> Adapter | `{ key: string, value: object }`            | Request to save the statistics for a specific card.                            |
+| `data:card:stats:save:success`| Adapter -> DAL | `{ key:string, value: object }`             | Response when card stats are saved successfully.                             |
+| `data:sync:all:load`         | DAL -> Adapter | `null`                                      | Request to load all user data (configs and stats) for initial sync.            |
+| `data:sync:all:load:success` | Adapter -> DAL | `{ configs: object, cardStats: object }`    | Response with all user data.                                                 |
+| `data:sync:all:save`         | DAL -> Adapter | `{ configs: object, cardStats: object }`    | Request to save all user data in a bulk operation.                           |
+| `data:sync:all:save:success` | Adapter -> DAL | `null`                                      | Response when all data has been saved successfully.                          |
+| `*:failure`                  | Adapter -> DAL | `{ error: Error }`                          | Generic failure message. The `*` is a wildcard for any request message name. |
 
-The data flow will change depending on whether the application is in "offline" or "online" mode. Communication between the DAL and the adapters is handled via namespaced messages on the Message Bus.
+## 3. Data Store Mapping
 
-### Message Definitions
-To ensure clarity and prevent event collisions, messages will be namespaced. The main unit of interaction is the flashcard, identified by the target language text.
+This section details how the data payloads from the message bus map onto the underlying storage mechanisms.
 
-*   `data:card:next`: Request to retrieve the next card to be reviewed.
-*   `data:card:stats:save`: Save the interaction results for a specific card.
-*   `data:config:save`: Save a configuration object.
-*   `data:config:load`: Load a configuration object.
+### IndexedDB Mapping
+The IndexedDB database will be simple, containing two main object stores to mirror the data types managed by the application:
+*   `configs`: Stores user configuration objects.
+*   `cardStats`: Stores learning statistics for each card.
 
-Each action will have corresponding `success` and `failure` messages, e.g., `data:config:save:success` and `data:config:save:failure`.
+For a message like `data:config:save` with a payload of `{ key: 'my-deck-config', value: { ... } }`, the IndexedDB adapter will perform the following operation:
+*   **Database:** `flashcardsDB`
+*   **Object Store:** `configs`
+*   **Action:** `put()`
+*   **Key:** `'my-deck-config'`
+*   **Value:** `{ "value": { ... }, "_version": 1 }`
 
-### Sequence Diagram: Saving Card Statistics
+The `_version` field is added to the stored object to support the synchronization strategy.
 
-This diagram shows the sequence of events when the application saves card interaction statistics.
+### Relational Database (Server-side) Mapping
+The existing `user_data` table in the SQLite database is well-suited for this model. The API Adapter will translate messages into `POST /api/sync` requests. The backend will then map the data to the `user_data` table as follows:
+
+| Message Data    | `user_data` Table Column | Value                                                              |
+| --------------- | ------------------------ | ------------------------------------------------------------------ |
+| Data Type       | `type`                   | `'configs'` or `'cardStat'`                                        |
+| `key`           | `key`                    | The `key` from the message payload (e.g., `'my-deck-config'`).     |
+| `value`         | `value`                  | A JSON string of the object `{ "value": { ... }, "_version": 1 }`. |
+| User            | `user_id`                | The ID of the authenticated user.                                  |
+
+The `value` column, which currently stores the configuration or stat object directly, will now store a new object that wraps the original `value` and includes the `_version` metadata. This change is necessary to support the conflict resolution mechanism. The server-side logic will need to be updated to handle this new structure.
+
+## 4. Error Handling
+
+A robust error handling strategy is crucial. The DAL returns a Promise for every request, which will be rejected upon failure, allowing the business logic and UI to respond appropriately. When an adapter encounters an error, it will dispatch a namespaced `failure` event (e.g., `data:config:save:failure`) on the message bus.
+
+### Sequence Diagram: Error Handling Example
 
 ```mermaid
 sequenceDiagram
-    participant UI
     participant BusinessLogic
     participant DAL
     participant MessageBus
     participant ActiveAdapter
     participant DataStore
 
-    UI->>BusinessLogic: User answers card
-    BusinessLogic->>DAL: saveCardStats(cardKey, stats)
-    DAL->>MessageBus: dispatch('data:card:stats:save', {key, stats})
-    MessageBus->>ActiveAdapter: on('data:card:stats:save', payload)
-    ActiveAdapter->>DataStore: Save(payload.key, payload.stats)
-    alt On Success
-        DataStore-->>ActiveAdapter: Success
-        ActiveAdapter-->>MessageBus: dispatch('data:card:stats:save:success')
-        MessageBus-->>DAL: on('data:card:stats:save:success')
-        DAL-->>BusinessLogic: Promise resolves
-    else On Failure
-        DataStore-->>ActiveAdapter: Failure (e.g., DB error)
-        ActiveAdapter-->>MessageBus: dispatch('data:card:stats:save:failure', {error})
-        MessageBus-->>DAL: on('data:card:stats:save:failure')
-        DAL-->>BusinessLogic: Promise rejects with error
-    end
+    BusinessLogic->>DAL: saveData('myConfig', {...})
+    DAL->>MessageBus: dispatch('data:config:save', ...)
+    MessageBus->>ActiveAdapter: on('data:config:save', ...)
+    ActiveAdapter->>DataStore: Save operation fails
+    DataStore-->>ActiveAdapter: Error
+    ActiveAdapter-->>MessageBus: dispatch('data:config:save:failure', {error})
+    MessageBus-->>DAL: on('data:config:save:failure')
+    DAL-->>BusinessLogic: Promise rejects with error
+    BusinessLogic->>BusinessLogic: Handle error (e.g., show UI notification)
 ```
 
-## 3. Error Handling
-A robust error handling strategy is crucial. Errors can occur at multiple points (network, database, validation). The general principle is that the DAL returns a Promise that will be rejected upon failure, allowing the business logic and UI to respond appropriately.
+## 5. Online/Offline Mode Switching
 
-When an adapter encounters an error (e.g., a network request fails or an IndexedDB write operation throws an exception), it will:
-1.  Catch the error.
-2.  Dispatch a corresponding `failure` event on the message bus (e.g., `data:config:save:failure`).
-3.  Include the error object in the event payload.
+The application will use the standard `navigator.onLine` browser API and `online`/`offline` window events to detect connectivity changes. This status will be stored in the global application state. The DAL inspects this state to determine which adapter (API or IndexedDB) should handle a given request.
 
-The DAL, upon receiving the failure event, will reject the promise it returned to the business logic, which can then update the UI to inform the user (e.g., "Failed to save. Please try again.").
+## 6. Conflict Resolution and Synchronization
 
-## 4. Online/Offline Mode Switching
+To prevent data loss, a robust synchronization strategy is required. This strategy relies on versioning each piece of data.
 
-The application must be able to seamlessly switch between online and offline modes.
+### Data Versioning
+Each record stored (both in IndexedDB and on the server) will include a version counter (`_version`). This is a simple integer that is incremented with every modification.
 
-*   **Status Detection:** The application will use the standard `navigator.onLine` browser API to detect the initial online/offline status. It will also listen for the `online` and `offline` window events to handle changes in connectivity.
-*   **State Management:** The current mode (e.g., `'online'` or `'offline'`) will be managed as part of the global application state.
-*   **Adapter Activation:** The DAL will be responsible for directing messages to the correct adapter. It will check the current application mode before dispatching an event. For example:
-    ```javascript
-    // Inside the DAL
-    saveData(key, data) {
-        const eventName = 'data:config:save';
-        if (getState().mode === 'online') {
-            this.messageBus.dispatch(eventName, { target: 'api', payload: { key, data } });
-        } else {
-            this.messageBus.dispatch(eventName, { target: 'indexeddb', payload: { key, data } });
-        }
-        // ... return a promise that resolves/rejects based on success/failure events
-    }
-    ```
-    Adapters will listen for messages and inspect the `target` property to determine if they should act on the message.
+### Synchronization Flow
+Synchronization is triggered when the application comes online after a period of being offline.
 
-## 5. Synchronization Strategy
+1.  **Client Initiates Sync:** The client sends the server a list of all locally modified records along with their version numbers.
+2.  **Server Compares Versions:** The server iterates through the client's records and compares them with its own versions.
+3.  **Conflict Resolution Logic:**
+    *   **No Conflict (Client Ahead):** If the client's `_version` is greater than the server's, the server's record is outdated. The server updates its record with the client's data and new version number.
+    *   **No Conflict (Server Ahead):** If the server's `_version` is greater, the client's record is outdated. The server sends its version to the client, which updates its local record.
+    *   **No Conflict (New Data):** If the client has a record that the server doesn't (or vice versa), the record is simply copied to the other party.
+    *   **Conflict Detected:** If the server has also modified a record that the client modified offline, a conflict exists.
 
-A simple "last-write-wins" strategy is risky and can lead to data loss. A more sophisticated approach is required for the long term.
+### User-Driven Conflict Resolution
+When a conflict is detected, the application must not automatically overwrite data.
 
-### Initial Strategy (MVP)
-For the initial implementation, we will use a "last-write-wins" approach but with clear user notification. When the application comes online, it will check if there is local data that needs to be synced. The user will be prompted to either push their local changes to the server (overwriting server data) or discard their local changes.
+1.  **Flag Conflicting Items:** The server returns a list of conflicting items to the client.
+2.  **Present to User:** The UI will display a modal showing the conflicts. For each conflict, the user will see their local version and the server's version side-by-side.
+3.  **User Resolves:** The user must choose which version to keep.
+4.  **Finalize Resolution:** Once the user makes a choice, the resolved version is saved with an incremented `_version` to both the client and the server, ensuring they are back in sync.
 
-### Long-Term Strategy
-A more robust solution will involve the following:
-1.  **Conflict Detection:** Use version vectors (or at a minimum, `updated_at` timestamps) for each piece of data. When syncing, the client and server can compare versions to detect conflicts.
-2.  **Data Merging:** For non-conflicting changes (e.g., the user updated one card offline and a different card on another device), the changes can be automatically merged.
-3.  **User-driven Resolution:** When a direct conflict is detected (e.g., the same card was modified both locally and on the server), the UI must prompt the user to resolve the conflict by choosing which version to keep.
-
-## 6. Implementation Plan
+## 7. Implementation Plan
 
 The implementation will be broken down into the following steps:
 
-1.  **Create the Data Abstraction Layer (DAL):**
-    *   Create a new module, `lib/core/data-abstraction-layer.js`.
-    *   This module will expose a simple API for data operations (e.g., `get`, `set`, `delete`).
-    *   It will internally manage the "mode" (online/offline) and delegate calls to the appropriate adapter via the message bus.
-
-2.  **Implement the Message Bus:**
-    *   A simple, in-memory event emitter can be created or a small library can be used. This will live in a new `lib/core/message-bus.js` file.
-
-3.  **Create Data Store Adapters:**
-    *   **IndexedDB Adapter (`lib/dal/indexeddb-adapter.js`):** This will contain the logic to interact with the browser's IndexedDB. It will wrap IndexedDB operations in Promises.
-    *   **API Adapter (`lib/dal/api-adapter.js`):** This will handle communication with the backend server. Initially, it can use the existing `fetch`-based API calls. It can be upgraded to use WebSockets later for real-time communication.
-
-4.  **Refactor Business Logic:**
-    *   Modify the existing modules (`config-manager.js`, `skill-manager.js`, `card-logic.js`) to use the new DAL instead of directly calling `fetch` or accessing local storage.
-    *   For example, instead of `syncToServer()`, a call like `DAL.set('configs', allConfigs)` would be used.
-
-By following this design, we can achieve a highly flexible and maintainable architecture that supports both online and offline use cases while maximizing code reuse.
+1.  **Create the Data Abstraction Layer (DAL).**
+2.  **Implement the Message Bus.**
+3.  **Create Data Store Adapters (IndexedDB and API).**
+4.  **Refactor Business Logic to use the DAL.**
+5.  **Update Server-side Logic to handle data versioning.**
