@@ -27,7 +27,6 @@
                 <textarea id="writing-input" class="text-display-styling" autocomplete="off" placeholder="Start typing here..."></textarea>
             </div>
             <div id="hotkey-bar">
-                <button id="read-aloud-btn">Read Aloud (Ctrl+S)</button>
                 <button id="repeat-word-btn">Repeat Word (Tab)</button>
             </div>
         </main>
@@ -62,6 +61,10 @@
                 <input type="range" id="speed-slider" min="0.5" max="2" value="1" step="0.1">
                 <label for="hide-text-checkbox">Hide Text Mode:</label>
                 <input type="checkbox" id="hide-text-checkbox">
+                <label for="auto-read-next-word-checkbox">Read next word automatically:</label>
+                <input type="checkbox" id="auto-read-next-word-checkbox" checked>
+                <label for="auto-read-on-correct-checkbox">Read word when entered correctly:</label>
+                <input type="checkbox" id="auto-read-on-correct-checkbox" checked>
             </div>
         </div>
         <div class="config-section">
