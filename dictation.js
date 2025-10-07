@@ -6,11 +6,11 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- Constants ---
     const DB_PREFIX = 'dictation-';
     const DB_CONFIG_KEY = 'dictation-config';
+    const SESSION_STORAGE_KEY = 'dictation-session';
 
     // --- DOM Elements ---
     const textSelect = document.getElementById('text-select');
     const newTextBtn = document.getElementById('new-text-btn');
-    const editTextBtn = document.getElementById('edit-text-btn');
     const deleteTextBtn = document.getElementById('delete-text-btn');
     const textDisplay = document.getElementById('text-display');
     const speakerIcon = document.getElementById('speaker-icon');
@@ -19,8 +19,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const fontSizeSelect = document.getElementById('font-size-select');
     const fontFamilySelect = document.getElementById('font-family-select');
     const hideTextCheckbox = document.getElementById('hide-text-checkbox');
-    const modal = document.getElementById('modal');
-    const closeButton = document.querySelector('.close-button');
     const textTitleInput = document.getElementById('text-title-input');
     const textContentTextarea = document.getElementById('text-content-textarea');
     const saveTextBtn = document.getElementById('save-text-btn');
@@ -35,11 +33,11 @@ document.addEventListener('DOMContentLoaded', () => {
     let texts = {};
     let sourceWords = [];
     let currentWordIndex = 0;
-    let originalTitle = null;
-    let highlightedWordSpan = null;
-    let fKeyPressCount = 0;
+    let originalTitle = null; // Used for editing/renaming texts
+    let tabKeyPressCount = 0;
 
-    // --- Function Definitions ---
+    // --- Utility Functions ---
+    const stripPunctuation = (str) => str.replace(/[\p{P}]/gu, '');
 
     const showNotification = (message, duration = 3000) => {
         notificationArea.textContent = message;
@@ -49,18 +47,25 @@ document.addEventListener('DOMContentLoaded', () => {
         }, duration);
     };
 
-    const updateTextList = () => {
-        const selectedValue = textSelect.value;
-        textSelect.innerHTML = '';
-        Object.keys(texts).forEach(title => {
-            const option = document.createElement('option');
-            option.value = title;
-            option.textContent = title;
-            textSelect.appendChild(option);
-        });
-        textSelect.value = selectedValue;
+    // --- Session & Progress Saving ---
+    const saveSession = () => {
+        if (textSelect.value) {
+            sessionStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify({
+                title: textSelect.value,
+                userInput: writingInput.value
+            }));
+        }
     };
 
+    const loadSession = () => {
+        const session = sessionStorage.getItem(SESSION_STORAGE_KEY);
+        if (session) {
+            return JSON.parse(session);
+        }
+        return null;
+    };
+
+    // --- Core Data Functions ---
     const loadTexts = async () => {
         const keys = await idb.keys();
         const dictationKeys = keys.filter(key => key.startsWith(DB_PREFIX));
@@ -75,81 +80,26 @@ document.addEventListener('DOMContentLoaded', () => {
         updateTextList();
     };
 
-    const openModal = (title = '', content = '', isEditing = false) => {
-        textTitleInput.value = title;
-        textContentTextarea.value = content;
-        originalTitle = isEditing ? title : null;
-        modal.style.display = 'block';
-    };
-
-    const closeModal = () => {
-        modal.style.display = 'none';
-        originalTitle = null;
-    };
-
-    const speakWord = (word, rate) => {
-        if (!('speechSynthesis' in window)) return;
-        const utterance = new SpeechSynthesisUtterance(word);
-        utterance.lang = textDisplay.lang || 'en';
-        utterance.rate = rate || parseFloat(speedSlider.value);
-        speechSynthesis.speak(utterance);
-    };
-
-    const stripPunctuation = (str) => str.replace(/[\p{P}]/gu, '');
-
-    const speakNextWord = () => {
-        if (currentWordIndex < sourceWords.length) {
-            speakWord(stripPunctuation(sourceWords[currentWordIndex]));
-        }
-    };
-
-    const handleContinuousInput = () => {
-        const sourceSpans = Array.from(textDisplay.querySelectorAll('span'));
-        const inputWords = writingInput.value.split(' ').filter(w => w.length > 0);
-        let lastCorrectIndex = -1;
-
-        sourceSpans.forEach((span, index) => {
-            span.classList.remove('correct', 'incorrect');
-            if (index < inputWords.length) {
-                if (inputWords[index] === sourceWords[index]) {
-                    span.classList.add('correct');
-                    lastCorrectIndex = index;
-                } else {
-                    span.classList.add('incorrect');
-                }
-            }
+    const updateTextList = () => {
+        const selectedValue = textSelect.value;
+        textSelect.innerHTML = '';
+        Object.keys(texts).forEach(title => {
+            const option = document.createElement('option');
+            option.value = title;
+            option.textContent = title;
+            textSelect.appendChild(option);
         });
-
-        const newWordIndex = lastCorrectIndex + 1;
-        if (newWordIndex > currentWordIndex && newWordIndex < sourceWords.length) {
-            currentWordIndex = newWordIndex;
-            speakWord(stripPunctuation(sourceWords[currentWordIndex - 1]));
-            speakNextWord();
-        }
-        currentWordIndex = newWordIndex;
-
-        if (writingInput.value.trim() === sourceWords.join(' ')) {
-            showNotification('Dictation complete!', 5000);
+        if (selectedValue) {
+            textSelect.value = selectedValue;
         }
     };
 
-    const displayText = async () => {
-        const title = textSelect.value;
-        if (title && texts[title]) {
-            sourceWords = texts[title].split(' ').filter(w => w.length > 0);
-            currentWordIndex = 0;
-            fKeyPressCount = 0;
-            writingInput.value = '';
-
-            textDisplay.innerHTML = sourceWords.map(word => `<span>${word}</span>`).join(' ');
-
-            const lang = await detectLanguage(texts[title]);
-            textDisplay.lang = lang;
-            writingInput.lang = lang;
-
-            handleContinuousInput();
-            speakNextWord();
-        }
+    const clearEditor = () => {
+        textSelect.value = '';
+        textTitleInput.value = '';
+        textContentTextarea.value = '';
+        originalTitle = null;
+        textTitleInput.focus();
     };
 
     const saveText = async () => {
@@ -163,7 +113,6 @@ document.addEventListener('DOMContentLoaded', () => {
             await loadTexts();
             textSelect.value = newTitle;
             displayText();
-            closeModal();
         }
     };
 
@@ -173,13 +122,91 @@ document.addEventListener('DOMContentLoaded', () => {
             await idb.del(`${DB_PREFIX}${title}`);
             textDisplay.innerHTML = '';
             writingInput.value = '';
+            clearEditor();
             await loadTexts();
+        }
+    };
+
+    // --- Dictation & Display Logic ---
+    const displayText = async (savedInput = '') => {
+        const title = textSelect.value;
+        if (title && texts[title]) {
+            sourceWords = texts[title].split(' ').filter(w => w.length > 0);
+            currentWordIndex = 0;
+            tabKeyPressCount = 0;
+            writingInput.value = savedInput;
+
+            textDisplay.innerHTML = sourceWords.map(word => `<span>${word}</span>`).join(' ');
+
+            const lang = await detectLanguage(texts[title]);
+            textDisplay.lang = lang;
+            writingInput.lang = lang;
+
+            handleContinuousInput();
+            if (!savedInput) {
+                speakNextWord();
+            }
+        }
+    };
+
+    const handleContinuousInput = () => {
+        const sourceSpans = Array.from(textDisplay.querySelectorAll('span'));
+        const inputWords = writingInput.value.split(/[\s\n]+/).filter(w => w.length > 0);
+        let lastCorrectIndex = -1;
+
+        // Reset all highlights
+        sourceSpans.forEach(span => span.classList.remove('correct', 'incorrect', 'current'));
+
+        sourceSpans.forEach((span, index) => {
+            if (index < inputWords.length) {
+                if (inputWords[index] === sourceWords[index]) {
+                    span.classList.add('correct');
+                    lastCorrectIndex = index;
+                } else {
+                    span.classList.add('incorrect');
+                }
+            }
+        });
+
+        const newWordIndex = lastCorrectIndex + 1;
+
+        if (newWordIndex > currentWordIndex && newWordIndex < sourceWords.length) {
+            speakWord(stripPunctuation(sourceWords[currentWordIndex])); // Re-read successful word
+            speakNextWord(); // Read the next word to be typed
+        }
+        currentWordIndex = newWordIndex;
+
+        // Highlight current word
+        if (currentWordIndex < sourceWords.length) {
+            sourceSpans[currentWordIndex].classList.add('current');
+        }
+
+        saveSession(); // Save progress after every word
+
+        if (writingInput.value.trim() === sourceWords.join(' ')) {
+            showNotification('Dictation complete!', 5000);
+            sessionStorage.removeItem(SESSION_STORAGE_KEY);
+        }
+    };
+
+    const speakWord = (word, rate) => {
+        if (!('speechSynthesis' in window)) return;
+        speechSynthesis.cancel();
+        const utterance = new SpeechSynthesisUtterance(word);
+        utterance.lang = textDisplay.lang || 'en';
+        utterance.rate = rate || parseFloat(speedSlider.value);
+        speechSynthesis.speak(utterance);
+    };
+
+    const speakNextWord = () => {
+        if (currentWordIndex < sourceWords.length) {
+            speakWord(stripPunctuation(sourceWords[currentWordIndex]));
         }
     };
 
     const repeatCurrentWord = () => {
         if (currentWordIndex < sourceWords.length) {
-            const speed = 1.0 - (0.2 * fKeyPressCount++);
+            const speed = 1.0 - (0.2 * tabKeyPressCount++);
             speakWord(stripPunctuation(sourceWords[currentWordIndex]), Math.max(0.2, speed));
         }
     };
@@ -191,13 +218,6 @@ document.addEventListener('DOMContentLoaded', () => {
         const utterance = new SpeechSynthesisUtterance(fullText);
         utterance.lang = textDisplay.lang || 'en';
         utterance.rate = parseFloat(speedSlider.value);
-
-        utterance.onend = () => {
-             if (highlightedWordSpan) {
-                highlightedWordSpan.classList.remove('highlight');
-                highlightedWordSpan = null;
-            }
-        };
         speechSynthesis.speak(utterance);
     };
 
@@ -211,14 +231,12 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
+    // --- Configuration ---
     const applyConfig = (config) => {
-        const elementsToStyle = [textDisplay, writingInput];
-        elementsToStyle.forEach(el => {
-            if (el) {
-                el.style.fontSize = config.fontSize;
-                el.style.fontFamily = config.fontFamily;
-            }
-        });
+        writingInput.style.fontSize = config.fontSize;
+        writingInput.style.fontFamily = config.fontFamily;
+        textDisplay.style.fontSize = config.fontSize;
+        textDisplay.style.fontFamily = config.fontFamily;
     };
 
     const saveConfig = async () => {
@@ -242,21 +260,20 @@ document.addEventListener('DOMContentLoaded', () => {
         toggleHideText();
     };
 
-    const handleConfigChange = () => {
-        applyConfig({ fontSize: fontSizeSelect.value, fontFamily: fontFamilySelect.value });
-        saveConfig();
-    };
-
     // --- Event Listeners ---
-    newTextBtn.addEventListener('click', () => openModal());
-    editTextBtn.addEventListener('click', () => {
-        const title = textSelect.value;
-        if (title && texts[title]) openModal(title, texts[title], true);
-    });
+    newTextBtn.addEventListener('click', clearEditor);
     deleteTextBtn.addEventListener('click', deleteText);
     saveTextBtn.addEventListener('click', saveText);
-    closeButton.addEventListener('click', closeModal);
-    textSelect.addEventListener('change', displayText);
+
+    textSelect.addEventListener('change', () => {
+        const title = textSelect.value;
+        if (title && texts[title]) {
+            textTitleInput.value = title;
+            textContentTextarea.value = texts[title];
+            originalTitle = title;
+            displayText();
+        }
+    });
 
     writingInput.addEventListener('input', handleContinuousInput);
     readAloudBtn.addEventListener('click', speakText);
@@ -275,6 +292,10 @@ document.addEventListener('DOMContentLoaded', () => {
     configToggleBtn.addEventListener('click', () => configPanel.classList.toggle('config-panel-hidden'));
     closeConfigBtn.addEventListener('click', () => configPanel.classList.add('config-panel-hidden'));
 
+    const handleConfigChange = () => {
+        applyConfig({ fontSize: fontSizeSelect.value, fontFamily: fontFamilySelect.value });
+        saveConfig();
+    };
     fontSizeSelect.addEventListener('change', handleConfigChange);
     fontFamilySelect.addEventListener('change', handleConfigChange);
     speedSlider.addEventListener('input', saveConfig);
@@ -284,11 +305,14 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     // --- Keyboard Shortcuts ---
-    document.addEventListener('keydown', (event) => {
-        if (event.key.toLowerCase() === 'f') {
+    writingInput.addEventListener('keydown', (event) => {
+        if (event.key === 'Tab') {
             event.preventDefault();
             repeatCurrentWord();
         }
+    });
+
+    document.addEventListener('keydown', (event) => {
         if (event.ctrlKey && event.key.toLowerCase() === 's') {
             event.preventDefault();
             speakText();
@@ -299,6 +323,12 @@ document.addEventListener('DOMContentLoaded', () => {
     const initializeApp = async () => {
         await loadConfig();
         await loadTexts();
+
+        const savedSession = loadSession();
+        if (savedSession && texts[savedSession.title]) {
+            textSelect.value = savedSession.title;
+            await displayText(savedSession.userInput);
+        }
     };
 
     initializeApp();
