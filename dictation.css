@@ -49,21 +49,17 @@ body {
     overflow-y: auto;
 }
 
-#input-container {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-}
-
 #writing-input {
-    flex-grow: 1;
-    width: 100%; /* Match parent width */
+    flex: 1; /* Take up the same amount of space as the display container */
     padding: 20px;
     border-radius: 8px;
     border: 1px solid var(--medium-gray);
     resize: none; /* Disable manual resizing */
-    background-color: transparent; /* Match the display container */
+    background-color: #fdfdfd; /* Match the main content background */
     box-sizing: border-box; /* Ensure padding is included in width/height */
+    line-height: inherit; /* Inherit from text-display-styling */
+    font-family: inherit; /* Inherit from text-display-styling */
+    overflow-y: auto; /* Match scrollbar behavior of display container */
 }
 
 .text-display-styling {
@@ -109,27 +105,31 @@ body {
     margin: 0;
 }
 
+.dictation-page-container {
+    display: flex;
+    flex-direction: row;
+    height: calc(100vh - var(--top-bar-height));
+    align-items: stretch; /* Ensure children stretch to fill height */
+}
+
+#dictation-container {
+    flex: 1; /* Allow this container to grow and shrink */
+    display: flex;
+    flex-direction: column;
+    min-width: 0; /* Prevent flexbox from overflowing */
+}
+
 /* Config Panel */
 #config-panel {
-    position: fixed;
-    top: var(--top-bar-height);
-    right: 0;
-    width: 350px; /* Wider for editor */
-    height: calc(100vh - var(--top-bar-height));
+    width: 350px;
+    height: 100%;
     background-color: var(--background-color);
     border-left: 1px solid var(--medium-gray);
     padding: 20px;
-    box-shadow: -5px 0 15px rgba(0,0,0,0.1);
-    transform: translateX(100%);
-    transition: transform 0.3s ease-in-out;
-    z-index: 100;
     display: flex;
     flex-direction: column;
     gap: 20px;
-}
-
-#config-panel:not(.config-panel-hidden) {
-    transform: translateX(0);
+    overflow-y: auto;
 }
 
 .config-section {

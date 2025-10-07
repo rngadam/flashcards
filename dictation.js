@@ -31,9 +31,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const repeatWordBtn = document.getElementById('repeat-word-btn');
     const revealTextBtn = document.getElementById('reveal-text-btn');
     const toggleHiddenBtn = document.getElementById('toggle-hidden-btn');
-    const configToggleBtn = document.getElementById('config-toggle-btn');
     const configPanel = document.getElementById('config-panel');
-    const closeConfigBtn = document.getElementById('close-config-btn');
     const resetSettingsBtn = document.getElementById('reset-settings-btn');
     const notificationArea = document.getElementById('notification-area');
 
@@ -44,7 +42,6 @@ document.addEventListener('DOMContentLoaded', () => {
     let originalTitle = null; // Used for editing/renaming texts
     let tabKeyPressCount = 0;
     let speechQueue = [];
-    const spokenWordIndexes = new Set();
 
     // --- Function Declarations (ordered to prevent no-use-before-define) ---
 
@@ -229,16 +226,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (!firstErrorFound) {
                         firstErrorFound = { input: inputWords[index], source: sourceWords[index] };
                     }
-                } else { // Word is correct so far
-                    const isExactMatch = normalizeWord(inputWords[index]) === normalizeWord(sourceWords[index]);
-
-                    // Speak on exact match, but only once.
-                    if (readOnCorrectCheckbox.checked && isExactMatch && !spokenWordIndexes.has(index)) {
-                        speakWord(stripPunctuation(sourceWords[index]));
-                        spokenWordIndexes.add(index);
-                    }
-
-                    // A word is marked 'correct' for highlighting purposes if it's a completed word
+                } else {
+                    // Only mark as correct if the word is complete
                     if (!isLastWord || isInputComplete) {
                         span.classList.add('correct');
                         lastCorrectIndex = index;
@@ -267,18 +256,20 @@ document.addEventListener('DOMContentLoaded', () => {
         const hasAdvanced = newWordIndex > currentWordIndex;
         currentWordIndex = newWordIndex;
 
-        // "Read next word" should only trigger when a complete word has been entered.
-        if (hasAdvanced && isInputComplete) {
+        if (hasAdvanced) {
+            if (readOnCorrectCheckbox.checked && currentWordIndex > 0) {
+                speakWord(stripPunctuation(sourceWords[currentWordIndex - 1]));
+            }
             if (readNextCheckbox.checked) {
                 speakNextWord();
             }
+            // Save session only when a word has been successfully entered
+            saveSession();
         }
 
         if (currentWordIndex < sourceWords.length) {
             sourceSpans[currentWordIndex].classList.add('current');
         }
-
-        saveSession();
 
         if (writingInput.value.trim() === sourceWords.join(' ')) {
             showNotification('Dictation complete!', 5000);
@@ -293,7 +284,6 @@ document.addEventListener('DOMContentLoaded', () => {
             // Clear any previous diff display when loading new text
             diffDisplay.innerHTML = '';
             diffDisplay.classList.add('hidden');
-            spokenWordIndexes.clear();
 
             sourceWords = texts[title].split(' ').filter(w => w.length > 0);
             currentWordIndex = 0;
@@ -470,9 +460,6 @@ document.addEventListener('DOMContentLoaded', () => {
             window.open(url, '_blank');
         }
     });
-
-    configToggleBtn.addEventListener('click', () => configPanel.classList.toggle('config-panel-hidden'));
-    closeConfigBtn.addEventListener('click', () => configPanel.classList.add('config-panel-hidden'));
 
     fontSizeSelect.addEventListener('change', handleConfigChange);
     fontFamilySelect.addEventListener('change', handleConfigChange);
