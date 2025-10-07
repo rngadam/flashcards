@@ -1,0 +1,221 @@
+/* dictation.css */
+
+:root {
+    --top-bar-height: 60px;
+    --correct-color: #28a745;
+    --incorrect-color: #dc3545;
+    --current-highlight-color: #e7f3ff; /* Light blue */
+    --current-highlight-border: #007bff;
+}
+
+body {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    overflow: hidden;
+}
+
+.top-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0 20px;
+    height: var(--top-bar-height);
+    background-color: var(--background-color);
+    border-bottom: 1px solid var(--medium-gray);
+    flex-shrink: 0;
+}
+
+#dictation-container {
+    display: flex;
+    flex-grow: 1;
+    height: calc(100vh - var(--top-bar-height));
+}
+
+#main-content {
+    flex-grow: 1;
+    display: flex;
+    flex-direction: column;
+    padding: 20px;
+    background-color: #fdfdfd;
+}
+
+#text-display-container {
+    flex-grow: 1;
+    border: 1px solid var(--medium-gray);
+    border-radius: 8px;
+    padding: 20px;
+    overflow-y: auto;
+    margin-bottom: 20px;
+}
+
+#input-container {
+    flex-basis: 30%; /* Input takes up a portion of the space */
+    display: flex;
+    flex-direction: column;
+}
+
+#writing-input {
+    flex-grow: 1;
+    width: 100%; /* Match parent width */
+    padding: 20px;
+    border-radius: 8px;
+    border: 1px solid var(--medium-gray);
+    resize: none; /* Disable manual resizing */
+}
+
+.text-display-styling {
+    font-size: 28px;
+    line-height: 1.8;
+    text-align: left;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+}
+
+#text-display span {
+    cursor: pointer;
+    transition: background-color 0.2s;
+    border-radius: 4px;
+    padding: 2px 0;
+}
+
+#text-display span.correct {
+    background-color: var(--success-message-bg);
+    color: var(--success-message-text);
+}
+
+#text-display span.incorrect {
+    background-color: var(--danger-message-bg);
+    color: var(--danger-message-text);
+    text-decoration: underline wavy red 2px;
+}
+
+#text-display span.current {
+    background-color: var(--current-highlight-color);
+    box-shadow: 0 0 0 2px var(--current-highlight-border);
+}
+
+#hotkey-bar {
+    padding-top: 10px;
+    display: flex;
+    gap: 10px;
+}
+
+#hotkey-bar button {
+    font-size: 0.9em;
+    padding: 8px 12px;
+    margin: 0;
+}
+
+/* Config Panel */
+#config-panel {
+    position: fixed;
+    top: var(--top-bar-height);
+    right: 0;
+    width: 350px; /* Wider for editor */
+    height: calc(100vh - var(--top-bar-height));
+    background-color: var(--background-color);
+    border-left: 1px solid var(--medium-gray);
+    padding: 20px;
+    box-shadow: -5px 0 15px rgba(0,0,0,0.1);
+    transform: translateX(100%);
+    transition: transform 0.3s ease-in-out;
+    z-index: 100;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+#config-panel:not(.config-panel-hidden) {
+    transform: translateX(0);
+}
+
+.config-section {
+    border-bottom: 1px solid #eee;
+    padding-bottom: 20px;
+}
+.config-section:last-of-type {
+    border-bottom: none;
+}
+
+.config-grid {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 15px;
+    align-items: center;
+}
+
+.master-detail-container {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+#text-list-container {
+    height: 150px;
+    overflow-y: auto;
+}
+
+#text-select {
+    width: 100%;
+    height: 100%;
+}
+
+#text-editor-container {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+#text-editor-container input,
+#text-editor-container textarea {
+    width: 100%;
+    padding: 8px;
+    border-radius: 4px;
+    border: 1px solid var(--medium-gray);
+}
+
+.editor-buttons {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 10px;
+}
+
+.editor-buttons button {
+    font-size: 0.9em;
+    padding: 8px 10px;
+    margin: 0;
+}
+
+/* Notification Area */
+#notification-area {
+    position: fixed;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    background-color: var(--success-notification-bg);
+    color: var(--text-color-light);
+    padding: 15px 25px;
+    border-radius: 8px;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.2);
+    z-index: 200;
+    opacity: 0;
+    transition: opacity 0.3s, bottom 0.3s;
+    pointer-events: none;
+}
+
+#notification-area:not(.hidden) {
+    opacity: 1;
+    bottom: 30px;
+}
+
+/* Utility */
+.hidden {
+    display: none !important;
+}
+
+#speaker-icon {
+    font-size: 5em;
+    text-align: center;
+    color: var(--medium-gray);
+    padding-top: 50px;
+}

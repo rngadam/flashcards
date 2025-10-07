@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dictation Practice</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="dictation.css">
+</head>
+<body>
+    <header class="top-bar">
+        <h1>Dictation Practice</h1>
+        <div class="top-bar-controls">
+            <button id="config-toggle-btn">Settings</button>
+        </div>
+    </header>
+
+    <div id="dictation-container">
+        <main id="main-content">
+            <div id="text-display-container">
+                <div id="text-display" class="text-display-styling">
+                    <!-- Speaker icon for hidden mode -->
+                    <div id="speaker-icon" class="hidden">🔊</div>
+                </div>
+            </div>
+            <div id="input-container">
+                <textarea id="writing-input" class="text-display-styling" autocomplete="off" placeholder="Start typing here..."></textarea>
+            </div>
+            <div id="hotkey-bar">
+                <button id="repeat-word-btn">Repeat Word (Tab)</button>
+            </div>
+        </main>
+    </div>
+
+    <div id="config-panel" class="config-panel-hidden">
+        <h2>Settings</h2>
+        <div class="config-section">
+            <h3>Appearance</h3>
+            <div class="config-grid">
+                <label for="font-size-select">Font Size:</label>
+                <select id="font-size-select">
+                    <option value="20px">20px</option>
+                    <option value="24px">24px</option>
+                    <option value="28px">28px</option>
+                    <option value="32px">32px</option>
+                    <option value="40px">40px</option>
+                </select>
+                <label for="font-family-select">Font Family:</label>
+                <select id="font-family-select">
+                    <option value="Arial, sans-serif">Arial</option>
+                    <option value="Verdana, sans-serif">Verdana</option>
+                    <option value="'Times New Roman', Times, serif">Times New Roman</option>
+                    <option value="'Courier New', Courier, monospace">Courier New</option>
+                </select>
+            </div>
+        </div>
+        <div class="config-section">
+            <h3>Practice</h3>
+            <div class="config-grid">
+                <label for="speed-slider">Read Aloud Speed:</label>
+                <input type="range" id="speed-slider" min="0.5" max="2" value="1" step="0.1">
+                <label for="hide-text-checkbox">Hide Text Mode:</label>
+                <input type="checkbox" id="hide-text-checkbox">
+                <label for="auto-read-next-word-checkbox">Read next word automatically:</label>
+                <input type="checkbox" id="auto-read-next-word-checkbox" checked>
+                <label for="auto-read-on-correct-checkbox">Read word when entered correctly:</label>
+                <input type="checkbox" id="auto-read-on-correct-checkbox" checked>
+            </div>
+        </div>
+        <div class="config-section">
+            <h3>My Texts</h3>
+            <div class="master-detail-container">
+                <div id="text-list-container">
+                    <select id="text-select" size="8"></select>
+                </div>
+                <div id="text-editor-container">
+                    <input type="text" id="text-title-input" placeholder="Title">
+                    <textarea id="text-content-textarea" rows="8" placeholder="Content..."></textarea>
+                    <div class="editor-buttons">
+                        <button id="new-text-btn">New</button>
+                        <button id="save-text-btn">Save</button>
+                        <button id="delete-text-btn">Delete</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <button id="close-config-btn">Close</button>
+    </div>
+
+    <div id="notification-area" class="hidden"></div>
+    <script type="module" src="dictation.js"></script>
+</body>
+</html>
