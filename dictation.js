@@ -25,6 +25,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const ignoreAccentsCheckbox = document.getElementById('ignore-accents-checkbox');
     const ignorePunctuationCheckbox = document.getElementById('ignore-punctuation-checkbox');
     const ignoreCaseCheckbox = document.getElementById('ignore-case-checkbox');
+    const waitForSpaceCheckbox = document.getElementById('wait-for-space-checkbox');
     const textTitleInput = document.getElementById('text-title-input');
     const textContentTextarea = document.getElementById('text-content-textarea');
     const saveTextBtn = document.getElementById('save-text-btn');
@@ -33,6 +34,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const toggleHiddenBtn = document.getElementById('toggle-hidden-btn');
     const resetSettingsBtn = document.getElementById('reset-settings-btn');
     const notificationArea = document.getElementById('notification-area');
+    const configPanel = document.getElementById('config-panel');
+    const toggleConfigPanelBtn = document.getElementById('toggle-config-panel-btn');
 
     // --- App State ---
     let texts = {};
@@ -190,11 +193,17 @@ document.addEventListener('DOMContentLoaded', () => {
         speakImmediately(fullText, parseFloat(speedSlider.value));
     };
 
+    const flashIncorrect = () => {
+        writingInput.classList.add('input-incorrect-flash');
+        setTimeout(() => {
+            writingInput.classList.remove('input-incorrect-flash');
+        }, 300);
+    };
+
     const handleContinuousInput = () => {
         const sourceSpans = Array.from(textDisplay.querySelectorAll('span'));
         const inputValue = writingInput.value;
-        const inputWords = inputValue.split(/[\s\n]+/).filter(w => w.length > 0);
-        const isInputComplete = /[\s\n]$/.test(inputValue) || inputValue.length === 0;
+        const inputTokens = inputValue.match(/\S+\s*/g) || [];
         const isHiddenMode = hideTextCheckbox.checked;
 
         let lastCorrectIndex = -1;
@@ -203,30 +212,48 @@ document.addEventListener('DOMContentLoaded', () => {
         // Part 1: Determine correctness of each word and find the first error
         sourceSpans.forEach(span => span.classList.remove('correct', 'incorrect', 'current'));
         sourceSpans.forEach((span, index) => {
-            if (index < inputWords.length) {
-                const isLastWord = index === inputWords.length - 1;
+            if (index < inputTokens.length) {
+                const token = inputTokens[index];
+                const inputWord = token.trim();
+                const wordIsFinishedBySpace = token.length > inputWord.length;
+                const isLastToken = index === inputTokens.length - 1;
+
                 const normalizedSource = normalizeWord(sourceWords[index]);
-                const normalizedInput = normalizeWord(inputWords[index]);
+                const normalizedInput = normalizeWord(inputWord);
 
                 let isIncorrect = false;
-                if (isLastWord && !isInputComplete) { // Typing last word
-                    if (!normalizedSource.startsWith(normalizedInput)) {
+                // Word is considered "finished" if it has a trailing space, or if it's not the last token.
+                const isWordInteractionComplete = !isLastToken || wordIsFinishedBySpace;
+
+                if (isWordInteractionComplete) { // For completed words, check for exact match
+                    if (normalizedInput !== normalizedSource) {
                         isIncorrect = true;
                     }
-                } else { // Word is complete
-                    if (normalizedInput !== normalizedSource) {
+                } else { // For the word being typed, check if it's a valid prefix
+                    if (!normalizedSource.startsWith(normalizedInput)) {
                         isIncorrect = true;
                     }
                 }
 
                 if (isIncorrect) {
-                    span.classList.add('incorrect');
-                    if (!firstErrorFound) {
-                        firstErrorFound = { input: inputWords[index], source: sourceWords[index] };
+                    if (waitForSpaceCheckbox.checked) {
+                        if (isWordInteractionComplete) {
+                            span.classList.add('incorrect');
+                            if (!firstErrorFound) {
+                                firstErrorFound = { input: inputWord, source: sourceWords[index] };
+                            }
+                        } else {
+                            flashIncorrect();
+                        }
+                    } else {
+                        span.classList.add('incorrect');
+                        if (!firstErrorFound) {
+                            firstErrorFound = { input: inputWord, source: sourceWords[index] };
+                        }
                     }
                 } else {
                     // Only mark as correct if the word is complete
-                    if (!isLastWord || isInputComplete) {
+                    if (isWordInteractionComplete) {
                         span.classList.add('correct');
                         lastCorrectIndex = index;
                     }
@@ -380,6 +407,7 @@ document.addEventListener('DOMContentLoaded', () => {
             ignoreAccents: ignoreAccentsCheckbox.checked,
             ignorePunctuation: ignorePunctuationCheckbox.checked,
             ignoreCase: ignoreCaseCheckbox.checked,
+            waitForSpace: waitForSpaceCheckbox.checked,
         };
         await idb.set(DB_CONFIG_KEY, config);
     };
@@ -395,6 +423,7 @@ document.addEventListener('DOMContentLoaded', () => {
         ignoreAccentsCheckbox.checked = config.ignoreAccents !== false;
         ignorePunctuationCheckbox.checked = config.ignorePunctuation !== false;
         ignoreCaseCheckbox.checked = config.ignoreCase !== false;
+        waitForSpaceCheckbox.checked = config.waitForSpace !== false;
 
         applyConfig({ fontSize: fontSizeSelect.value, fontFamily: fontFamilySelect.value });
         toggleHideText();
@@ -471,6 +500,7 @@ document.addEventListener('DOMContentLoaded', () => {
     ignoreAccentsCheckbox.addEventListener('change', saveConfig);
     ignorePunctuationCheckbox.addEventListener('change', saveConfig);
     ignoreCaseCheckbox.addEventListener('change', saveConfig);
+    waitForSpaceCheckbox.addEventListener('change', saveConfig);
 
     writingInput.addEventListener('keydown', (event) => {
         if (event.key === 'Tab') {
@@ -507,6 +537,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
     revealTextBtn.addEventListener('click', revealHiddenText);
     toggleHiddenBtn.addEventListener('click', toggleHiddenTextMode);
+
+    toggleConfigPanelBtn.addEventListener('click', () => {
+        configPanel.classList.toggle('config-panel-hidden');
+    });
+
+    writingInput.addEventListener('focus', () => {
+        configPanel.classList.add('config-panel-hidden');
+    });
 
     const initializeApp = async () => {
         await loadConfig();
