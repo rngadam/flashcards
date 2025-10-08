@@ -38,30 +38,28 @@ body {
     flex-direction: column;
     padding: 20px;
     background-color: #fdfdfd;
+    gap: 20px;
 }
 
 #text-display-container {
-    flex-grow: 1;
+    flex: 1;
     border: 1px solid var(--medium-gray);
     border-radius: 8px;
     padding: 20px;
     overflow-y: auto;
-    margin-bottom: 20px;
-}
-
-#input-container {
-    flex-basis: 30%; /* Input takes up a portion of the space */
-    display: flex;
-    flex-direction: column;
 }
 
 #writing-input {
-    flex-grow: 1;
-    width: 100%; /* Match parent width */
+    flex: 1; /* Take up the same amount of space as the display container */
     padding: 20px;
     border-radius: 8px;
     border: 1px solid var(--medium-gray);
     resize: none; /* Disable manual resizing */
+    background-color: #fdfdfd; /* Match the main content background */
+    box-sizing: border-box; /* Ensure padding is included in width/height */
+    line-height: inherit; /* Inherit from text-display-styling */
+    font-family: inherit; /* Inherit from text-display-styling */
+    overflow-y: auto; /* Match scrollbar behavior of display container */
 }
 
 .text-display-styling {
@@ -107,27 +105,31 @@ body {
     margin: 0;
 }
 
+.dictation-page-container {
+    display: flex;
+    flex-direction: row;
+    height: calc(100vh - var(--top-bar-height));
+    align-items: stretch; /* Ensure children stretch to fill height */
+}
+
+#dictation-container {
+    flex: 1; /* Allow this container to grow and shrink */
+    display: flex;
+    flex-direction: column;
+    min-width: 0; /* Prevent flexbox from overflowing */
+}
+
 /* Config Panel */
 #config-panel {
-    position: fixed;
-    top: var(--top-bar-height);
-    right: 0;
-    width: 350px; /* Wider for editor */
-    height: calc(100vh - var(--top-bar-height));
+    width: 350px;
+    height: 100%;
     background-color: var(--background-color);
     border-left: 1px solid var(--medium-gray);
     padding: 20px;
-    box-shadow: -5px 0 15px rgba(0,0,0,0.1);
-    transform: translateX(100%);
-    transition: transform 0.3s ease-in-out;
-    z-index: 100;
     display: flex;
     flex-direction: column;
     gap: 20px;
-}
-
-#config-panel:not(.config-panel-hidden) {
-    transform: translateX(0);
+    overflow-y: auto;
 }
 
 .config-section {
@@ -216,6 +218,40 @@ body {
 #speaker-icon {
     font-size: 5em;
     text-align: center;
-    color: var(--medium-gray);
-    padding-top: 50px;
+    color: rgba(128, 128, 128, 0.2); /* Make icon semi-transparent */
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: -1; /* Place it behind the text/diff */
+    pointer-events: none; /* Make it unclickable */
 }
+
+#text-display-container {
+    position: relative; /* Needed for absolute positioning of speaker icon */
+}
+
+#diff-display .diff-added {
+    background-color: var(--success-message-bg);
+    color: var(--success-message-text);
+    text-decoration: none;
+}
+
+#diff-display .diff-removed {
+    background-color: var(--danger-message-bg);
+    color: var(--danger-message-text);
+    text-decoration: line-through;
+}
+
+/* Font size classes */
+.font-size-20 { font-size: 20px; }
+.font-size-24 { font-size: 24px; }
+.font-size-28 { font-size: 28px; }
+.font-size-32 { font-size: 32px; }
+.font-size-40 { font-size: 40px; }
+
+/* Font family classes */
+.font-family-arial { font-family: Arial, sans-serif; }
+.font-family-verdana { font-family: Verdana, sans-serif; }
+.font-family-times-new-roman { font-family: 'Times New Roman', Times, serif; }
+.font-family-courier-new { font-family: 'Courier New', Courier, monospace; }

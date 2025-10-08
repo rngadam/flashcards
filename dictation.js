@@ -14,19 +14,24 @@ document.addEventListener('DOMContentLoaded', () => {
     const deleteTextBtn = document.getElementById('delete-text-btn');
     const textDisplay = document.getElementById('text-display');
     const speakerIcon = document.getElementById('speaker-icon');
+    const diffDisplay = document.getElementById('diff-display');
     const writingInput = document.getElementById('writing-input');
     const speedSlider = document.getElementById('speed-slider');
     const fontSizeSelect = document.getElementById('font-size-select');
     const fontFamilySelect = document.getElementById('font-family-select');
     const hideTextCheckbox = document.getElementById('hide-text-checkbox');
+    const readNextCheckbox = document.getElementById('read-next-checkbox');
+    const readOnCorrectCheckbox = document.getElementById('read-on-correct-checkbox');
+    const ignoreAccentsCheckbox = document.getElementById('ignore-accents-checkbox');
+    const ignorePunctuationCheckbox = document.getElementById('ignore-punctuation-checkbox');
+    const ignoreCaseCheckbox = document.getElementById('ignore-case-checkbox');
     const textTitleInput = document.getElementById('text-title-input');
     const textContentTextarea = document.getElementById('text-content-textarea');
     const saveTextBtn = document.getElementById('save-text-btn');
-    const readAloudBtn = document.getElementById('read-aloud-btn');
     const repeatWordBtn = document.getElementById('repeat-word-btn');
-    const configToggleBtn = document.getElementById('config-toggle-btn');
-    const configPanel = document.getElementById('config-panel');
-    const closeConfigBtn = document.getElementById('close-config-btn');
+    const revealTextBtn = document.getElementById('reveal-text-btn');
+    const toggleHiddenBtn = document.getElementById('toggle-hidden-btn');
+    const resetSettingsBtn = document.getElementById('reset-settings-btn');
     const notificationArea = document.getElementById('notification-area');
 
     // --- App State ---
@@ -35,6 +40,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let currentWordIndex = 0;
     let originalTitle = null; // Used for editing/renaming texts
     let tabKeyPressCount = 0;
+    let speechQueue = [];
 
     // --- Function Declarations (ordered to prevent no-use-before-define) ---
 
@@ -51,10 +57,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const saveSession = () => {
         if (textSelect.value) {
-            sessionStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify({
+            const sessionData = {
                 title: textSelect.value,
                 userInput: writingInput.value
-            }));
+            };
+            sessionStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(sessionData));
         }
     };
 
@@ -85,19 +92,73 @@ document.addEventListener('DOMContentLoaded', () => {
         textTitleInput.focus();
     };
 
+    const normalizeWord = (word) => {
+        let normalized = word;
+        if (ignoreCaseCheckbox.checked) {
+            normalized = normalized.toLowerCase();
+        }
+        if (ignoreAccentsCheckbox.checked) {
+            normalized = normalized.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+        }
+        if (ignorePunctuationCheckbox.checked) {
+            normalized = normalized.replace(/[\p{P}]/gu, '');
+        }
+        return normalized;
+    };
+
+    const createDiffHtml = (actual, expected) => {
+        const diff = Diff.diffChars(actual, expected);
+        const fragment = document.createDocumentFragment();
+        diff.forEach((part) => {
+            const span = document.createElement('span');
+            span.className = part.added ? 'diff-added' : part.removed ? 'diff-removed' : 'diff-correct';
+            span.appendChild(document.createTextNode(part.value));
+            fragment.appendChild(span);
+        });
+        return fragment;
+    };
+
     // ** Level 2: Dependencies on Level 1 **
-    const speakWord = (word, rate) => {
-        if (!('speechSynthesis' in window)) return;
-        speechSynthesis.cancel();
+    let isSpeaking = false;
+
+    const processSpeechQueue = () => {
+        if (isSpeaking || speechQueue.length === 0) {
+            return;
+        }
+
+        isSpeaking = true;
+        const { word, rate } = speechQueue.shift();
+        console.log(`Speaking: ${word}`);
+
         const utterance = new SpeechSynthesisUtterance(word);
         utterance.lang = textDisplay.lang || 'en';
-        utterance.rate = rate || parseFloat(speedSlider.value);
+        utterance.rate = rate;
+
+        utterance.onend = () => {
+            isSpeaking = false;
+            processSpeechQueue();
+        };
+
         speechSynthesis.speak(utterance);
+    };
+
+    const speakWord = (word, rate) => {
+        if (!('speechSynthesis' in window)) return;
+        speechQueue.push({ word, rate: rate || parseFloat(speedSlider.value) });
+        processSpeechQueue();
+    };
+
+    const speakImmediately = (word, rate) => {
+        if (!('speechSynthesis' in window)) return;
+        speechQueue = []; // Clear the queue
+        speechSynthesis.cancel(); // Stop any current speech
+        isSpeaking = false;
+        speakWord(word, rate);
     };
 
     const loadTexts = async () => {
         const keys = await idb.keys();
-        const dictationKeys = keys.filter(key => key.startsWith(DB_PREFIX));
+        const dictationKeys = keys.filter(key => key.startsWith(DB_PREFIX) && key !== DB_CONFIG_KEY);
         const entries = await Promise.all(
             dictationKeys.map(async (key) => {
                 const title = key.substring(DB_PREFIX.length);
@@ -119,53 +180,94 @@ document.addEventListener('DOMContentLoaded', () => {
     const repeatCurrentWord = () => {
         if (currentWordIndex < sourceWords.length) {
             const speed = 1.0 - (0.2 * tabKeyPressCount++);
-            speakWord(stripPunctuation(sourceWords[currentWordIndex]), Math.max(0.2, speed));
+            speakImmediately(stripPunctuation(sourceWords[currentWordIndex]), Math.max(0.2, speed));
         }
     };
 
     const speakText = () => {
         if (!sourceWords.length || !('speechSynthesis' in window)) return;
-        speechSynthesis.cancel();
         const fullText = sourceWords.join(' ');
-        const utterance = new SpeechSynthesisUtterance(fullText);
-        utterance.lang = textDisplay.lang || 'en';
-        utterance.rate = parseFloat(speedSlider.value);
-        speechSynthesis.speak(utterance);
+        speakImmediately(fullText, parseFloat(speedSlider.value));
     };
 
     const handleContinuousInput = () => {
         const sourceSpans = Array.from(textDisplay.querySelectorAll('span'));
-        const inputWords = writingInput.value.split(/[\s\n]+/).filter(w => w.length > 0);
+        const inputValue = writingInput.value;
+        const inputWords = inputValue.split(/[\s\n]+/).filter(w => w.length > 0);
+        const isInputComplete = /[\s\n]$/.test(inputValue) || inputValue.length === 0;
+        const isHiddenMode = hideTextCheckbox.checked;
+
         let lastCorrectIndex = -1;
+        let firstErrorFound = null;
 
+        // Part 1: Determine correctness of each word and find the first error
         sourceSpans.forEach(span => span.classList.remove('correct', 'incorrect', 'current'));
-
         sourceSpans.forEach((span, index) => {
             if (index < inputWords.length) {
-                if (inputWords[index] === sourceWords[index]) {
-                    span.classList.add('correct');
-                    lastCorrectIndex = index;
-                } else {
+                const isLastWord = index === inputWords.length - 1;
+                const normalizedSource = normalizeWord(sourceWords[index]);
+                const normalizedInput = normalizeWord(inputWords[index]);
+
+                let isIncorrect = false;
+                if (isLastWord && !isInputComplete) { // Typing last word
+                    if (!normalizedSource.startsWith(normalizedInput)) {
+                        isIncorrect = true;
+                    }
+                } else { // Word is complete
+                    if (normalizedInput !== normalizedSource) {
+                        isIncorrect = true;
+                    }
+                }
+
+                if (isIncorrect) {
                     span.classList.add('incorrect');
+                    if (!firstErrorFound) {
+                        firstErrorFound = { input: inputWords[index], source: sourceWords[index] };
+                    }
+                } else {
+                    // Only mark as correct if the word is complete
+                    if (!isLastWord || isInputComplete) {
+                        span.classList.add('correct');
+                        lastCorrectIndex = index;
+                    }
                 }
             }
         });
 
-        const newWordIndex = lastCorrectIndex + 1;
+        // Part 2: Update the hidden mode display based on whether an error was found
+        if (isHiddenMode) {
+            if (firstErrorFound) {
+                const diffHtml = createDiffHtml(firstErrorFound.input, firstErrorFound.source);
+                diffDisplay.innerHTML = '';
+                diffDisplay.appendChild(diffHtml);
+                diffDisplay.classList.remove('hidden');
+                speakerIcon.classList.add('hidden');
+            } else {
+                // No errors found, show the speaker icon
+                diffDisplay.classList.add('hidden');
+                speakerIcon.classList.remove('hidden');
+            }
+        }
 
-        if (newWordIndex > currentWordIndex && newWordIndex < sourceWords.length) {
-            currentWordIndex = newWordIndex;
-            speakWord(stripPunctuation(sourceWords[currentWordIndex - 1]));
-            speakNextWord();
-        } else {
-             currentWordIndex = newWordIndex;
+        // Part 3: Update current word index, handle audio, and save session
+        const newWordIndex = lastCorrectIndex + 1;
+        const hasAdvanced = newWordIndex > currentWordIndex;
+        currentWordIndex = newWordIndex;
+
+        if (hasAdvanced) {
+            if (readOnCorrectCheckbox.checked && currentWordIndex > 0) {
+                speakWord(stripPunctuation(sourceWords[currentWordIndex - 1]));
+            }
+            if (readNextCheckbox.checked) {
+                speakNextWord();
+            }
+            // Save session only when a word has been successfully entered
+            saveSession();
         }
 
         if (currentWordIndex < sourceWords.length) {
             sourceSpans[currentWordIndex].classList.add('current');
         }
-
-        saveSession();
 
         if (writingInput.value.trim() === sourceWords.join(' ')) {
             showNotification('Dictation complete!', 5000);
@@ -177,6 +279,10 @@ document.addEventListener('DOMContentLoaded', () => {
     const displayText = async (savedInput = '') => {
         const title = textSelect.value;
         if (title && texts[title]) {
+            // Clear any previous diff display when loading new text
+            diffDisplay.innerHTML = '';
+            diffDisplay.classList.add('hidden');
+
             sourceWords = texts[title].split(' ').filter(w => w.length > 0);
             currentWordIndex = 0;
             tabKeyPressCount = 0;
@@ -223,18 +329,44 @@ document.addEventListener('DOMContentLoaded', () => {
     const toggleHideText = () => {
         const isHidden = hideTextCheckbox.checked;
         textDisplay.classList.toggle('hidden', isHidden);
+        revealTextBtn.classList.toggle('hidden', !isHidden);
+
+        // When hiding text, show the speaker icon and hide the diff display.
+        // When showing text, hide both.
         speakerIcon.classList.toggle('hidden', !isHidden);
+        diffDisplay.classList.toggle('hidden', true); // Always hide diff on toggle
+
         if (isHidden) {
             writingInput.focus();
+            // We re-run input handler to check if a diff should be shown immediately
+            handleContinuousInput();
             speakNextWord();
         }
     };
 
     const applyConfig = (config) => {
-        writingInput.style.fontSize = config.fontSize;
-        writingInput.style.fontFamily = config.fontFamily;
-        textDisplay.style.fontSize = config.fontSize;
-        textDisplay.style.fontFamily = config.fontFamily;
+        const classesToRemove = (element) => {
+            const toRemove = [];
+            element.classList.forEach(c => {
+                if (c.startsWith('font-size-') || c.startsWith('font-family-')) {
+                    toRemove.push(c);
+                }
+            });
+            return toRemove;
+        };
+
+        classesToRemove(writingInput).forEach(c => writingInput.classList.remove(c));
+        classesToRemove(textDisplay).forEach(c => textDisplay.classList.remove(c));
+
+        // Add the new classes
+        if (config.fontSize) {
+            writingInput.classList.add(config.fontSize);
+            textDisplay.classList.add(config.fontSize);
+        }
+        if (config.fontFamily) {
+            writingInput.classList.add(config.fontFamily);
+            textDisplay.classList.add(config.fontFamily);
+        }
     };
 
     const saveConfig = async () => {
@@ -243,16 +375,26 @@ document.addEventListener('DOMContentLoaded', () => {
             fontFamily: fontFamilySelect.value,
             hideText: hideTextCheckbox.checked,
             speed: speedSlider.value,
+            readNext: readNextCheckbox.checked,
+            readOnCorrect: readOnCorrectCheckbox.checked,
+            ignoreAccents: ignoreAccentsCheckbox.checked,
+            ignorePunctuation: ignorePunctuationCheckbox.checked,
+            ignoreCase: ignoreCaseCheckbox.checked,
         };
         await idb.set(DB_CONFIG_KEY, config);
     };
 
     const loadConfig = async () => {
         const config = await idb.get(DB_CONFIG_KEY) || {};
-        fontSizeSelect.value = config.fontSize || '28px';
-        fontFamilySelect.value = config.fontFamily || 'Arial, sans-serif';
+        fontSizeSelect.value = config.fontSize || 'font-size-28';
+        fontFamilySelect.value = config.fontFamily || 'font-family-arial';
         speedSlider.value = config.speed || '1';
         hideTextCheckbox.checked = config.hideText || false;
+        readNextCheckbox.checked = config.readNext !== false;
+        readOnCorrectCheckbox.checked = config.readOnCorrect !== false;
+        ignoreAccentsCheckbox.checked = config.ignoreAccents !== false;
+        ignorePunctuationCheckbox.checked = config.ignorePunctuation !== false;
+        ignoreCaseCheckbox.checked = config.ignoreCase !== false;
 
         applyConfig({ fontSize: fontSizeSelect.value, fontFamily: fontFamilySelect.value });
         toggleHideText();
@@ -263,8 +405,33 @@ document.addEventListener('DOMContentLoaded', () => {
         saveConfig();
     };
 
+    const resetSettings = () => {
+        // Set UI elements to default values
+        fontSizeSelect.value = 'font-size-28';
+        fontFamilySelect.value = 'font-family-arial';
+        speedSlider.value = '1';
+        hideTextCheckbox.checked = false;
+        readNextCheckbox.checked = true;
+        readOnCorrectCheckbox.checked = true;
+        ignoreAccentsCheckbox.checked = true;
+        ignorePunctuationCheckbox.checked = true;
+        ignoreCaseCheckbox.checked = true;
+
+        // Apply visual changes
+        applyConfig({
+            fontSize: fontSizeSelect.value,
+            fontFamily: fontFamilySelect.value,
+        });
+        toggleHideText();
+
+        // Save the new default config and notify the user
+        saveConfig();
+        showNotification('Display settings have been reset.');
+    };
+
     // --- Event Listeners & Initial Load ---
 
+    resetSettingsBtn.addEventListener('click', resetSettings);
     newTextBtn.addEventListener('click', clearEditor);
     deleteTextBtn.addEventListener('click', deleteText);
     saveTextBtn.addEventListener('click', saveText);
@@ -280,7 +447,6 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     writingInput.addEventListener('input', handleContinuousInput);
-    readAloudBtn.addEventListener('click', speakText);
     repeatWordBtn.addEventListener('click', repeatCurrentWord);
 
     textDisplay.addEventListener('click', (event) => {
@@ -293,9 +459,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    configToggleBtn.addEventListener('click', () => configPanel.classList.toggle('config-panel-hidden'));
-    closeConfigBtn.addEventListener('click', () => configPanel.classList.add('config-panel-hidden'));
-
     fontSizeSelect.addEventListener('change', handleConfigChange);
     fontFamilySelect.addEventListener('change', handleConfigChange);
     speedSlider.addEventListener('input', saveConfig);
@@ -303,6 +466,11 @@ document.addEventListener('DOMContentLoaded', () => {
         toggleHideText();
         saveConfig();
     });
+    readNextCheckbox.addEventListener('change', saveConfig);
+    readOnCorrectCheckbox.addEventListener('change', saveConfig);
+    ignoreAccentsCheckbox.addEventListener('change', saveConfig);
+    ignorePunctuationCheckbox.addEventListener('change', saveConfig);
+    ignoreCaseCheckbox.addEventListener('change', saveConfig);
 
     writingInput.addEventListener('keydown', (event) => {
         if (event.key === 'Tab') {
@@ -311,20 +479,44 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
+    const revealHiddenText = () => {
+        if (hideTextCheckbox.checked) {
+            hideTextCheckbox.checked = false;
+            toggleHideText();
+            saveConfig();
+        }
+    };
+
+    const toggleHiddenTextMode = () => {
+        hideTextCheckbox.checked = !hideTextCheckbox.checked;
+        toggleHideText();
+        saveConfig();
+    };
+
     document.addEventListener('keydown', (event) => {
         if (event.ctrlKey && event.key.toLowerCase() === 's') {
             event.preventDefault();
             speakText();
+        } else if (event.key === '`') {
+            revealHiddenText();
+        } else if (event.key === 'Escape') {
+            event.preventDefault();
+            toggleHiddenTextMode();
         }
     });
+
+    revealTextBtn.addEventListener('click', revealHiddenText);
+    toggleHiddenBtn.addEventListener('click', toggleHiddenTextMode);
 
     const initializeApp = async () => {
         await loadConfig();
         await loadTexts();
 
+        // Restore the previous session if it exists
         const savedSession = loadSession();
         if (savedSession && texts[savedSession.title]) {
             textSelect.value = savedSession.title;
+            // Directly call displayText with the saved user input to restore the state
             await displayText(savedSession.userInput);
         }
     };

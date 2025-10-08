@@ -6,85 +6,99 @@
     <title>Dictation Practice</title>
     <link rel="stylesheet" href="style.css">
     <link rel="stylesheet" href="dictation.css">
+    <script src="https://cdn.jsdelivr.net/npm/diff/dist/diff.min.js"></script>
 </head>
 <body>
     <header class="top-bar">
         <h1>Dictation Practice</h1>
         <div class="top-bar-controls">
-            <button id="config-toggle-btn">Settings</button>
         </div>
     </header>
 
-    <div id="dictation-container">
-        <main id="main-content">
-            <div id="text-display-container">
-                <div id="text-display" class="text-display-styling">
+    <div class="dictation-page-container">
+        <div id="dictation-container">
+            <main id="main-content">
+                <div id="text-display-container">
+                    <div id="text-display" class="text-display-styling">
+                        <!-- Spans will be generated here -->
+                    </div>
+                    <div id="diff-display" class="text-display-styling hidden">
+                        <!-- Diff will be generated here -->
+                    </div>
                     <!-- Speaker icon for hidden mode -->
                     <div id="speaker-icon" class="hidden">🔊</div>
                 </div>
-            </div>
-            <div id="input-container">
-                <textarea id="writing-input" class="text-display-styling" autocomplete="off" placeholder="Start typing here..."></textarea>
-            </div>
-            <div id="hotkey-bar">
-                <button id="repeat-word-btn">Repeat Word (Tab)</button>
-            </div>
-        </main>
-    </div>
-
-    <div id="config-panel" class="config-panel-hidden">
-        <h2>Settings</h2>
-        <div class="config-section">
-            <h3>Appearance</h3>
-            <div class="config-grid">
-                <label for="font-size-select">Font Size:</label>
-                <select id="font-size-select">
-                    <option value="20px">20px</option>
-                    <option value="24px">24px</option>
-                    <option value="28px">28px</option>
-                    <option value="32px">32px</option>
-                    <option value="40px">40px</option>
-                </select>
-                <label for="font-family-select">Font Family:</label>
-                <select id="font-family-select">
-                    <option value="Arial, sans-serif">Arial</option>
-                    <option value="Verdana, sans-serif">Verdana</option>
-                    <option value="'Times New Roman', Times, serif">Times New Roman</option>
-                    <option value="'Courier New', Courier, monospace">Courier New</option>
-                </select>
-            </div>
-        </div>
-        <div class="config-section">
-            <h3>Practice</h3>
-            <div class="config-grid">
-                <label for="speed-slider">Read Aloud Speed:</label>
-                <input type="range" id="speed-slider" min="0.5" max="2" value="1" step="0.1">
-                <label for="hide-text-checkbox">Hide Text Mode:</label>
-                <input type="checkbox" id="hide-text-checkbox">
-                <label for="auto-read-next-word-checkbox">Read next word automatically:</label>
-                <input type="checkbox" id="auto-read-next-word-checkbox" checked>
-                <label for="auto-read-on-correct-checkbox">Read word when entered correctly:</label>
-                <input type="checkbox" id="auto-read-on-correct-checkbox" checked>
-            </div>
-        </div>
-        <div class="config-section">
-            <h3>My Texts</h3>
-            <div class="master-detail-container">
-                <div id="text-list-container">
-                    <select id="text-select" size="8"></select>
+            <textarea id="writing-input" class="text-display-styling" autocomplete="off" placeholder="Start typing here..."></textarea>
+                <div id="hotkey-bar">
+                    <button id="toggle-hidden-btn">Toggle Hidden Text (Esc)</button>
+                    <button id="repeat-word-btn">Repeat Word (Tab)</button>
+                    <button id="reveal-text-btn" class="hidden">Reveal Text (`)</button>
                 </div>
-                <div id="text-editor-container">
-                    <input type="text" id="text-title-input" placeholder="Title">
-                    <textarea id="text-content-textarea" rows="8" placeholder="Content..."></textarea>
-                    <div class="editor-buttons">
-                        <button id="new-text-btn">New</button>
-                        <button id="save-text-btn">Save</button>
-                        <button id="delete-text-btn">Delete</button>
+            </main>
+        </div>
+
+        <div id="config-panel">
+            <h2>Settings</h2>
+            <div class="config-section">
+                <h3>Appearance</h3>
+                <div class="config-grid">
+                    <label for="font-size-select">Font Size:</label>
+                    <select id="font-size-select">
+                        <option value="font-size-20">20px</option>
+                        <option value="font-size-24">24px</option>
+                        <option value="font-size-28">28px</option>
+                        <option value="font-size-32">32px</option>
+                        <option value="font-size-40">40px</option>
+                    </select>
+                    <label for="font-family-select">Font Family:</label>
+                    <select id="font-family-select">
+                        <option value="font-family-arial">Arial</option>
+                        <option value="font-family-verdana">Verdana</option>
+                        <option value="font-family-times-new-roman">Times New Roman</option>
+                        <option value="font-family-courier-new">Courier New</option>
+                    </select>
+                </div>
+            </div>
+            <div class="config-section">
+                <h3>Practice</h3>
+                <div class="config-grid">
+                    <label for="speed-slider">Read Aloud Speed:</label>
+                    <input type="range" id="speed-slider" min="0.5" max="2" value="1" step="0.1">
+                    <label for="hide-text-checkbox">Hide Text Mode (Esc):</label>
+                    <input type="checkbox" id="hide-text-checkbox">
+                    <label for="read-next-checkbox">Read next word aloud after current word finished:</label>
+                    <input type="checkbox" id="read-next-checkbox" checked>
+                    <label for="read-on-correct-checkbox">Read current word aloud when completed:</label>
+                    <input type="checkbox" id="read-on-correct-checkbox" checked>
+                    <label for="ignore-accents-checkbox">Ignore accents:</label>
+                    <input type="checkbox" id="ignore-accents-checkbox" checked>
+                    <label for="ignore-punctuation-checkbox">Ignore punctuation:</label>
+                    <input type="checkbox" id="ignore-punctuation-checkbox" checked>
+                    <label for="ignore-case-checkbox">Ignore case:</label>
+                    <input type="checkbox" id="ignore-case-checkbox" checked>
+                </div>
+            </div>
+            <div class="config-section">
+                <h3>My Texts</h3>
+                <div class="master-detail-container">
+                    <div id="text-list-container">
+                        <select id="text-select" size="8"></select>
+                    </div>
+                    <div id="text-editor-container">
+                        <input type="text" id="text-title-input" placeholder="Title">
+                        <textarea id="text-content-textarea" rows="8" placeholder="Content..."></textarea>
+                        <div class="editor-buttons">
+                            <button id="new-text-btn">New</button>
+                            <button id="save-text-btn">Save</button>
+                            <button id="delete-text-btn">Delete</button>
+                        </div>
                     </div>
                 </div>
             </div>
+            <div class="config-section">
+                <button id="reset-settings-btn">Reset Display Settings</button>
+            </div>
         </div>
-        <button id="close-config-btn">Close</button>
     </div>
 
     <div id="notification-area" class="hidden"></div>
