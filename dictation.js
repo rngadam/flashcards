@@ -32,7 +32,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const resetSettingsBtn = document.getElementById('reset-settings-btn');
     const notificationArea = document.getElementById('notification-area');
     const configPanel = document.getElementById('config-panel');
-    const toggleConfigPanelBtn = document.getElementById('toggle-config-panel-btn');
+    const menuToggleBtn = document.getElementById('menu-toggle-btn');
 
     // --- App State ---
     let texts = {};
@@ -203,7 +203,7 @@ const obscureWord = (word) => {
     };
 
     const handleContinuousInput = () => {
-        const sourceSpans = Array.from(textDisplay.querySelectorAll('span'));
+        const sourceSpans = Array.from(textDisplay.querySelectorAll('.word-span'));
         const inputValue = writingInput.value;
         const inputTokens = inputValue.match(/\S+\s*/g) || [];
         const isHiddenMode = hideTextCheckbox.checked;
@@ -247,8 +247,9 @@ const obscureWord = (word) => {
                     if (isWordInteractionComplete) {
                         span.classList.add('correct');
                         if (isHiddenMode) {
-                            // If it was previously incorrect (showing a diff), revert to boxes
-                            span.textContent = obscureWord(sourceWords[index]);
+                            // If it was previously incorrect (showing a diff) or just completed,
+                            // reveal the correct word permanently.
+                            span.textContent = sourceWords[index];
                         }
                         lastCorrectIndex = index;
                     }
@@ -294,7 +295,7 @@ const renderText = () => {
     const isHidden = hideTextCheckbox.checked;
     // Render words, obscuring if in hidden mode.
     const wordsToRender = isHidden ? sourceWords.map(obscureWord) : sourceWords;
-    textDisplay.innerHTML = wordsToRender.map(word => `<span>${word}</span>`).join(' ');
+    textDisplay.innerHTML = wordsToRender.map(word => `<span class="word-span">${word}</span>`).join(' ');
 };
 
     const displayText = async (savedInput = '') => {
@@ -509,12 +510,12 @@ const renderText = () => {
 
     toggleHiddenBtn.addEventListener('click', toggleHiddenTextMode);
 
-    toggleConfigPanelBtn.addEventListener('click', () => {
-        configPanel.classList.toggle('config-panel-hidden');
+    menuToggleBtn.addEventListener('click', () => {
+        configPanel.classList.toggle('config-panel-visible');
     });
 
     writingInput.addEventListener('focus', () => {
-        configPanel.classList.add('config-panel-hidden');
+        configPanel.classList.remove('config-panel-visible');
     });
 
     const initializeApp = async () => {
