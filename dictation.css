@@ -124,6 +124,8 @@ body {
     background: none;
     border: none;
     cursor: pointer;
+    position: relative;
+    z-index: 101;
 }
 
 /* Config Panel */
@@ -145,7 +147,7 @@ body {
     transition: transform 0.3s ease-in-out;
 }
 
-.config-panel-visible {
+#config-panel.config-panel-visible {
     transform: translateX(0);
 }
 
