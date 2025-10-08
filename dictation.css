@@ -122,8 +122,9 @@ body {
 /* Config Panel */
 #config-panel {
     width: 350px;
+    min-width: 0; /* Allow the panel to shrink to 0px for the transition */
     height: 100%;
-    transition: width 0.3s ease-in-out, padding 0.3s ease-in-out;
+    transition: width 0.3s ease-in-out, padding 0.3s ease-in-out, min-width 0.3s ease-in-out;
     background-color: var(--background-color);
     border-left: 1px solid var(--medium-gray);
     padding: 20px;
