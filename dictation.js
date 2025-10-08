@@ -7,13 +7,14 @@ document.addEventListener('DOMContentLoaded', () => {
     const DB_PREFIX = 'dictation-';
     const DB_CONFIG_KEY = 'dictation-config';
     const SESSION_STORAGE_KEY = 'dictation-session';
-    const INCORRECT_FLASH_DURATION = 300;
 
     // --- DOM Elements ---
     const textSelect = document.getElementById('text-select');
     const newTextBtn = document.getElementById('new-text-btn');
     const deleteTextBtn = document.getElementById('delete-text-btn');
     const textDisplay = document.getElementById('text-display');
+    const speakerIcon = document.getElementById('speaker-icon');
+    const diffDisplay = document.getElementById('diff-display');
     const writingInput = document.getElementById('writing-input');
     const speedSlider = document.getElementById('speed-slider');
     const fontSizeSelect = document.getElementById('font-size-select');
@@ -29,11 +30,12 @@ document.addEventListener('DOMContentLoaded', () => {
     const textContentTextarea = document.getElementById('text-content-textarea');
     const saveTextBtn = document.getElementById('save-text-btn');
     const repeatWordBtn = document.getElementById('repeat-word-btn');
+    const revealTextBtn = document.getElementById('reveal-text-btn');
     const toggleHiddenBtn = document.getElementById('toggle-hidden-btn');
     const resetSettingsBtn = document.getElementById('reset-settings-btn');
     const notificationArea = document.getElementById('notification-area');
     const configPanel = document.getElementById('config-panel');
-    const menuToggleBtn = document.getElementById('menu-toggle-btn');
+    const toggleConfigPanelBtn = document.getElementById('toggle-config-panel-btn');
 
     // --- App State ---
     let texts = {};
@@ -47,11 +49,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // ** Level 1: No Dependencies **
     const stripPunctuation = (str) => str.replace(/[\p{P}]/gu, '');
-
-    const obscureWord = (word) => {
-        // Replaces letters and numbers with black boxes, preserves punctuation.
-        return word.replace(/[\p{L}\p{N}]/gu, '■');
-    };
 
     const showNotification = (message, duration = 3000) => {
         notificationArea.textContent = message;
@@ -200,20 +197,20 @@ document.addEventListener('DOMContentLoaded', () => {
         writingInput.classList.add('input-incorrect-flash');
         setTimeout(() => {
             writingInput.classList.remove('input-incorrect-flash');
-        }, INCORRECT_FLASH_DURATION);
+        }, 300);
     };
 
     const handleContinuousInput = () => {
-        const sourceSpans = Array.from(textDisplay.querySelectorAll('.word-span'));
+        const sourceSpans = Array.from(textDisplay.querySelectorAll('span'));
         const inputValue = writingInput.value;
         const inputTokens = inputValue.match(/\S+\s*/g) || [];
         const isHiddenMode = hideTextCheckbox.checked;
 
         let lastCorrectIndex = -1;
+        let firstErrorFound = null;
 
-        // Part 1: Determine correctness of each word
+        // Part 1: Determine correctness of each word and find the first error
         sourceSpans.forEach(span => span.classList.remove('correct', 'incorrect', 'current'));
-
         sourceSpans.forEach((span, index) => {
             if (index < inputTokens.length) {
                 const token = inputTokens[index];
@@ -225,43 +222,61 @@ document.addEventListener('DOMContentLoaded', () => {
                 const normalizedInput = normalizeWord(inputWord);
 
                 let isIncorrect = false;
+                // Word is considered "finished" if it has a trailing space, or if it's not the last token.
                 const isWordInteractionComplete = !isLastToken || wordIsFinishedBySpace;
 
-                if (isWordInteractionComplete) {
-                    if (normalizedInput !== normalizedSource) isIncorrect = true;
-                } else {
-                    if (!normalizedSource.startsWith(normalizedInput)) isIncorrect = true;
+                if (isWordInteractionComplete) { // For completed words, check for exact match
+                    if (normalizedInput !== normalizedSource) {
+                        isIncorrect = true;
+                    }
+                } else { // For the word being typed, check if it's a valid prefix
+                    if (!normalizedSource.startsWith(normalizedInput)) {
+                        isIncorrect = true;
+                    }
                 }
 
                 if (isIncorrect) {
-                    if (waitForSpaceCheckbox.checked && !isWordInteractionComplete) {
-                        flashIncorrect();
+                    if (waitForSpaceCheckbox.checked) {
+                        if (isWordInteractionComplete) {
+                            span.classList.add('incorrect');
+                            if (!firstErrorFound) {
+                                firstErrorFound = { input: inputWord, source: sourceWords[index] };
+                            }
+                        } else {
+                            flashIncorrect();
+                        }
                     } else {
                         span.classList.add('incorrect');
-                        if (isHiddenMode) {
-                            const diffHtml = createDiffHtml(inputWord, sourceWords[index]);
-                            span.innerHTML = ''; // Clear the black boxes
-                            span.appendChild(diffHtml);
+                        if (!firstErrorFound) {
+                            firstErrorFound = { input: inputWord, source: sourceWords[index] };
                         }
                     }
                 } else {
+                    // Only mark as correct if the word is complete
                     if (isWordInteractionComplete) {
                         span.classList.add('correct');
-                        if (isHiddenMode) {
-                            // If it was previously incorrect (showing a diff) or just completed,
-                            // reveal the correct word permanently.
-                            span.textContent = sourceWords[index];
-                        }
                         lastCorrectIndex = index;
                     }
                 }
-            } else if (isHiddenMode) {
-                // For words not yet typed in hidden mode, ensure they are black boxes
-                span.textContent = obscureWord(sourceWords[index]);
             }
         });
 
-        // Part 2: Update current word index, handle audio, and save session
+        // Part 2: Update the hidden mode display based on whether an error was found
+        if (isHiddenMode) {
+            if (firstErrorFound) {
+                const diffHtml = createDiffHtml(firstErrorFound.input, firstErrorFound.source);
+                diffDisplay.innerHTML = '';
+                diffDisplay.appendChild(diffHtml);
+                diffDisplay.classList.remove('hidden');
+                speakerIcon.classList.add('hidden');
+            } else {
+                // No errors found, show the speaker icon
+                diffDisplay.classList.add('hidden');
+                speakerIcon.classList.remove('hidden');
+            }
+        }
+
+        // Part 3: Update current word index, handle audio, and save session
         const newWordIndex = lastCorrectIndex + 1;
         const hasAdvanced = newWordIndex > currentWordIndex;
         currentWordIndex = newWordIndex;
@@ -288,38 +303,19 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     // ** Level 4: Dependencies on Level 3 **
-const renderText = () => {
-    // Clear previous content safely
-    textDisplay.innerHTML = '';
-    if (!sourceWords.length) {
-        return;
-    }
-
-    const isHidden = hideTextCheckbox.checked;
-    const wordsToRender = isHidden ? sourceWords.map(obscureWord) : sourceWords;
-
-    wordsToRender.forEach((word, index) => {
-        const span = document.createElement('span');
-        span.className = 'word-span';
-        span.textContent = word;
-        textDisplay.appendChild(span);
-
-        // Add a space after each word except the last one
-        if (index < wordsToRender.length - 1) {
-            textDisplay.appendChild(document.createTextNode(' '));
-        }
-    });
-};
-
     const displayText = async (savedInput = '') => {
         const title = textSelect.value;
         if (title && texts[title]) {
+            // Clear any previous diff display when loading new text
+            diffDisplay.innerHTML = '';
+            diffDisplay.classList.add('hidden');
+
             sourceWords = texts[title].split(' ').filter(w => w.length > 0);
             currentWordIndex = 0;
             tabKeyPressCount = 0;
             writingInput.value = savedInput;
 
-            renderText(); // Use the helper to render the initial text display
+            textDisplay.innerHTML = sourceWords.map(word => `<span>${word}</span>`).join(' ');
 
             const lang = await detectLanguage(texts[title]);
             textDisplay.lang = lang;
@@ -358,11 +354,19 @@ const renderText = () => {
     };
 
     const toggleHideText = () => {
-        renderText(); // Re-render the text display based on the new checkbox state
-        handleContinuousInput(); // Re-apply styles and reveal any existing errors
+        const isHidden = hideTextCheckbox.checked;
+        textDisplay.classList.toggle('hidden', isHidden);
+        revealTextBtn.classList.toggle('hidden', !isHidden);
 
-        if (hideTextCheckbox.checked) {
+        // When hiding text, show the speaker icon and hide the diff display.
+        // When showing text, hide both.
+        speakerIcon.classList.toggle('hidden', !isHidden);
+        diffDisplay.classList.toggle('hidden', true); // Always hide diff on toggle
+
+        if (isHidden) {
             writingInput.focus();
+            // We re-run input handler to check if a diff should be shown immediately
+            handleContinuousInput();
             speakNextWord();
         }
     };
@@ -496,10 +500,7 @@ const renderText = () => {
     ignoreAccentsCheckbox.addEventListener('change', saveConfig);
     ignorePunctuationCheckbox.addEventListener('change', saveConfig);
     ignoreCaseCheckbox.addEventListener('change', saveConfig);
-    waitForSpaceCheckbox.addEventListener('change', () => {
-        saveConfig();
-        handleContinuousInput();
-    });
+    waitForSpaceCheckbox.addEventListener('change', saveConfig);
 
     writingInput.addEventListener('keydown', (event) => {
         if (event.key === 'Tab') {
@@ -507,6 +508,14 @@ const renderText = () => {
             repeatCurrentWord();
         }
     });
+
+    const revealHiddenText = () => {
+        if (hideTextCheckbox.checked) {
+            hideTextCheckbox.checked = false;
+            toggleHideText();
+            saveConfig();
+        }
+    };
 
     const toggleHiddenTextMode = () => {
         hideTextCheckbox.checked = !hideTextCheckbox.checked;
@@ -518,20 +527,23 @@ const renderText = () => {
         if (event.ctrlKey && event.key.toLowerCase() === 's') {
             event.preventDefault();
             speakText();
+        } else if (event.key === '`') {
+            revealHiddenText();
         } else if (event.key === 'Escape') {
             event.preventDefault();
             toggleHiddenTextMode();
         }
     });
 
+    revealTextBtn.addEventListener('click', revealHiddenText);
     toggleHiddenBtn.addEventListener('click', toggleHiddenTextMode);
 
-    menuToggleBtn.addEventListener('click', () => {
-        configPanel.classList.toggle('config-panel-visible');
+    toggleConfigPanelBtn.addEventListener('click', () => {
+        configPanel.classList.toggle('config-panel-hidden');
     });
 
     writingInput.addEventListener('focus', () => {
-        configPanel.classList.remove('config-panel-visible');
+        configPanel.classList.add('config-panel-hidden');
     });
 
     const initializeApp = async () => {
