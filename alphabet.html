@@ -143,7 +143,7 @@
     </div>
 
     <script>
-        (function() {
+        window.onload = function() {
             'use strict';
 
             // --- 1. DATABASE SETUP ---
@@ -278,11 +278,9 @@
             async function seedDatabase() {
                 const alphabetCount = await db.alphabets.count();
                 if (alphabetCount > 0) {
-                    console.log('Database already seeded.');
                     return; // Don't re-seed
                 }
 
-                console.log('Seeding database...');
                 try {
                     await db.transaction('rw', db.alphabets, db.characters, async () => {
                         // Use allKeys: true to get the generated primary keys
@@ -304,7 +302,6 @@
 
                         await db.characters.bulkAdd(charactersToSeed);
                     });
-                    console.log('Database seeded successfully.');
                 } catch (error) {
                     console.error('Error seeding database:', error);
                 }
@@ -313,6 +310,7 @@
             // --- 4. INITIALIZATION ---
             // When the DOM is ready, seed the database and initialize the app
             document.addEventListener('DOMContentLoaded', () => {
+                gsap.registerPlugin(DrawSVGPlugin); // Register plugin once DOM is ready
                 seedDatabase().then(initializeApp).catch(err => {
                     console.error("Failed to initialize database:", err);
                 });
@@ -348,7 +346,6 @@
 
             // --- 7. UI RENDERING & LOGIC ---
             async function initializeApp() {
-                console.log('Initializing application...');
                 await renderAlphabetSelect();
 
                 trainModeBtn.addEventListener('click', () => setMode('train'));
@@ -424,13 +421,23 @@
             }
 
             function animateCharacter(svgElement, strokePaths) {
-                gsap.registerPlugin(DrawSVGPlugin);
                 svgElement.innerHTML = ''; // Clear previous animation
 
                 const tl = gsap.timeline();
-                const allPaths = [...strokePaths.uppercase, ...strokePaths.lowercase];
 
-                allPaths.forEach(pathData => {
+                // Animate uppercase strokes
+                strokePaths.uppercase.forEach(pathData => {
+                    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                    path.setAttribute('d', pathData);
+                    svgElement.appendChild(path);
+                    tl.from(path, { drawSVG: 0, duration: 1 }, "+=0.1");
+                });
+
+                // Add a pause between uppercase and lowercase
+                tl.to({}, { duration: 0.5 });
+
+                // Animate lowercase strokes
+                strokePaths.lowercase.forEach(pathData => {
                     const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
                     path.setAttribute('d', pathData);
                     svgElement.appendChild(path);
@@ -503,7 +510,10 @@
 
                 // Intelligent character selection
                 const allCharacters = await db.characters.where('alphabetId').equals(appState.currentAlphabetId).toArray();
-                const progressData = await db.userProgress.where('characterId').startsWith('greek').or('characterId').startsWith('italian').or('characterId').startsWith('spanish').or('characterId').startsWith('turkish').toArray();
+
+                // Optimized Query: Fetch progress only for the current alphabet's characters
+                const characterIds = allCharacters.map(c => c.characterId);
+                const progressData = await db.userProgress.where('characterId').anyOf(characterIds).toArray();
 
                 const progressMap = new Map(progressData.map(p => [p.characterId, p]));
 
@@ -632,6 +642,10 @@
             // --- HANDWRITING VALIDATION LOGIC ---
 
             function getStrokeEndpoints(svgPath) {
+                // NOTE: This is a simplified SVG path parser. It assumes the first two numbers
+                // in the path string are the start point and the last two are the end point.
+                // This works for the M, L, and C commands used in this application's dataset,
+                // but would fail for more complex paths using commands like H, V, or A.
                 const numbers = svgPath.match(/-?\d+(\.\d+)?/g);
                 if (!numbers || numbers.length < 2) return null;
 
@@ -653,7 +667,7 @@
                 }
                 if (userStrokes.length === 0) return false;
 
-                const threshold = 35; // How close points need to be, in a 100x100 grid
+                const threshold = 20; // Reduced for more accurate validation
 
                 for (let i = 0; i < userStrokes.length; i++) {
                     const userStroke = userStrokes[i];
@@ -678,7 +692,7 @@
                 return true; // All strokes matched
             }
 
-        })();
+        };
     </script>
 </body>
 </html>
