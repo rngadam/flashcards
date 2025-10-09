@@ -119,10 +119,22 @@ body {
     min-width: 0; /* Prevent flexbox from overflowing */
 }
 
+.menu-toggle-btn {
+    font-size: 1.5em;
+    background: none;
+    border: none;
+    cursor: pointer;
+    position: relative;
+    z-index: 101;
+}
+
 /* Config Panel */
 #config-panel {
     width: 350px;
     height: 100%;
+    position: fixed;
+    top: 0;
+    right: 0;
     background-color: var(--background-color);
     border-left: 1px solid var(--medium-gray);
     padding: 20px;
@@ -130,6 +142,13 @@ body {
     flex-direction: column;
     gap: 20px;
     overflow-y: auto;
+    z-index: 100;
+    transform: translateX(100%);
+    transition: transform 0.3s ease-in-out;
+}
+
+#config-panel.config-panel-visible {
+    transform: translateX(0);
 }
 
 .config-section {
@@ -243,6 +262,10 @@ body {
     text-decoration: line-through;
 }
 
+.diff-removed {
+    text-decoration: line-through;
+}
+
 /* Font size classes */
 .font-size-20 { font-size: 20px; }
 .font-size-24 { font-size: 24px; }
@@ -255,3 +278,9 @@ body {
 .font-family-verdana { font-family: Verdana, sans-serif; }
 .font-family-times-new-roman { font-family: 'Times New Roman', Times, serif; }
 .font-family-courier-new { font-family: 'Courier New', Courier, monospace; }
+
+.input-incorrect-flash {
+    border-color: var(--incorrect-color);
+    box-shadow: 0 0 3px 1px var(--incorrect-color);
+    transition: border-color 0.1s ease-in-out, box-shadow 0.1s ease-in-out;
+}

@@ -12,6 +12,7 @@
     <header class="top-bar">
         <h1>Dictation Practice</h1>
         <div class="top-bar-controls">
+            <button id="menu-toggle-btn" class="menu-toggle-btn">☰</button>
         </div>
     </header>
 
@@ -22,17 +23,11 @@
                     <div id="text-display" class="text-display-styling">
                         <!-- Spans will be generated here -->
                     </div>
-                    <div id="diff-display" class="text-display-styling hidden">
-                        <!-- Diff will be generated here -->
-                    </div>
-                    <!-- Speaker icon for hidden mode -->
-                    <div id="speaker-icon" class="hidden">🔊</div>
                 </div>
             <textarea id="writing-input" class="text-display-styling" autocomplete="off" placeholder="Start typing here..."></textarea>
                 <div id="hotkey-bar">
                     <button id="toggle-hidden-btn">Toggle Hidden Text (Esc)</button>
                     <button id="repeat-word-btn">Repeat Word (Tab)</button>
-                    <button id="reveal-text-btn" class="hidden">Reveal Text (`)</button>
                 </div>
             </main>
         </div>
@@ -76,6 +71,8 @@
                     <input type="checkbox" id="ignore-punctuation-checkbox" checked>
                     <label for="ignore-case-checkbox">Ignore case:</label>
                     <input type="checkbox" id="ignore-case-checkbox" checked>
+                    <label for="wait-for-space-checkbox">Wait for space before correction:</label>
+                    <input type="checkbox" id="wait-for-space-checkbox" checked>
                 </div>
             </div>
             <div class="config-section">
