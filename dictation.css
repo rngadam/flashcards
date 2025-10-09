@@ -262,6 +262,10 @@ body {
     text-decoration: line-through;
 }
 
+.diff-removed {
+    text-decoration: line-through;
+}
+
 /* Font size classes */
 .font-size-20 { font-size: 20px; }
 .font-size-24 { font-size: 24px; }

@@ -7,6 +7,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const DB_PREFIX = 'dictation-';
     const DB_CONFIG_KEY = 'dictation-config';
     const SESSION_STORAGE_KEY = 'dictation-session';
+    const INCORRECT_FLASH_DURATION = 300;
 
     // --- DOM Elements ---
     const textSelect = document.getElementById('text-select');
@@ -46,6 +47,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // ** Level 1: No Dependencies **
     const stripPunctuation = (str) => str.replace(/[\p{P}]/gu, '');
+
+    const obscureWord = (word) => {
+        // Replaces letters and numbers with black boxes, preserves punctuation.
+        return word.replace(/[\p{L}\p{N}]/gu, '■');
+    };
 
     const showNotification = (message, duration = 3000) => {
         notificationArea.textContent = message;
@@ -117,11 +123,6 @@ document.addEventListener('DOMContentLoaded', () => {
         });
         return fragment;
     };
-
-const obscureWord = (word) => {
-    // Replaces letters and numbers with black boxes, preserves punctuation.
-    return word.replace(/[\p{L}\p{N}]/gu, '■');
-};
 
     // ** Level 2: Dependencies on Level 1 **
     let isSpeaking = false;
@@ -199,7 +200,7 @@ const obscureWord = (word) => {
         writingInput.classList.add('input-incorrect-flash');
         setTimeout(() => {
             writingInput.classList.remove('input-incorrect-flash');
-        }, 300);
+        }, INCORRECT_FLASH_DURATION);
     };
 
     const handleContinuousInput = () => {
@@ -288,14 +289,26 @@ const obscureWord = (word) => {
 
     // ** Level 4: Dependencies on Level 3 **
 const renderText = () => {
+    // Clear previous content safely
+    textDisplay.innerHTML = '';
     if (!sourceWords.length) {
-        textDisplay.innerHTML = '';
         return;
     }
+
     const isHidden = hideTextCheckbox.checked;
-    // Render words, obscuring if in hidden mode.
     const wordsToRender = isHidden ? sourceWords.map(obscureWord) : sourceWords;
-    textDisplay.innerHTML = wordsToRender.map(word => `<span class="word-span">${word}</span>`).join(' ');
+
+    wordsToRender.forEach((word, index) => {
+        const span = document.createElement('span');
+        span.className = 'word-span';
+        span.textContent = word;
+        textDisplay.appendChild(span);
+
+        // Add a space after each word except the last one
+        if (index < wordsToRender.length - 1) {
+            textDisplay.appendChild(document.createTextNode(' '));
+        }
+    });
 };
 
     const displayText = async (savedInput = '') => {
@@ -483,7 +496,10 @@ const renderText = () => {
     ignoreAccentsCheckbox.addEventListener('change', saveConfig);
     ignorePunctuationCheckbox.addEventListener('change', saveConfig);
     ignoreCaseCheckbox.addEventListener('change', saveConfig);
-    waitForSpaceCheckbox.addEventListener('change', saveConfig);
+    waitForSpaceCheckbox.addEventListener('change', () => {
+        saveConfig();
+        handleContinuousInput();
+    });
 
     writingInput.addEventListener('keydown', (event) => {
         if (event.key === 'Tab') {
