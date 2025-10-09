@@ -1,5 +1,5 @@
 import { expect } from 'chai';
-import { getDeckWords, getHighlightHTML } from '../lib/filter-utils.js';
+import { getDeckWords, getHighlightHTML } from '../lib/shared/filter-utils.js';
 
 describe('getDeckWords', () => {
     const roleToColumnMap = {
