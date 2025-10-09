@@ -158,7 +158,7 @@ python -m SimpleHTTPServer</code></pre>
     </div>
 
     <script>
-        document.addEventListener('DOMContentLoaded', () => {
+        window.onload = function() {
             if (window.location.protocol === 'file:') {
                 document.getElementById('app-container').style.display = 'none';
                 document.getElementById('file-protocol-error').style.display = 'block';
@@ -718,7 +718,7 @@ python -m SimpleHTTPServer</code></pre>
                 console.error('A critical error occurred:', e);
                 document.body.innerHTML = `<pre>A critical error occurred: ${e.stack}</pre>`;
             }
-        });
+        };
     </script>
 </body>
 </html>
