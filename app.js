@@ -1,15 +1,17 @@
 /* global Sortable */
 
 // --- Module Imports ---
-import { detectColumnLanguages } from './lib/detect-column-languages.js';
+import { detectColumnLanguages } from './lib/shared/detect-column-languages.js';
 
 // --- UI and Core Logic Imports ---
 import dom from './lib/ui/dom-elements.js';
+import logger from './lib/core/logger.js';
 import { getState, updateState, popFromViewHistory, COLUMN_ROLES } from './lib/core/state.js';
 import { showTopNotification, formatTimeAgo, formatTimeDifference } from './lib/ui/ui-helpers.js';
 import { initConfigManager, saveCurrentConfig, saveConfig, resetDeckStats, loadSelectedConfig, populateConfigSelector, loadInitialConfigs, exportSQLite, exportAllData, importAllData } from './lib/core/config-manager.js';
 import { initSkillManager, renderSkillsList, openSkillDialog, saveSkill, deleteSkill, deleteAllSkills, addDefaultSkill, createPresetSkills, exportSkills, populateAllSkillSelectors, getSelectedSkills, getActiveSkills, saveTransform } from './lib/core/skill-manager.js';
-import { initCardLogic, getCardKey, getRetentionScore, createDefaultSkillStats, getSanitizedStats, getAllCardStats, markCardAsKnown, getTimeToDue, getCurrentSkillConfig, getTextForRoles, renderSkillMastery, displayCard, flipCard, showNextCard, showPrevCard, saveCardStats } from './lib/core/card-logic.js';
+import { initCardLogic, getCardKey, getRetentionScore, getSanitizedStats, getAllCardStats, markCardAsKnown, getTimeToDue, getCurrentSkillConfig, getTextForRoles, renderSkillMastery, displayCard, flipCard, showNextCard, showPrevCard, saveCardStats } from './lib/core/card-logic.js';
+import { createDefaultSkillStats } from './lib/shared/validation.js';
 import { initVerification, checkWritingAnswer, generateMultipleChoiceOptions, checkMultipleChoiceAnswer, toggleVoiceRecognition, startVoiceRecognition, stopVoiceRecognition } from './lib/core/verification.js';
 import { initAuth, syncToServer, checkAuthStatus } from './lib/core/auth.js';
 
@@ -83,10 +85,10 @@ function initializeApp() {
     updateLayout();
     window.addEventListener('resize', updateLayout);
 
+    // Tab switching: compute panels dynamically on click so new tabs can be injected later
     document.querySelectorAll('.tabs').forEach(tabsContainer => {
         const container = tabsContainer.parentElement;
         if (!container) return;
-        const tabPanels = container.querySelectorAll('.tab-panel');
         tabsContainer.addEventListener('click', e => {
             if (e.target.matches('.tab-button')) {
                 const button = e.target;
@@ -97,6 +99,7 @@ function initializeApp() {
                 button.classList.add('active');
                 button.setAttribute('aria-selected', 'true');
                 const tabName = button.dataset.tab;
+                const tabPanels = container.querySelectorAll('.tab-panel');
                 tabPanels.forEach(panel => {
                     panel.classList.toggle('active', panel.id === tabName);
                 });
@@ -126,12 +129,93 @@ function initializeApp() {
     }
 
     setupModal(dom.hamburgerMenu, dom.mobileMenuOverlay, dom.closeMobileMenuButton);
-    setupModal(dom.settingsButton, dom.settingsModal, dom.closeSettingsButton, null, () => {
+    setupModal(dom.settingsButton, dom.settingsModal, dom.closeSettingsButton, () => {
+        // Ensure the logging panel exists and render logging + speech immediately when opening settings
+        try {
+            // Ensure a Debug tab exists in the settings tabs and a corresponding panel
+            const tabsBar = dom.settingsModal.querySelector('.tabs');
+            const debugTabId = 'debug-settings';
+            if (tabsBar && !dom.settingsModal.querySelector(`#${debugTabId}`)) {
+                // create tab button
+                const debugBtn = document.createElement('button');
+                debugBtn.className = 'tab-button';
+                debugBtn.id = 'debug-tab';
+                debugBtn.dataset.tab = debugTabId;
+                debugBtn.setAttribute('role', 'tab');
+                debugBtn.setAttribute('aria-controls', debugTabId);
+                debugBtn.setAttribute('aria-selected', 'false');
+                debugBtn.textContent = 'Debug';
+                tabsBar.appendChild(debugBtn);
+
+                // create panel container
+                const debugPanel = document.createElement('div');
+                debugPanel.id = debugTabId;
+                debugPanel.className = 'tab-panel';
+                debugPanel.setAttribute('role', 'tabpanel');
+                debugPanel.setAttribute('aria-labelledby', 'debug-tab');
+                // place after existing panels
+                const panelsContainer = dom.settingsModal.querySelectorAll('.tab-panel');
+                if (panelsContainer.length > 0) panelsContainer[panelsContainer.length - 1].after(debugPanel);
+                else dom.settingsModal.appendChild(debugPanel);
+            }
+
+            let debugPanelEl = dom.settingsModal.querySelector('#debug-settings');
+            if (!debugPanelEl) debugPanelEl = dom.settingsModal.querySelector('.logging-panel') || document.createElement('div');
+
+            // create logging panel inside debug panel
+            let loggingPanelImmediate = debugPanelEl.querySelector('.logging-panel');
+            if (!loggingPanelImmediate) {
+                loggingPanelImmediate = document.createElement('div');
+                loggingPanelImmediate.className = 'logging-panel';
+                loggingPanelImmediate.style.padding = '8px';
+                debugPanelEl.appendChild(loggingPanelImmediate);
+            }
+            import('./lib/ui/ui-helpers.js').then(mod => {
+                try {
+                    mod.renderLoggingControls(loggingPanelImmediate);
+                    let speechPanelImmediate = loggingPanelImmediate.querySelector('.speech-panel');
+                    if (!speechPanelImmediate) {
+                        speechPanelImmediate = document.createElement('div');
+                        speechPanelImmediate.className = 'speech-panel';
+                        speechPanelImmediate.style.paddingTop = '8px';
+                        loggingPanelImmediate.appendChild(speechPanelImmediate);
+                    }
+                    mod.renderSpeechPanel(speechPanelImmediate);
+                } catch (e) {}
+            }).catch(() => {});
+        } catch (e) {}
+        return true;
+    }, () => {
         // If we are closing the settings and cards are loaded but none is shown, show the first card.
         if (state.cardData.length > 0 && state.currentCardIndex === -1) {
             showNextCard();
         }
     });
+    // Inject logging controls into settings modal
+    if (dom.settingsModal) {
+        let loggingPanel = dom.settingsModal.querySelector('.logging-panel');
+        if (!loggingPanel) {
+            loggingPanel = document.createElement('div');
+            loggingPanel.className = 'logging-panel';
+            loggingPanel.style.padding = '8px';
+            dom.settingsModal.appendChild(loggingPanel);
+        }
+        // Render controls when settings modal opens
+        dom.settingsModal.addEventListener('transitionend', () => {
+            if (!dom.settingsModal.classList.contains('hidden')) {
+                // lazy load to avoid DOM issues in tests
+                import('./lib/ui/ui-helpers.js').then(mod => {
+                            mod.renderLoggingControls(loggingPanel);
+                            // Also render a speech testing panel below logging controls
+                            const speechPanel = document.createElement('div');
+                            speechPanel.className = 'speech-panel';
+                            speechPanel.style.paddingTop = '8px';
+                            loggingPanel.appendChild(speechPanel);
+                            mod.renderSpeechPanel(speechPanel);
+                }).catch(() => {});
+            }
+        });
+    }
     setupModal(dom.historyButton, dom.historyModal, dom.closeHistoryButton, () => {
         if (state.cardData.length === 0) {
             showTopNotification('No deck loaded. Please load a deck to view history.', 'error');
@@ -676,6 +760,7 @@ function initializeApp() {
     }
 
     function handleHotkeys(e) {
+        try { logger.log('ui', 'hotkey.event', { type: e.type, code: e.code, target: e.target?.tagName }); } catch (err) {}
         if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT' || e.target.tagName === 'TEXTAREA') {
             if (e.target.tagName === 'TEXTAREA') return;
             if (e.code === 'Enter' && dom.writingPracticeContainer.classList.contains('hidden')) return;
@@ -928,6 +1013,19 @@ function initializeApp() {
     loadInitialConfigs().then(() => {
         checkAuthStatus();
     });
+
+    // Re-initialize verification now that dependent functions (getCurrentSkillConfig, getLanguageForRole, etc.) are defined
+    try {
+        dependencies.getCurrentSkillConfig = getCurrentSkillConfig;
+        dependencies.getLanguageForRole = getLanguageForRole;
+        dependencies.markCardAsKnown = markCardAsKnown;
+        dependencies.flipCard = flipCard;
+        dependencies.showNextCard = showNextCard;
+        initVerification(dependencies);
+    } catch (e) {
+        // swallow - best-effort rewire
+        console.warn('Failed to re-init verification with updated dependencies', e);
+    }
 
     if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {

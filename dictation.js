@@ -1,6 +1,6 @@
 // dictation.js
 import * as idb from './lib/idb-keyval-wrapper.js';
-import { detectLanguage } from './lib/detect-language.js';
+import { detectLanguage } from './lib/shared/detect-language.js';
 
 document.addEventListener('DOMContentLoaded', () => {
     // --- Constants ---

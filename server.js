@@ -261,6 +261,28 @@ app.post('/api/sync', ensureAuthenticated, async (req, res) => {
     }
 });
 
+// --- Logging ingestion endpoint ---
+// Accepts basic JSON logs from the client for debugging/diagnostics.
+// Body shape: { category?: string, event?: string, payload?: any }
+app.post('/api/logs', (req, res) => {
+    try {
+        const { category, event, payload } = req.body || {};
+        // Basic size/shape checks to avoid huge payloads hitting the console
+        if (!category && !event && !payload) {
+            return res.status(400).json({ error: 'Empty log payload' });
+        }
+
+        // Print a concise, structured log to the server console for now.
+        console.log('[CLIENT-LOG]', category || 'unknown', event || '-', JSON.stringify(payload));
+
+        // Respond quickly. In future we can persist or forward to telemetry.
+        res.status(200).json({ received: true });
+    } catch (err) {
+        console.error('Error receiving client log:', err);
+        res.status(500).json({ error: 'Failed to receive log' });
+    }
+});
+
 // Logout
 app.post('/api/logout', (req, res, next) => {
     req.logout((err) => {
