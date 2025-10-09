@@ -634,18 +634,14 @@ function initializeApp() {
     }
 
     async function handleIDontKnow() {
+        await markCardAsKnown(false);
+
         const skillConfig = getCurrentSkillConfig();
         if (skillConfig && skillConfig.verificationMethod === 'voice') {
-            await markCardAsKnown(false);
             stopVoiceRecognition();
-            if (!dom.card.classList.contains('flipped')) flipCard();
-            dom.iKnowButton.classList.remove('hidden');
-            dom.iDontKnowButton.classList.remove('hidden');
-            dom.nextCardButton.classList.remove('hidden');
-        } else {
-            await markCardAsKnown(false);
-            await showNextCard({ forceNew: true });
         }
+
+        await showNextCard({ forceNew: true });
     }
 
     async function handleSlowReplay() {
