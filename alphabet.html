@@ -101,6 +101,21 @@
     </style>
 </head>
 <body>
+    <div id="file-protocol-error" style="display: none; padding: 20px; text-align: center; max-width: 600px; margin: 40px auto; background-color: #fff; border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.1);">
+        <h2 style="color: #d9534f;">Unsupported Protocol</h2>
+        <p style="font-size: 1.1em;">This application cannot be run directly from the local file system (<code style="background: #eee; padding: 2px 5px; border-radius: 3px;">file://</code>) due to browser security restrictions that block its database features.</p>
+        <hr style="margin: 20px 0;">
+        <p><strong>To fix this, please start a simple local web server.</strong></p>
+        <p>If you have Python installed, you can run one of the following commands in your terminal from the project's root directory:</p>
+        <pre style="background-color: #f5f5f5; padding: 15px; border-radius: 4px; border: 1px solid #ddd; text-align: left;"><code># For Python 3
+python3 -m http.server
+
+# For Python 2
+python -m SimpleHTTPServer</code></pre>
+        <p>After starting the server, open this page in your browser at:</p>
+        <p><a href="http://localhost:8000/alphabet.html">http://localhost:8000/alphabet.html</a></p>
+    </div>
+
     <div id="app-container">
         <header>
             <h1>Alphabet Learning App</h1>
@@ -143,9 +158,16 @@
     </div>
 
     <script>
-        window.onload = function() {
+        document.addEventListener('DOMContentLoaded', () => {
+            if (window.location.protocol === 'file:') {
+                document.getElementById('app-container').style.display = 'none';
+                document.getElementById('file-protocol-error').style.display = 'block';
+                return; // Stop further execution
+            }
+
             'use strict';
 
+            try {
             // --- 1. DATABASE SETUP ---
             const db = new Dexie('AlphabetDB');
             db.version(1).stores({
@@ -692,7 +714,11 @@
                 return true; // All strokes matched
             }
 
-        };
+            } catch (e) {
+                console.error('A critical error occurred:', e);
+                document.body.innerHTML = `<pre>A critical error occurred: ${e.stack}</pre>`;
+            }
+        });
     </script>
 </body>
 </html>
