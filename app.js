@@ -181,9 +181,9 @@ function initializeApp() {
                         loggingPanelImmediate.appendChild(speechPanelImmediate);
                     }
                     mod.renderSpeechPanel(speechPanelImmediate);
-                } catch (e) {}
-            }).catch(() => {});
-        } catch (e) {}
+                } catch (e) { /* ignore */ }
+            }).catch(() => { /* ignore */ });
+        } catch (e) { /* ignore */ }
         return true;
     }, () => {
         // If we are closing the settings and cards are loaded but none is shown, show the first card.
@@ -756,7 +756,7 @@ function initializeApp() {
     }
 
     function handleHotkeys(e) {
-        try { logger.log('ui', 'hotkey.event', { type: e.type, code: e.code, target: e.target?.tagName }); } catch (err) {}
+        try { logger.log('ui', 'hotkey.event', { type: e.type, code: e.code, target: e.target?.tagName }); } catch (err) { /* ignore */ }
         if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT' || e.target.tagName === 'TEXTAREA') {
             if (e.target.tagName === 'TEXTAREA') return;
             if (e.code === 'Enter' && dom.writingPracticeContainer.classList.contains('hidden')) return;
