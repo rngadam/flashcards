@@ -6,6 +6,7 @@
   "type": "module",
   "scripts": {
     "start": "node server.js",
+  "watch": "nodemon --watch . --ext js,html,css --ignore node_modules/ --delay 200 --signal SIGINT --exec \"node server.js\"",
     "test": "mocha 'test/**/*.js'",
     "lint": "eslint .",
     "format:md": "prettier --write \"**/*.md\""
@@ -17,10 +18,14 @@
     "chai": "^4.5.0",
     "eslint": "^8.57.0",
     "eslint-plugin-css": "^0.11.0",
+    "eslint-plugin-import": "^2.30.0",
     "jsdom": "^27.0.0",
     "mocha": "^10.2.0",
     "prettier": "^3.6.2",
-    "sinon": "^21.0.0"
+    "sinon": "^21.0.0",
+    "sql.js": "^1.13.0",
+    "nodemon": "^3.0.1"
+    ,"jsdom-global": "^3.0.0"
   },
   "dependencies": {
     "connect-sqlite3": "^0.9.13",
