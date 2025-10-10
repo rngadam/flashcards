@@ -187,7 +187,7 @@ You are an expert front-end web developer. Your goal is to create a single, self
 
 You must use the following JavaScript libraries. Include them in the `<head>` section of the HTML file using these exact CDN links.
 ```html
-<script src="[https://cdn.jsdelivr.net/npm/dexie@4.0.1/dist/dexie.min.js](https://cdn.jsdelivr.net/npm/dexie@4.0.1/dist/dexie.min.js)"></script>
-<script src="[https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js](https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js)"></script>
-<script src="[https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/DrawSVGPlugin.min.js](https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/DrawSVGPlugin.min.js)"></script>
+<script src="https://cdn.jsdelivr.net/npm/dexie@4.0.1/dist/dexie.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/gsap@3.13.0/dist/gsap.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/gsap@3.13.0/dist/DrawSVGPlugin.min.js"></script>
 ```

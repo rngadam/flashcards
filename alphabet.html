@@ -7,6 +7,7 @@
     <script src="https://cdn.jsdelivr.net/npm/dexie@4.0.1/dist/dexie.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/gsap@3.13.0/dist/gsap.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/gsap@3.13.0/dist/DrawSVGPlugin.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/svg-path-parser@1.1.0/dist/svg-path-parser.min.js"></script>
     <style>
         body {
             font-family: sans-serif;
@@ -171,7 +172,15 @@ python -m SimpleHTTPServer</code></pre>
 
             'use strict';
 
-            try {
+            // --- 0. CONSTANTS ---
+            const MAX_INCORRECT_ATTEMPTS = 3;
+            const FEEDBACK_TIMEOUT_MS = 1500;
+            const HINT_TIMEOUT_MS = 4000;
+            const CANVAS_WIDTH = 400;
+            const CANVAS_HEIGHT = 400;
+            const SVG_VIEWBOX_SIZE = 100;
+            const STROKE_VALIDATION_THRESHOLD = 20;
+
             // --- 1. DATABASE SETUP ---
             const db = new Dexie('AlphabetDB');
             db.version(1).stores({
@@ -304,43 +313,38 @@ python -m SimpleHTTPServer</code></pre>
             async function seedDatabase() {
                 const alphabetCount = await db.alphabets.count();
                 if (alphabetCount > 0) {
+                    logger.log("Database already seeded.");
                     return; // Don't re-seed
                 }
 
+                logger.log("Seeding database...");
                 try {
                     await db.transaction('rw', db.alphabets, db.characters, async () => {
-                        // Use allKeys: true to get the generated primary keys
                         const alphabetIds = await db.alphabets.bulkAdd(alphabetsData, { allKeys: true });
-
-                        // Create a map of alphabet names to their new IDs
                         const nameToIdMap = {};
                         alphabetsData.forEach((alphabet, index) => {
                             nameToIdMap[alphabet.name] = alphabetIds[index];
                         });
 
-                        // Prepare character data with the correct foreign keys
-                        const charactersToSeed = charactersData.map(char => {
-                            const newChar = { ...char };
-                            newChar.alphabetId = nameToIdMap[char.alphabetName];
-                            delete newChar.alphabetName; // Clean up the temporary property
-                            return newChar;
-                        });
+                        const charactersToSeed = charactersData.map(char => ({
+                            ...char,
+                            alphabetId: nameToIdMap[char.alphabetName],
+                            alphabetName: undefined
+                        }));
 
                         await db.characters.bulkAdd(charactersToSeed);
                     });
+                    logger.log("Database seeded successfully.");
                 } catch (error) {
                     logger.error('Error seeding database:', error);
+                    // Inform the user that a feature might not work
+                    alert("There was an error initializing the alphabet data. Some features may not work correctly.");
                 }
             }
 
             // --- 4. INITIALIZATION ---
-            // When the DOM is ready, seed the database and initialize the app
-            document.addEventListener('DOMContentLoaded', () => {
-                gsap.registerPlugin(DrawSVGPlugin); // Register plugin once DOM is ready
-                seedDatabase().then(initializeApp).catch(err => {
-                    console.error("Failed to initialize database:", err);
-                });
-            });
+            // Moved initialization logic to be called directly from window.onload
+            // This avoids issues with nested DOMContentLoaded listeners.
 
             // --- 5. DOM ELEMENT REFERENCES ---
             const alphabetSelectionContainer = document.getElementById('alphabet-selection-container');
@@ -380,45 +384,67 @@ python -m SimpleHTTPServer</code></pre>
                 logger.log(`Logging ${enabled ? 'enabled' : 'disabled'}.`);
             }
 
+            // Define the complete shape of the appState object at initialization
             let appState = {
                 currentAlphabetId: null,
                 currentMode: 'train', // 'train' or 'test'
+                currentCharForTest: null,
+                incorrectAttempts: 0,
             };
 
             // --- 7. UI RENDERING & LOGIC ---
             async function initializeApp() {
-                // Initialize logging toggle state and listener
-                loggingToggle.checked = isLoggingEnabled;
-                loggingToggle.addEventListener('change', (e) => updateLoggingState(e.target.checked));
-                logger.log("Application initializing...");
+                try {
+                    gsap.registerPlugin(DrawSVGPlugin);
 
-                await renderAlphabetSelect();
+                    loggingToggle.checked = isLoggingEnabled;
+                    loggingToggle.addEventListener('change', (e) => updateLoggingState(e.target.checked));
+                    logger.log("Application initializing...");
 
-                trainModeBtn.addEventListener('click', () => setMode('train'));
-                testModeBtn.addEventListener('click', () => setMode('test'));
+                    await seedDatabase();
+                    await renderAlphabetSelect();
+
+                    trainModeBtn.addEventListener('click', () => setMode('train'));
+                    testModeBtn.addEventListener('click', () => setMode('test'));
+
+                    // Set canvas dimensions from constants
+                    drawingCanvas.width = CANVAS_WIDTH;
+                    drawingCanvas.height = CANVAS_HEIGHT;
+                } catch (err) {
+                    console.error("Failed to initialize the application:", err);
+                    alert("A critical error occurred during startup. Please refresh the page.");
+                }
             }
 
             async function renderAlphabetSelect() {
-                const alphabets = await db.alphabets.toArray();
-                alphabetButtonsContainer.innerHTML = ''; // Clear existing buttons
-                alphabets.forEach(alphabet => {
-                    const button = document.createElement('button');
-                    button.textContent = alphabet.name;
-                    button.addEventListener('click', () => selectAlphabet(alphabet));
-                    alphabetButtonsContainer.appendChild(button);
-                });
+                try {
+                    const alphabets = await db.alphabets.toArray();
+                    alphabetButtonsContainer.innerHTML = ''; // Clear existing buttons
+                    alphabets.forEach(alphabet => {
+                        const button = document.createElement('button');
+                        button.textContent = alphabet.name;
+                        button.addEventListener('click', () => selectAlphabet(alphabet));
+                        alphabetButtonsContainer.appendChild(button);
+                    });
+                } catch (error) {
+                    logger.error("Failed to render alphabet selection:", error);
+                }
             }
 
             async function selectAlphabet(alphabet) {
-                appState.currentAlphabetId = alphabet.id;
-                logger.log(`Selected alphabet: ${alphabet.name} (ID: ${alphabet.id})`);
+                try {
+                    appState.currentAlphabetId = alphabet.id;
+                    logger.log(`Selected alphabet: ${alphabet.name} (ID: ${alphabet.id})`);
 
-                const characters = await db.characters
-                    .where('alphabetId')
-                    .equals(alphabet.id)
-                    .sortBy('order');
+                    const characters = await db.characters
+                        .where('alphabetId')
+                        .equals(alphabet.id)
+                        .sortBy('order');
 
-                renderCharacterGrid(characters, alphabet.name);
+                    renderCharacterGrid(characters, alphabet.name);
+                } catch (error) {
+                    logger.error(`Failed to select alphabet ${alphabet.name}:`, error);
+                }
             }
 
             function renderCharacterGrid(characters, alphabetName) {
@@ -440,30 +466,41 @@ python -m SimpleHTTPServer</code></pre>
             }
 
             async function displayCharacter(characterId) {
-                const character = await db.characters.get({ characterId });
-                if (!character) return;
+                try {
+                    const character = await db.characters.get({ characterId });
+                    if (!character) {
+                        logger.warn(`Character with ID ${characterId} not found.`);
+                        return;
+                    };
 
-                const alphabet = await db.alphabets.get(character.alphabetId);
-                if (!alphabet) return;
+                    const alphabet = await db.alphabets.get(character.alphabetId);
+                    if (!alphabet) {
+                        logger.warn(`Alphabet with ID ${character.alphabetId} not found.`);
+                        return;
+                    }
 
+                    // Update UI
+                    characterName.textContent = character.name;
+                    charUppercase.textContent = character.uppercase;
+                    charLowercase.textContent = character.lowercase;
 
-                // Update UI
-                characterName.textContent = character.name;
-                charUppercase.textContent = character.uppercase;
-                charLowercase.textContent = character.lowercase;
+                    const performActions = () => {
+                        animateCharacter(handwritingSvg, character.strokeSVGPaths);
+                        speak(character.pronunciationKey, alphabet.languageCode);
+                    };
 
-                const performActions = () => {
-                    animateCharacter(handwritingSvg, character.strokeSVGPaths);
-                    speak(character.pronunciationKey, alphabet.languageCode);
-                };
+                    performActions();
+                    // Use addEventListener instead of onclick
+                    replayAnimationBtn.removeEventListener('click', replayAnimationBtn.handler);
+                    replayAnimationBtn.handler = performActions;
+                    replayAnimationBtn.addEventListener('click', replayAnimationBtn.handler);
 
-                performActions();
-
-                replayAnimationBtn.onclick = performActions;
-
-                // Switch views
-                characterGridContainer.classList.add('hidden');
-                characterDisplayContainer.classList.remove('hidden');
+                    // Switch views
+                    characterGridContainer.classList.add('hidden');
+                    characterDisplayContainer.classList.remove('hidden');
+                } catch (error) {
+                    logger.error(`Failed to display character ${characterId}:`, error);
+                }
             }
 
             function animateCharacter(svgElement, strokePaths) {
@@ -549,46 +586,47 @@ python -m SimpleHTTPServer</code></pre>
             }
 
             async function startTest() {
-                if (!appState.currentAlphabetId) {
-                    testPrompt.textContent = 'Please select an alphabet first.';
-                    return;
+                try {
+                    if (!appState.currentAlphabetId) {
+                        testPrompt.textContent = 'Please select an alphabet first.';
+                        return;
+                    }
+
+                    // Intelligent character selection
+                    const allCharacters = await db.characters.where('alphabetId').equals(appState.currentAlphabetId).toArray();
+                    const characterIds = allCharacters.map(c => c.characterId);
+                    const progressData = await db.userProgress.where('characterId').anyOf(characterIds).toArray();
+                    const progressMap = new Map(progressData.map(p => [p.characterId, p]));
+
+                    let characterToTest;
+                    const untestedChars = allCharacters.filter(c => !progressMap.has(c.characterId));
+
+                    if (untestedChars.length > 0) {
+                        characterToTest = untestedChars[Math.floor(Math.random() * untestedChars.length)];
+                    } else {
+                        allCharacters.sort((a, b) => {
+                            const progressA = progressMap.get(a.characterId);
+                            const progressB = progressMap.get(b.characterId);
+                            const scoreA = (progressA.correctCount || 0) / ((progressA.correctCount || 0) + (progressA.incorrectCount || 0) + 1);
+                            const scoreB = (progressB.correctCount || 0) / ((progressB.correctCount || 0) + (progressB.incorrectCount || 0) + 1);
+                            return scoreA - scoreB;
+                        });
+                        characterToTest = allCharacters[0];
+                    }
+
+                    const alphabet = await db.alphabets.get(characterToTest.alphabetId);
+
+                    appState.currentCharForTest = characterToTest;
+                    appState.incorrectAttempts = 0; // Reset incorrect attempts
+
+                    testPrompt.textContent = `Draw the letter: "${characterToTest.name}"`;
+                    speak(characterToTest.pronunciationKey, alphabet.languageCode);
+
+                    setupCanvas();
+                } catch (error) {
+                    logger.error("Failed to start the test:", error);
+                    testPrompt.textContent = "Error starting test. Please try again.";
                 }
-
-                // Intelligent character selection
-                const allCharacters = await db.characters.where('alphabetId').equals(appState.currentAlphabetId).toArray();
-
-                // Optimized Query: Fetch progress only for the current alphabet's characters
-                const characterIds = allCharacters.map(c => c.characterId);
-                const progressData = await db.userProgress.where('characterId').anyOf(characterIds).toArray();
-
-                const progressMap = new Map(progressData.map(p => [p.characterId, p]));
-
-                let characterToTest;
-                const untestedChars = allCharacters.filter(c => !progressMap.has(c.characterId));
-
-                if (untestedChars.length > 0) {
-                    characterToTest = untestedChars[Math.floor(Math.random() * untestedChars.length)];
-                } else {
-                    // Find character with the lowest success rate
-                    allCharacters.sort((a, b) => {
-                        const progressA = progressMap.get(a.characterId);
-                        const progressB = progressMap.get(b.characterId);
-                        const scoreA = (progressA.correctCount || 0) / ((progressA.correctCount || 0) + (progressA.incorrectCount || 0) + 1);
-                        const scoreB = (progressB.correctCount || 0) / ((progressB.correctCount || 0) + (progressB.incorrectCount || 0) + 1);
-                        return scoreA - scoreB;
-                    });
-                    characterToTest = allCharacters[0];
-                }
-
-                const alphabet = await db.alphabets.get(characterToTest.alphabetId);
-
-                appState.currentCharForTest = characterToTest;
-                appState.incorrectAttempts = 0; // Reset incorrect attempts
-
-                testPrompt.textContent = `Draw the letter: "${characterToTest.name}"`;
-                speak(characterToTest.pronunciationKey, alphabet.languageCode);
-
-                setupCanvas();
             }
 
             function setupCanvas() {
@@ -603,102 +641,131 @@ python -m SimpleHTTPServer</code></pre>
                 ctx.lineCap = 'round';
                 ctx.lineJoin = 'round';
 
-                function startDrawing(e) {
+                const startDrawing = (e) => {
+                    e.preventDefault();
                     drawing = true;
                     currentStroke = [];
                     const pos = getMousePos(drawingCanvas, e);
                     ctx.beginPath();
                     ctx.moveTo(pos.x, pos.y);
-                }
+                };
 
-                function draw(e) {
+                const draw = (e) => {
+                    e.preventDefault();
                     if (!drawing) return;
                     const pos = getMousePos(drawingCanvas, e);
                     currentStroke.push(pos);
                     ctx.lineTo(pos.x, pos.y);
                     ctx.stroke();
-                }
+                };
 
-                function stopDrawing() {
+                const stopDrawing = (e) => {
+                    e.preventDefault();
                     if (!drawing) return;
                     drawing = false;
-                    if (currentStroke.length > 0) {
+                    if (currentStroke.length > 1) { // Only add meaningful strokes
                         userStrokes.push(currentStroke);
                     }
                     ctx.closePath();
-                }
+                };
 
-                drawingCanvas.onmousedown = startDrawing;
-                drawingCanvas.onmousemove = draw;
-                drawingCanvas.onmouseup = stopDrawing;
-                drawingCanvas.onmouseleave = stopDrawing;
+                // Add both mouse and touch event listeners
+                drawingCanvas.addEventListener('mousedown', startDrawing);
+                drawingCanvas.addEventListener('mousemove', draw);
+                drawingCanvas.addEventListener('mouseup', stopDrawing);
+                drawingCanvas.addEventListener('mouseleave', stopDrawing);
+                drawingCanvas.addEventListener('touchstart', startDrawing);
+                drawingCanvas.addEventListener('touchmove', draw);
+                drawingCanvas.addEventListener('touchend', stopDrawing);
 
-                submitDrawingBtn.onclick = async () => {
+                // Use a named function for the click handler to allow removal
+                const handleSubmit = async () => {
                     const char = appState.currentCharForTest;
 
-                    // New, improved validation
                     const isCorrect = validateStrokes(userStrokes, char.strokeSVGPaths.uppercase) ||
                                       validateStrokes(userStrokes, char.strokeSVGPaths.lowercase);
 
-                    const progress = await db.userProgress.get({ characterId: char.characterId }) || { characterId: char.characterId, correctCount: 0, incorrectCount: 0 };
+                    try {
+                        const progress = await db.userProgress.get({ characterId: char.characterId }) || { characterId: char.characterId, correctCount: 0, incorrectCount: 0 };
+                        progress.lastTested = new Date(); // Update lastTested timestamp
 
-                    if (isCorrect) {
-                        testFeedback.textContent = 'Correct!';
-                        progress.correctCount++;
-                        await db.userProgress.put(progress);
-                        setTimeout(() => {
-                            testFeedback.textContent = '';
-                            startTest();
-                        }, 1500);
-                    } else {
-                        appState.incorrectAttempts++;
-                        progress.incorrectCount++;
-                        await db.userProgress.put(progress);
-
-                        if (appState.incorrectAttempts >= 3) {
-                            testFeedback.textContent = `Incorrect. Here's a hint.`;
-                            // Show animation hint
-                            characterDisplayContainer.classList.remove('hidden');
-                            testingModeContainer.classList.add('hidden');
-                            displayCharacter(char.characterId);
+                        if (isCorrect) {
+                            testFeedback.textContent = 'Correct!';
+                            progress.correctCount++;
+                            await db.userProgress.put(progress);
                             setTimeout(() => {
-                                setMode('test');
-                                characterDisplayContainer.classList.add('hidden');
-                            }, 4000); // Allow time for animation
-                        } else {
-                           testFeedback.textContent = `Incorrect. Try again.`;
-                           setTimeout(() => {
                                 testFeedback.textContent = '';
-                                ctx.clearRect(0, 0, drawingCanvas.width, drawingCanvas.height);
-                                userStrokes = [];
-                           }, 1500);
+                                startTest();
+                            }, FEEDBACK_TIMEOUT_MS);
+                        } else {
+                            appState.incorrectAttempts++;
+                            progress.incorrectCount++;
+                            await db.userProgress.put(progress);
+
+                            if (appState.incorrectAttempts >= MAX_INCORRECT_ATTEMPTS) {
+                                testFeedback.textContent = `Incorrect. Here's a hint.`;
+                                characterDisplayContainer.classList.remove('hidden');
+                                testingModeContainer.classList.add('hidden');
+                                displayCharacter(char.characterId);
+                                setTimeout(() => {
+                                    setMode('test');
+                                    characterDisplayContainer.classList.add('hidden');
+                                }, HINT_TIMEOUT_MS);
+                            } else {
+                               testFeedback.textContent = `Incorrect. Try again.`;
+                               setTimeout(() => {
+                                    testFeedback.textContent = '';
+                                    ctx.clearRect(0, 0, drawingCanvas.width, drawingCanvas.height);
+                                    userStrokes = [];
+                               }, FEEDBACK_TIMEOUT_MS);
+                            }
                         }
+                    } catch (error) {
+                        logger.error("Failed to update user progress:", error);
                     }
                 };
+
+                // Remove previous listener before adding a new one
+                submitDrawingBtn.removeEventListener('click', submitDrawingBtn.handler);
+                submitDrawingBtn.handler = handleSubmit;
+                submitDrawingBtn.addEventListener('click', submitDrawingBtn.handler);
             }
 
             function getMousePos(canvas, evt) {
                 const rect = canvas.getBoundingClientRect();
+                const clientX = evt.touches ? evt.touches[0].clientX : evt.clientX;
+                const clientY = evt.touches ? evt.touches[0].clientY : evt.clientY;
                 return {
-                    x: evt.clientX - rect.left,
-                    y: evt.clientY - rect.top
+                    x: clientX - rect.left,
+                    y: clientY - rect.top
                 };
             }
 
             // --- HANDWRITING VALIDATION LOGIC ---
 
             function getStrokeEndpoints(svgPath) {
-                // NOTE: This is a simplified SVG path parser. It assumes the first two numbers
-                // in the path string are the start point and the last two are the end point.
-                // This works for the M, L, and C commands used in this application's dataset,
-                // but would fail for more complex paths using commands like H, V, or A.
-                const numbers = svgPath.match(/-?\d+(\.\d+)?/g);
-                if (!numbers || numbers.length < 2) return null;
+                try {
+                    const commands = svgPathParser.parseSVG(svgPath);
+                    if (commands.length === 0) return null;
 
-                return {
-                    start: { x: parseFloat(numbers[0]), y: parseFloat(numbers[1]) },
-                    end: { x: parseFloat(numbers[numbers.length - 2]), y: parseFloat(numbers[numbers.length - 1]) }
-                };
+                    svgPathParser.makeAbsolute(commands);
+
+                    const firstCommand = commands[0];
+                    const lastCommand = commands[commands.length - 1];
+
+                    // For a Z command, the end point is the start point of the subpath
+                    const endPoint = lastCommand.code.toUpperCase() === 'Z'
+                        ? { x: lastCommand.x0, y: lastCommand.y0 }
+                        : { x: lastCommand.x, y: lastCommand.y };
+
+                    return {
+                        start: { x: firstCommand.x0, y: firstCommand.y0 },
+                        end: endPoint
+                    };
+                } catch (error) {
+                    logger.error("Error parsing SVG path:", error);
+                    return null;
+                }
             }
 
             function arePointsClose(p1, p2, threshold) {
@@ -709,39 +776,45 @@ python -m SimpleHTTPServer</code></pre>
 
             function validateStrokes(userStrokes, correctStrokePaths) {
                 if (userStrokes.length !== correctStrokePaths.length) {
+                    logger.log(`Validation failed: Stroke count mismatch. User: ${userStrokes.length}, Correct: ${correctStrokePaths.length}`);
                     return false;
                 }
                 if (userStrokes.length === 0) return false;
 
-                const threshold = 20; // Reduced for more accurate validation
+                const scaleFactor = CANVAS_WIDTH / SVG_VIEWBOX_SIZE;
 
                 for (let i = 0; i < userStrokes.length; i++) {
                     const userStroke = userStrokes[i];
-                    if (userStroke.length < 2) return false; // Stroke must have start and end
+                    if (userStroke.length < 2) {
+                        logger.log(`Validation failed: User stroke ${i} has fewer than 2 points.`);
+                        return false; // Stroke must have start and end
+                    }
 
                     const correctEndpoints = getStrokeEndpoints(correctStrokePaths[i]);
-                    if (!correctEndpoints) return false;
+                    if (!correctEndpoints) {
+                        logger.warn(`Could not parse correct endpoints for stroke ${i}: ${correctStrokePaths[i]}`);
+                        return false; // Could not parse correct path
+                    }
 
-                    // Normalize canvas points (400x400) to SVG points (100x100)
-                    const userStartPoint = { x: userStroke[0].x / 4, y: userStroke[0].y / 4 };
-                    const userEndPoint = { x: userStroke[userStroke.length - 1].x / 4, y: userStroke[userStroke.length - 1].y / 4 };
+                    const userStartPoint = { x: userStroke[0].x / scaleFactor, y: userStroke[0].y / scaleFactor };
+                    const userEndPoint = { x: userStroke[userStroke.length - 1].x / scaleFactor, y: userStroke[userStroke.length - 1].y / scaleFactor };
 
-                    // Allow stroke to be drawn in either direction
-                    const matchForward = arePointsClose(userStartPoint, correctEndpoints.start, threshold) && arePointsClose(userEndPoint, correctEndpoints.end, threshold);
-                    const matchReverse = arePointsClose(userStartPoint, correctEndpoints.end, threshold) && arePointsClose(userEndPoint, correctEndpoints.start, threshold);
+                    const matchForward = arePointsClose(userStartPoint, correctEndpoints.start, STROKE_VALIDATION_THRESHOLD) && arePointsClose(userEndPoint, correctEndpoints.end, STROKE_VALIDATION_THRESHOLD);
+                    const matchReverse = arePointsClose(userStartPoint, correctEndpoints.end, STROKE_VALIDATION_THRESHOLD) && arePointsClose(userEndPoint, correctEndpoints.start, STROKE_VALIDATION_THRESHOLD);
 
                     if (!matchForward && !matchReverse) {
-                        return false; // This stroke doesn't match
+                        logger.log(`Validation failed on stroke ${i}:`);
+                        logger.log('User points (scaled):', { start: userStartPoint, end: userEndPoint });
+                        logger.log('Correct points:', correctEndpoints);
+                        return false;
                     }
                 }
 
-                return true; // All strokes matched
+                return true;
             }
 
-            } catch (e) {
-                console.error('A critical error occurred:', e);
-                document.body.innerHTML = `<pre>A critical error occurred: ${e.stack}</pre>`;
-            }
+            // --- Start the application ---
+            initializeApp();
         };
     </script>
 </body>
