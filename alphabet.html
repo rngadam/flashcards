@@ -119,6 +119,10 @@ python -m SimpleHTTPServer</code></pre>
     <div id="app-container">
         <header>
             <h1>Alphabet Learning App</h1>
+            <div class="logging-control" style="display: flex; align-items: center; gap: 5px; font-size: 0.8em;">
+                <input type="checkbox" id="logging-toggle">
+                <label for="logging-toggle">Enable Logging</label>
+            </div>
             <div id="mode-selector">
                 <button id="train-mode-btn" class="active">Train</button>
                 <button id="test-mode-btn">Test</button>
@@ -325,7 +329,7 @@ python -m SimpleHTTPServer</code></pre>
                         await db.characters.bulkAdd(charactersToSeed);
                     });
                 } catch (error) {
-                    console.error('Error seeding database:', error);
+                    logger.error('Error seeding database:', error);
                 }
             }
 
@@ -360,7 +364,22 @@ python -m SimpleHTTPServer</code></pre>
             const submitDrawingBtn = document.getElementById('submit-drawing-btn');
 
 
-            // --- 6. STATE MANAGEMENT ---
+            // --- 6. STATE MANAGEMENT & LOGGING ---
+            const loggingToggle = document.getElementById('logging-toggle');
+            let isLoggingEnabled = localStorage.getItem('alphabet-loggingEnabled') === 'true';
+
+            const logger = {
+                log: (...args) => isLoggingEnabled && console.log(...args),
+                warn: (...args) => isLoggingEnabled && console.warn(...args),
+                error: (...args) => isLoggingEnabled && console.error(...args),
+            };
+
+            function updateLoggingState(enabled) {
+                isLoggingEnabled = enabled;
+                localStorage.setItem('alphabet-loggingEnabled', enabled);
+                logger.log(`Logging ${enabled ? 'enabled' : 'disabled'}.`);
+            }
+
             let appState = {
                 currentAlphabetId: null,
                 currentMode: 'train', // 'train' or 'test'
@@ -368,6 +387,11 @@ python -m SimpleHTTPServer</code></pre>
 
             // --- 7. UI RENDERING & LOGIC ---
             async function initializeApp() {
+                // Initialize logging toggle state and listener
+                loggingToggle.checked = isLoggingEnabled;
+                loggingToggle.addEventListener('change', (e) => updateLoggingState(e.target.checked));
+                logger.log("Application initializing...");
+
                 await renderAlphabetSelect();
 
                 trainModeBtn.addEventListener('click', () => setMode('train'));
@@ -387,7 +411,7 @@ python -m SimpleHTTPServer</code></pre>
 
             async function selectAlphabet(alphabet) {
                 appState.currentAlphabetId = alphabet.id;
-                console.log(`Selected alphabet: ${alphabet.name}`);
+                logger.log(`Selected alphabet: ${alphabet.name} (ID: ${alphabet.id})`);
 
                 const characters = await db.characters
                     .where('alphabetId')
@@ -471,7 +495,7 @@ python -m SimpleHTTPServer</code></pre>
             function loadAndCacheVoices() {
                 voices = speechSynthesis.getVoices();
                 if (voices.length > 0) {
-                    console.log('Speech synthesis voices loaded.');
+                    logger.log(`Speech synthesis voices loaded (${voices.length} voices).`);
                 }
             }
 
@@ -482,7 +506,7 @@ python -m SimpleHTTPServer</code></pre>
 
             function speak(text, langCode) {
                 if (!('speechSynthesis' in window)) {
-                    console.warn('Speech Synthesis not supported.');
+                    logger.warn('Speech Synthesis not supported.');
                     return;
                 }
 
@@ -496,7 +520,7 @@ python -m SimpleHTTPServer</code></pre>
                 if (voice) {
                     utterance.voice = voice;
                 } else {
-                    console.warn(`No specific voice found for lang '${langCode}'. Using browser default.`);
+                    logger.warn(`No specific voice found for lang '${langCode}'. Using browser default.`);
                 }
 
                 speechSynthesis.speak(utterance);
