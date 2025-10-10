@@ -11,7 +11,7 @@ describe('logger', function () {
     });
 
     it('records entries in buffer and detectColumnLanguages logs sample and result', async function () {
-        const eldMock = { detect: async (text) => ({ language: 'el' }) };
+        const eldMock = { detect: async () => ({ language: 'el' }) };
         __setEldMock(eldMock);
         logger.setConfig({ outputs: { console: false, inMemory: true, server: false }, enabledCategories: ['language'] });
         const cardData = [["γεια", "foo"]];
