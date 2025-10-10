@@ -192,20 +192,19 @@ python -m SimpleHTTPServer</code></pre>
                 <input type="checkbox" id="gridlines-toggle">
             </div>
             <div class="setting-item">
-                <span>Selected Alphabet:</span>
-                <span id="selected-alphabet-display">None</span>
+                <label for="alphabet-select">Alphabet</label>
+                <select id="alphabet-select"></select>
+            </div>
+            <div class="setting-item">
+                <span>Speech Language:</span>
+                <span id="speech-language-display">Default</span>
             </div>
         </div>
 
         <main id="main-content" class="main-columns">
             <div id="left-column">
-                <section id="alphabet-selection-container">
-                    <h2>Select an Alphabet</h2>
-                    <div id="alphabet-buttons"></div>
-                </section>
-
-                <section id="character-grid-container" class="hidden">
-                    <h2 id="character-grid-title"></h2>
+                <section id="character-grid-container">
+                    <h2 id="character-grid-title">Select an alphabet from settings to begin</h2>
                     <div id="character-grid"></div>
                 </section>
             </div>
@@ -224,6 +223,7 @@ python -m SimpleHTTPServer</code></pre>
                         <svg id="handwriting-svg-lower" viewBox="0 0 100 100"></svg>
                     </div>
                     <button id="replay-animation-btn">Replay Animation</button>
+                    <button id="edit-strokes-btn">Edit Strokes</button>
                 </section>
 
                 <section id="testing-mode-container" class="hidden">
@@ -231,6 +231,20 @@ python -m SimpleHTTPServer</code></pre>
                     <canvas id="drawing-canvas" width="400" height="400"></canvas>
                     <div id="test-feedback"></div>
                     <button id="submit-drawing-btn">Submit</button>
+                </section>
+
+                <section id="stroke-editor-container" class="hidden">
+                    <h3>SVG Stroke Editor</h3>
+                    <div>
+                        <label for="uppercase-path-input">Uppercase Path Data:</label>
+                        <textarea id="uppercase-path-input" rows="4" cols="50"></textarea>
+                    </div>
+                    <div>
+                        <label for="lowercase-path-input">Lowercase Path Data:</label>
+                        <textarea id="lowercase-path-input" rows="4" cols="50"></textarea>
+                    </div>
+                    <button id="redraw-svg-btn">Redraw</button>
+                    <button id="close-editor-btn">Close</button>
                 </section>
             </div>
         </main>
@@ -437,7 +451,15 @@ python -m SimpleHTTPServer</code></pre>
             const hamburgerMenu = document.getElementById('hamburger-menu');
             const settingsPanel = document.getElementById('settings-panel');
             const gridlinesToggle = document.getElementById('gridlines-toggle');
-            const selectedAlphabetDisplay = document.getElementById('selected-alphabet-display');
+            const alphabetSelect = document.getElementById('alphabet-select');
+            const speechLanguageDisplay = document.getElementById('speech-language-display');
+
+            const editStrokesBtn = document.getElementById('edit-strokes-btn');
+            const strokeEditorContainer = document.getElementById('stroke-editor-container');
+            const uppercasePathInput = document.getElementById('uppercase-path-input');
+            const lowercasePathInput = document.getElementById('lowercase-path-input');
+            const redrawSvgBtn = document.getElementById('redraw-svg-btn');
+            const closeEditorBtn = document.getElementById('close-editor-btn');
 
             const trainModeBtn = document.getElementById('train-mode-btn');
             const testModeBtn = document.getElementById('test-mode-btn');
@@ -483,6 +505,12 @@ python -m SimpleHTTPServer</code></pre>
                         settingsPanel.classList.toggle('open');
                     });
 
+                    document.getElementById('main-content').addEventListener('click', () => {
+                        if (settingsPanel.classList.contains('open')) {
+                            settingsPanel.classList.remove('open');
+                        }
+                    });
+
                     gridlinesToggle.addEventListener('change', (e) => {
                         drawingCanvas.style.backgroundImage = e.target.checked
                             ? 'linear-gradient(#ccc 1px, transparent 1px), linear-gradient(90deg, #ccc 1px, transparent 1px)'
@@ -495,7 +523,7 @@ python -m SimpleHTTPServer</code></pre>
                     logger.log("Application initializing...");
 
                     await seedDatabase();
-                    await renderAlphabetSelect();
+                    await populateAlphabetDropdown();
 
                     trainModeBtn.addEventListener('click', () => setMode('train'));
                     testModeBtn.addEventListener('click', () => setMode('test'));
@@ -509,25 +537,32 @@ python -m SimpleHTTPServer</code></pre>
                 }
             }
 
-            async function renderAlphabetSelect() {
+            async function populateAlphabetDropdown() {
                 try {
                     const alphabets = await db.alphabets.toArray();
-                    alphabetButtonsContainer.innerHTML = ''; // Clear existing buttons
+                    alphabetSelect.innerHTML = '<option value="">Select Alphabet</option>';
                     alphabets.forEach(alphabet => {
-                        const button = document.createElement('button');
-                        button.textContent = alphabet.name;
-                        button.addEventListener('click', () => selectAlphabet(alphabet));
-                        alphabetButtonsContainer.appendChild(button);
+                        const option = document.createElement('option');
+                        option.value = alphabet.id;
+                        option.textContent = alphabet.name;
+                        alphabetSelect.appendChild(option);
+                    });
+
+                    alphabetSelect.addEventListener('change', async (e) => {
+                        const alphabetId = parseInt(e.target.value, 10);
+                        if (alphabetId) {
+                            const alphabet = await db.alphabets.get(alphabetId);
+                            selectAlphabet(alphabet);
+                        }
                     });
                 } catch (error) {
-                    logger.error("Failed to render alphabet selection:", error);
+                    logger.error("Failed to populate alphabet dropdown:", error);
                 }
             }
 
             async function selectAlphabet(alphabet) {
                 try {
                     appState.currentAlphabetId = alphabet.id;
-                    selectedAlphabetDisplay.textContent = alphabet.name;
                     logger.log(`Selected alphabet: ${alphabet.name} (ID: ${alphabet.id})`);
 
                     const characters = await db.characters
@@ -589,6 +624,8 @@ python -m SimpleHTTPServer</code></pre>
                     replayAnimationBtn.handler = performActions;
                     replayAnimationBtn.addEventListener('click', replayAnimationBtn.handler);
 
+                    editStrokesBtn.onclick = () => openStrokeEditor(character);
+
                     // Switch views - keep character grid visible
                     characterDisplayContainer.classList.remove('hidden');
                 } catch (error) {
@@ -635,20 +672,29 @@ python -m SimpleHTTPServer</code></pre>
             function speak(text, langCode) {
                 if (!('speechSynthesis' in window)) {
                     logger.warn('Speech Synthesis not supported.');
+                    speechLanguageDisplay.textContent = 'Not Supported';
                     return;
                 }
 
-                speechSynthesis.cancel(); // Stop any currently speaking utterance
+                speechSynthesis.cancel();
 
                 const utterance = new SpeechSynthesisUtterance(text);
                 utterance.lang = langCode;
 
-                const voice = voices.find(v => v.lang === langCode);
+                // Improved voice finding logic
+                const primaryLang = langCode.split('-')[0];
+                let voice = voices.find(v => v.lang === langCode);
+                if (!voice) {
+                    voice = voices.find(v => v.lang.startsWith(primaryLang));
+                }
 
                 if (voice) {
                     utterance.voice = voice;
+                    speechLanguageDisplay.textContent = voice.lang;
+                    logger.log(`Using voice: ${voice.name} (${voice.lang})`);
                 } else {
-                    logger.warn(`No specific voice found for lang '${langCode}'. Using browser default.`);
+                    speechLanguageDisplay.textContent = `Default (${langCode})`;
+                    logger.warn(`No specific voice found for lang '${langCode}' or '${primaryLang}'. Using browser default.`);
                 }
 
                 speechSynthesis.speak(utterance);
@@ -918,6 +964,23 @@ python -m SimpleHTTPServer</code></pre>
                 }
 
                 return true;
+            }
+
+            function openStrokeEditor(character) {
+                strokeEditorContainer.classList.remove('hidden');
+                uppercasePathInput.value = character.strokeSVGPaths.uppercase.join('\n');
+                lowercasePathInput.value = character.strokeSVGPaths.lowercase.join('\n');
+
+                const redraw = () => {
+                    const upperPaths = uppercasePathInput.value.split('\n').filter(p => p.trim() !== '');
+                    const lowerPaths = lowercasePathInput.value.split('\n').filter(p => p.trim() !== '');
+                    animateCharacter(handwritingSvgUpper, handwritingSvgLower, { uppercase: upperPaths, lowercase: lowerPaths });
+                };
+
+                redrawSvgBtn.onclick = redraw;
+                closeEditorBtn.onclick = () => {
+                    strokeEditorContainer.classList.add('hidden');
+                };
             }
 
             // --- Start the application ---
