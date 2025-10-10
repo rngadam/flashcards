@@ -624,7 +624,9 @@ python -m SimpleHTTPServer</code></pre>
                     replayAnimationBtn.handler = performActions;
                     replayAnimationBtn.addEventListener('click', replayAnimationBtn.handler);
 
-                    editStrokesBtn.onclick = () => openStrokeEditor(character);
+                    editStrokesBtn.removeEventListener('click', editStrokesBtn.handler);
+                    editStrokesBtn.handler = () => openStrokeEditor(character);
+                    editStrokesBtn.addEventListener('click', editStrokesBtn.handler);
 
                     // Switch views - keep character grid visible
                     characterDisplayContainer.classList.remove('hidden');
@@ -977,10 +979,14 @@ python -m SimpleHTTPServer</code></pre>
                     animateCharacter(handwritingSvgUpper, handwritingSvgLower, { uppercase: upperPaths, lowercase: lowerPaths });
                 };
 
-                redrawSvgBtn.onclick = redraw;
-                closeEditorBtn.onclick = () => {
+                const closeEditor = () => {
                     strokeEditorContainer.classList.add('hidden');
+                    redrawSvgBtn.removeEventListener('click', redraw);
+                    closeEditorBtn.removeEventListener('click', closeEditor);
                 };
+
+                redrawSvgBtn.addEventListener('click', redraw);
+                closeEditorBtn.addEventListener('click', closeEditor);
             }
 
             // --- Start the application ---
