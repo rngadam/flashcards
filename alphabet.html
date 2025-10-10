@@ -78,16 +78,17 @@
 
         #character-display-container {
             display: flex;
+            flex-direction: column;
             gap: 20px;
         }
 
-        #animation-container {
+        .animation-box {
             width: 200px;
             height: 200px;
             border: 1px solid #ddd;
         }
 
-        #handwriting-svg path {
+        .animation-box svg path {
             stroke: #333;
             stroke-width: 5;
             fill: none;
@@ -98,6 +99,55 @@
         #drawing-canvas {
             border: 1px solid #333;
             cursor: crosshair;
+        }
+
+        .main-columns {
+            display: flex;
+            gap: 20px;
+        }
+
+        #left-column {
+            flex: 1;
+        }
+
+        #right-column {
+            flex: 2;
+        }
+
+        #hamburger-menu {
+            cursor: pointer;
+        }
+
+        #hamburger-menu span {
+            display: block;
+            width: 25px;
+            height: 3px;
+            margin: 5px;
+            background: #333;
+        }
+
+        #settings-panel {
+            position: fixed;
+            top: 0;
+            left: -300px;
+            width: 300px;
+            height: 100%;
+            background: #fff;
+            box-shadow: 2px 0 5px rgba(0,0,0,0.1);
+            transition: left 0.3s;
+            padding: 20px;
+            z-index: 1000;
+        }
+
+        #settings-panel.open {
+            left: 0;
+        }
+
+        .setting-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
         }
     </style>
 </head>
@@ -119,46 +169,70 @@ python -m SimpleHTTPServer</code></pre>
 
     <div id="app-container">
         <header>
-            <h1>Alphabet Learning App</h1>
-            <div class="logging-control" style="display: flex; align-items: center; gap: 5px; font-size: 0.8em;">
-                <input type="checkbox" id="logging-toggle">
-                <label for="logging-toggle">Enable Logging</label>
+            <div id="hamburger-menu">
+                <span></span>
+                <span></span>
+                <span></span>
             </div>
+            <h1>Alphabet Learning App</h1>
             <div id="mode-selector">
                 <button id="train-mode-btn" class="active">Train</button>
                 <button id="test-mode-btn">Test</button>
             </div>
         </header>
 
-        <main id="main-content">
-            <section id="alphabet-selection-container">
-                <h2>Select an Alphabet</h2>
-                <div id="alphabet-buttons"></div>
-            </section>
+        <div id="settings-panel">
+            <h2>Settings</h2>
+            <div class="setting-item">
+                <label for="logging-toggle">Enable Logging</label>
+                <input type="checkbox" id="logging-toggle">
+            </div>
+            <div class="setting-item">
+                <label for="gridlines-toggle">Show Gridlines</label>
+                <input type="checkbox" id="gridlines-toggle">
+            </div>
+            <div class="setting-item">
+                <span>Selected Alphabet:</span>
+                <span id="selected-alphabet-display">None</span>
+            </div>
+        </div>
 
-            <section id="character-grid-container" class="hidden">
-                <h2 id="character-grid-title"></h2>
-                <div id="character-grid"></div>
-            </section>
+        <main id="main-content" class="main-columns">
+            <div id="left-column">
+                <section id="alphabet-selection-container">
+                    <h2>Select an Alphabet</h2>
+                    <div id="alphabet-buttons"></div>
+                </section>
 
-            <section id="character-display-container" class="hidden">
-                <div id="character-info">
-                    <h2 id="character-name"></h2>
-                    <p>Uppercase: <span id="char-uppercase"></span></p>
-                    <p>Lowercase: <span id="char-lowercase"></span></p>
-                </div>
-                <div id="animation-container">
-                    <svg id="handwriting-svg" viewBox="0 0 100 100"></svg>
-                </div>
-                <button id="replay-animation-btn">Replay Animation</button>
-            </section>
+                <section id="character-grid-container" class="hidden">
+                    <h2 id="character-grid-title"></h2>
+                    <div id="character-grid"></div>
+                </section>
+            </div>
 
-            <section id="testing-mode-container" class="hidden">
-                <h2 id="test-prompt"></h2>
-                <canvas id="drawing-canvas" width="400" height="400"></canvas>
-                <div id="test-feedback"></div>
-                <button id="submit-drawing-btn">Submit</button>
-            </section>
+            <div id="right-column">
+                <section id="character-display-container" class="hidden">
+                    <div id="character-info">
+                        <h2 id="character-name"></h2>
+                        <p>Uppercase: <span id="char-uppercase"></span></p>
+                        <p>Lowercase: <span id="char-lowercase"></span></p>
+                    </div>
+                    <div id="animation-container-upper" class="animation-box">
+                        <svg id="handwriting-svg-upper" viewBox="0 0 100 100"></svg>
+                    </div>
+                    <div id="animation-container-lower" class="animation-box">
+                        <svg id="handwriting-svg-lower" viewBox="0 0 100 100"></svg>
+                    </div>
+                    <button id="replay-animation-btn">Replay Animation</button>
+                </section>
+
+                <section id="testing-mode-container" class="hidden">
+                    <h2 id="test-prompt"></h2>
+                    <canvas id="drawing-canvas" width="400" height="400"></canvas>
+                    <div id="test-feedback"></div>
+                    <button id="submit-drawing-btn">Submit</button>
+                </section>
+            </div>
         </main>
     </div>
 
@@ -356,8 +430,14 @@ python -m SimpleHTTPServer</code></pre>
             const characterName = document.getElementById('character-name');
             const charUppercase = document.getElementById('char-uppercase');
             const charLowercase = document.getElementById('char-lowercase');
-            const handwritingSvg = document.getElementById('handwriting-svg');
+            const handwritingSvgUpper = document.getElementById('handwriting-svg-upper');
+            const handwritingSvgLower = document.getElementById('handwriting-svg-lower');
             const replayAnimationBtn = document.getElementById('replay-animation-btn');
+
+            const hamburgerMenu = document.getElementById('hamburger-menu');
+            const settingsPanel = document.getElementById('settings-panel');
+            const gridlinesToggle = document.getElementById('gridlines-toggle');
+            const selectedAlphabetDisplay = document.getElementById('selected-alphabet-display');
 
             const trainModeBtn = document.getElementById('train-mode-btn');
             const testModeBtn = document.getElementById('test-mode-btn');
@@ -389,6 +469,7 @@ python -m SimpleHTTPServer</code></pre>
                 currentAlphabetId: null,
                 currentMode: 'train', // 'train' or 'test'
                 currentCharForTest: null,
+                caseForTest: null, // 'uppercase' or 'lowercase'
                 incorrectAttempts: 0,
             };
 
@@ -396,6 +477,18 @@ python -m SimpleHTTPServer</code></pre>
             async function initializeApp() {
                 try {
                     gsap.registerPlugin(DrawSVGPlugin);
+
+                    // Settings Panel Logic
+                    hamburgerMenu.addEventListener('click', () => {
+                        settingsPanel.classList.toggle('open');
+                    });
+
+                    gridlinesToggle.addEventListener('change', (e) => {
+                        drawingCanvas.style.backgroundImage = e.target.checked
+                            ? 'linear-gradient(#ccc 1px, transparent 1px), linear-gradient(90deg, #ccc 1px, transparent 1px)'
+                            : 'none';
+                        drawingCanvas.style.backgroundSize = e.target.checked ? '20px 20px' : 'auto';
+                    });
 
                     loggingToggle.checked = isLoggingEnabled;
                     loggingToggle.addEventListener('change', (e) => updateLoggingState(e.target.checked));
@@ -434,6 +527,7 @@ python -m SimpleHTTPServer</code></pre>
             async function selectAlphabet(alphabet) {
                 try {
                     appState.currentAlphabetId = alphabet.id;
+                    selectedAlphabetDisplay.textContent = alphabet.name;
                     logger.log(`Selected alphabet: ${alphabet.name} (ID: ${alphabet.id})`);
 
                     const characters = await db.characters
@@ -485,7 +579,7 @@ python -m SimpleHTTPServer</code></pre>
                     charLowercase.textContent = character.lowercase;
 
                     const performActions = () => {
-                        animateCharacter(handwritingSvg, character.strokeSVGPaths);
+                        animateCharacter(handwritingSvgUpper, handwritingSvgLower, character.strokeSVGPaths);
                         speak(character.pronunciationKey, alphabet.languageCode);
                     };
 
@@ -495,16 +589,16 @@ python -m SimpleHTTPServer</code></pre>
                     replayAnimationBtn.handler = performActions;
                     replayAnimationBtn.addEventListener('click', replayAnimationBtn.handler);
 
-                    // Switch views
-                    characterGridContainer.classList.add('hidden');
+                    // Switch views - keep character grid visible
                     characterDisplayContainer.classList.remove('hidden');
                 } catch (error) {
                     logger.error(`Failed to display character ${characterId}:`, error);
                 }
             }
 
-            function animateCharacter(svgElement, strokePaths) {
-                svgElement.innerHTML = ''; // Clear previous animation
+            function animateCharacter(upperSvgElement, lowerSvgElement, strokePaths) {
+                upperSvgElement.innerHTML = ''; // Clear previous animations
+                lowerSvgElement.innerHTML = '';
 
                 const tl = gsap.timeline();
 
@@ -512,18 +606,15 @@ python -m SimpleHTTPServer</code></pre>
                 strokePaths.uppercase.forEach(pathData => {
                     const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
                     path.setAttribute('d', pathData);
-                    svgElement.appendChild(path);
+                    upperSvgElement.appendChild(path);
                     tl.from(path, { drawSVG: 0, duration: 1 }, "+=0.1");
                 });
-
-                // Add a pause between uppercase and lowercase
-                tl.to({}, { duration: 0.5 });
 
                 // Animate lowercase strokes
                 strokePaths.lowercase.forEach(pathData => {
                     const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
                     path.setAttribute('d', pathData);
-                    svgElement.appendChild(path);
+                    lowerSvgElement.appendChild(path);
                     tl.from(path, { drawSVG: 0, duration: 1 }, "+=0.1");
                 });
             }
@@ -617,9 +708,10 @@ python -m SimpleHTTPServer</code></pre>
                     const alphabet = await db.alphabets.get(characterToTest.alphabetId);
 
                     appState.currentCharForTest = characterToTest;
-                    appState.incorrectAttempts = 0; // Reset incorrect attempts
+                    appState.incorrectAttempts = 0;
+                    appState.caseForTest = Math.random() < 0.5 ? 'uppercase' : 'lowercase';
 
-                    testPrompt.textContent = `Draw the letter: "${characterToTest.name}"`;
+                    testPrompt.textContent = `Draw the ${appState.caseForTest} letter: "${characterToTest.name}"`;
                     speak(characterToTest.pronunciationKey, alphabet.languageCode);
 
                     setupCanvas();
@@ -681,9 +773,9 @@ python -m SimpleHTTPServer</code></pre>
                 // Use a named function for the click handler to allow removal
                 const handleSubmit = async () => {
                     const char = appState.currentCharForTest;
+                    const caseToTest = appState.caseForTest;
 
-                    const isCorrect = validateStrokes(userStrokes, char.strokeSVGPaths.uppercase) ||
-                                      validateStrokes(userStrokes, char.strokeSVGPaths.lowercase);
+                    const isCorrect = validateStrokes(userStrokes, char.strokeSVGPaths[caseToTest]);
 
                     try {
                         const progress = await db.userProgress.get({ characterId: char.characterId }) || { characterId: char.characterId, correctCount: 0, incorrectCount: 0 };
