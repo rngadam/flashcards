@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Juliette | Présentation pour Investisseurs</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;900&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            overflow: hidden;
+        }
+        .slide {
+            min-width: 100%;
+            transition: transform 0.5s ease-in-out;
+        }
+        .slide-container {
+            transition: transform 0.5s ease-in-out;
+        }
+        /* Custom styles for better presentation aesthetics */
+        h1 {
+            font-weight: 900;
+        }
+        h2 {
+            font-weight: 700;
+        }
+        .slide-content {
+            max-width: 1000px;
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-white flex flex-col items-center justify-center h-screen w-screen overflow-hidden">
+
+    <!-- Main container for slides -->
+    <div id="slider" class="h-full w-full">
+        <div id="slide-container" class="flex h-full w-full">
+            <!-- Slide 1: Title -->
+            <div class="slide flex-shrink-0 w-full h-full flex items-center justify-center p-8">
+                <div class="text-center slide-content">
+                    <img src="https://placehold.co/150x150/111827/FFFFFF?text=J" alt="Logo Juliette" class="mx-auto mb-8 rounded-full">
+                    <h1 class="text-6xl md:text-8xl mb-4 text-cyan-400">Juliette</h1>
+                    <p class="text-2xl md:text-3xl text-gray-300">L'apprentissage personnalisé, perfectionné.</p>
+                </div>
+            </div>
+
+            <!-- Slide 2: The Problem -->
+            <div class="slide flex-shrink-0 w-full h-full flex items-center justify-center p-8">
+                <div class="slide-content text-left">
+                    <h2 class="text-4xl md:text-5xl mb-8">Le Problème 🎓</h2>
+                    <p class="text-xl md:text-2xl mb-6 text-gray-300">L'approche « taille unique » de l'apprentissage en ligne est un échec pour les étudiants.</p>
+                    <ul class="space-y-4 text-lg md:text-xl text-gray-400 list-disc list-inside">
+                        <li><span class="font-semibold text-white">Manque de personnalisation :</span> Les applications forcent les utilisateurs à utiliser un contenu préétabli, offrant peu de flexibilité.</li>
+                        <li><span class="font-semibold text-white">Apprentissage passif :</span> Les plateformes favorisent la mémorisation par cœur plutôt que le rappel actif et le développement des compétences.</li>
+                        <li><span class="font-semibold text-white">L'effet « jardin clos » :</span> Les utilisateurs sont enfermés dans un seul écosystème, incapables d'utiliser leur propre matériel.</li>
+                        <li><span class="font-semibold text-white">La fracture numérique :</span> La nécessité d'un accès constant à Internet limite les possibilités d'apprentissage.</li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- Slide 3: The Solution -->
+            <div class="slide flex-shrink-0 w-full h-full flex items-center justify-center p-8">
+                 <div class="slide-content text-left md:text-center">
+                    <h2 class="text-4xl md:text-5xl mb-6 text-cyan-400">La Solution</h2>
+                    <p class="text-xl md:text-2xl mb-8 text-gray-300">Voici Juliette : une plateforme d'apprentissage puissante, flexible et personnalisée qui donne le contrôle à l'utilisateur.</p>
+                    <img src="https://placehold.co/800x400/1F2937/FFFFFF?text=Interface+Juliette" alt="Interface de Juliette sur tablette et téléphone" class="rounded-lg shadow-2xl mx-auto">
+                </div>
+            </div>
+
+            <!-- Slide 4: How It Works -->
+            <div class="slide flex-shrink-0 w-full h-full flex items-center justify-center p-8">
+                <div class="slide-content text-left">
+                    <h2 class="text-4xl md:text-5xl mb-8">Comment ça marche</h2>
+                     <ol class="space-y-6 text-lg md:text-xl text-gray-300">
+                        <li class="flex items-start"><span class="text-cyan-400 font-bold text-3xl mr-4">1.</span> <div><strong class="text-white">Chargez n'importe quelle donnée :</strong> Créez instantanément un jeu de cartes en collant une URL (Google Sheet, CSV...). La plateforme analyse automatiquement les données.</div></li>
+                        <li class="flex items-start"><span class="text-cyan-400 font-bold text-3xl mr-4">2.</span> <div><strong class="text-white">Personnalisez vos compétences :</strong> Définissez *comment* vous voulez apprendre avec des « compétences » comme « Lecture et écoute » ou « Pratique de l'écriture ».</div></li>
+                        <li class="flex items-start"><span class="text-cyan-400 font-bold text-3xl mr-4">3.</span> <div><strong class="text-white">Apprenez intelligemment :</strong> Notre algorithme de répétition espacée suit vos performances et priorise les cartes qui nécessitent le plus d'attention pour maximiser la rétention.</div></li>
+                    </ol>
+                </div>
+            </div>
+            
+            <!-- Slide 5: Key Features -->
+            <div class="slide flex-shrink-0 w-full h-full flex items-center justify-center p-8">
+                <div class="slide-content text-left">
+                    <h2 class="text-4xl md:text-5xl mb-8">Principales Caractéristiques</h2>
+                    <ul class="space-y-4 text-lg md:text-xl text-gray-400 list-disc list-inside">
+                        <li><span class="font-semibold text-white">Répétition Espacée Intelligente :</span> Suivi des performances sur plusieurs compétences pour chaque carte.</li>
+                        <li><span class="font-semibold text-white">Apprentissage Multimodal :</span> Supporte le texte, l'audio et la reconnaissance vocale.</li>
+                        <li><span class="font-semibold text-white">Hors ligne & Synchro Multi-appareils :</span> Fonctionne sans Internet et synchronise vos progrès dès que vous êtes en ligne.</li>
+                        <li><span class="font-semibold text-white">Analyses et Rapports Puissants :</span> Un tableau de bord détaillé pour suivre votre apprentissage.</li>
+                        <li><span class="font-semibold text-white">Pour Développeurs & Utilisateurs Avancés :</span> Exportation des données vers JSON et SQLite.</li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- Slide 6: The Market -->
+            <div class="slide flex-shrink-0 w-full h-full flex items-center justify-center p-8">
+                <div class="slide-content text-center">
+                    <h2 class="text-4xl md:text-5xl mb-6">Le Marché</h2>
+                    <p class="text-xl md:text-2xl mb-8 text-cyan-400">Le marché mondial de l'EdTech est projeté à 404 milliards de dollars d'ici 2025 (TCAC de 16,5%).</p>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 text-left">
+                        <div class="bg-gray-800 p-6 rounded-lg"><h3 class="font-bold text-xl mb-2 text-white">Apprentissage des langues</h3><p class="text-gray-400">Notre marché cible initial, un segment de plus de 50 milliards de dollars.</p></div>
+                        <div class="bg-gray-800 p-6 rounded-lg"><h3 class="font-bold text-xl mb-2 text-white">Enseignement Supérieur & K-12</h3><p class="text-gray-400">Étudiants et enseignants ayant besoin d'un outil flexible pour la mémorisation.</p></div>
+                        <div class="bg-gray-800 p-6 rounded-lg"><h3 class="font-bold text-xl mb-2 text-white">Formation en Entreprise</h3><p class="text-gray-400">Employés nécessitant d'acquérir de nouvelles compétences professionnelles.</p></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Slide 7: Business Model -->
+            <div class="slide flex-shrink-0 w-full h-full flex items-center justify-center p-8">
+                <div class="slide-content text-left">
+                    <h2 class="text-4xl md:text-5xl mb-8">Modèle Économique</h2>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        <div class="bg-gray-800 p-6 rounded-lg">
+                            <h3 class="font-bold text-xl mb-2 text-cyan-400">Gratuit</h3>
+                            <ul class="list-disc list-inside text-gray-400"><li>Jusqu'à 3 jeux</li><li>Accès complet aux modes d'apprentissage</li><li>Accès hors ligne</li></ul>
+                        </div>
+                        <div class="bg-gray-800 p-6 rounded-lg ring-2 ring-cyan-400">
+                             <h3 class="font-bold text-xl mb-2 text-cyan-400">Premium <span class="text-base text-white">(7$/mois)</span></h3>
+                            <ul class="list-disc list-inside text-gray-300"><li>Jeux illimités</li><li>Synchronisation multi-appareils</li><li>Analyses avancées</li><li>Support prioritaire</li></ul>
+                        </div>
+                        <div class="bg-gray-800 p-6 rounded-lg">
+                            <h3 class="font-bold text-xl mb-2 text-cyan-400">Institutionnel (B2B)</h3>
+                            <ul class="list-disc list-inside text-gray-400"><li>Tarifs personnalisés</li><li>Gestion centralisée</li><li>Intégration LMS</li></ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Slide 8: The Team -->
+            <div class="slide flex-shrink-0 w-full h-full flex items-center justify-center p-8">
+                <div class="slide-content text-center">
+                    <h2 class="text-4xl md:text-5xl mb-8">L'Équipe</h2>
+                    <p class="text-xl md:text-2xl mb-12 text-gray-300">Une équipe passionnée d'éducateurs et de développeurs qui se consacrent à la transformation de notre façon d'apprendre.</p>
+                     <div class="flex flex-col md:flex-row justify-center gap-12">
+                        <div class="text-center">
+                            <img src="https://placehold.co/128x128/1F2937/FFFFFF?text=RN" alt="Photo de Ricky Ng-Adam" class="rounded-full mx-auto mb-4">
+                            <h3 class="text-2xl font-bold">Ricky Ng-Adam</h3>
+                            <p class="text-cyan-400">Co-fondateur & Stratégie</p>
+                        </div>
+                        <div class="text-center">
+                             <img src="https://placehold.co/128x128/1F2937/FFFFFF?text=AM" alt="Photo de Alexandre Michaud" class="rounded-full mx-auto mb-4">
+                            <h3 class="text-2xl font-bold">Alexandre Michaud</h3>
+                            <p class="text-cyan-400">Co-fondateur & Ingénierie</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Slide 9: The Ask -->
+            <div class="slide flex-shrink-0 w-full h-full flex items-center justify-center p-8">
+                <div class="slide-content text-center">
+                    <h2 class="text-4xl md:text-5xl mb-6">La Demande</h2>
+                    <p class="text-6xl md:text-7xl font-bold text-cyan-400 my-8">500 000 $</p>
+                    <p class="text-xl md:text-2xl mb-8 text-gray-300">En financement de démarrage pour :</p>
+                    <ul class="space-y-4 text-lg md:text-xl text-gray-400 text-left max-w-2xl mx-auto list-disc list-inside">
+                        <li><span class="font-semibold text-white">Agrandir notre équipe de développement</span> pour accélérer l'intégration de nouvelles fonctionnalités.</li>
+                        <li><span class="font-semibold text-white">Investir en marketing et acquisition d'utilisateurs</span> pour établir Juliette comme un chef de file.</li>
+                        <li><span class="font-semibold text-white">Développer notre offre B2B</span> pour soutenir les clients institutionnels.</li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- Slide 10: Contact -->
+            <div class="slide flex-shrink-0 w-full h-full flex items-center justify-center p-8">
+                 <div class="slide-content text-center">
+                    <h1 class="text-5xl md:text-6xl mb-8">Construisons ensemble l'avenir de l'apprentissage.</h1>
+                     <div class="text-xl text-gray-300 space-y-8 mt-12">
+                        <div>
+                            <p class="font-bold text-2xl text-white">Ricky Ng-Adam</p>
+                            <p class="text-cyan-400">Co-fondateur & Stratégie</p>
+                            <a href="https://linkedin.com/in/rngadam" target="_blank" class="text-gray-400 hover:text-cyan-400 transition-colors">linkedin.com/in/rngadam</a>
+                        </div>
+                         <div>
+                            <p class="font-bold text-2xl text-white">Alexandre Michaud</p>
+                            <p class="text-cyan-400">Co-fondateur & Ingénierie</p>
+                            <a href="https://linkedin.com/in/alexmichaud123" target="_blank" class="text-gray-400 hover:text-cyan-400 transition-colors">linkedin.com/in/alexmichaud123</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+    
+    <!-- Navigation Controls -->
+    <div class="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-6 z-10">
+        <button id="prevBtn" class="bg-gray-700/50 hover:bg-gray-600/70 rounded-full p-3 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" /></svg>
+        </button>
+
+        <div id="dots-container" class="flex gap-2">
+            <!-- Dots will be generated by JS -->
+        </div>
+
+        <button id="nextBtn" class="bg-gray-700/50 hover:bg-gray-600/70 rounded-full p-3 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" /></svg>
+        </button>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const slideContainer = document.getElementById('slide-container');
+            const slides = document.querySelectorAll('.slide');
+            const prevBtn = document.getElementById('prevBtn');
+            const nextBtn = document.getElementById('nextBtn');
+            const dotsContainer = document.getElementById('dots-container');
+
+            let currentSlide = 0;
+            const totalSlides = slides.length;
+
+            // Create navigation dots
+            for (let i = 0; i < totalSlides; i++) {
+                const dot = document.createElement('button');
+                dot.classList.add('w-3', 'h-3', 'rounded-full', 'bg-gray-600/80', 'transition-colors', 'hover:bg-gray-400');
+                dot.addEventListener('click', () => goToSlide(i));
+                dotsContainer.appendChild(dot);
+            }
+            const dots = dotsContainer.querySelectorAll('button');
+
+            const updateControls = () => {
+                // Update dots
+                dots.forEach((dot, i) => {
+                    dot.classList.toggle('bg-cyan-400', i === currentSlide);
+                    dot.classList.toggle('bg-gray-600/80', i !== currentSlide);
+                });
+
+                // Update prev/next buttons
+                prevBtn.disabled = currentSlide === 0;
+                nextBtn.disabled = currentSlide === totalSlides - 1;
+            };
+
+            const goToSlide = (slideIndex) => {
+                currentSlide = slideIndex;
+                slideContainer.style.transform = `translateX(-${currentSlide * 100}%)`;
+                updateControls();
+            };
+
+            // Event Listeners
+            prevBtn.addEventListener('click', () => {
+                if (currentSlide > 0) {
+                    goToSlide(currentSlide - 1);
+                }
+            });
+
+            nextBtn.addEventListener('click', () => {
+                if (currentSlide < totalSlides - 1) {
+                    goToSlide(currentSlide + 1);
+                }
+            });
+
+            // Keyboard navigation
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'ArrowRight' && currentSlide < totalSlides - 1) {
+                    nextBtn.click();
+                } else if (e.key === 'ArrowLeft' && currentSlide > 0) {
+                    prevBtn.click();
+                }
+            });
+
+            // Initial state
+            goToSlide(0);
+        });
+    </script>
+</body>
+</html>
