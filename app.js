@@ -12,6 +12,7 @@ import { initConfigManager, saveCurrentConfig, saveConfig, resetDeckStats, loadS
 import { initSkillManager, renderSkillsList, openSkillDialog, saveSkill, deleteSkill, deleteAllSkills, addDefaultSkill, createPresetSkills, exportSkills, populateAllSkillSelectors, getSelectedSkills, getActiveSkills, saveTransform } from './lib/core/skill-manager.js';
 import { initCardLogic, getCardKey, getRetentionScore, getSanitizedStats, getAllCardStats, markCardAsKnown, getTimeToDue, getCurrentSkillConfig, getTextForRoles, renderSkillMastery, displayCard, flipCard, showNextCard, showPrevCard, saveCardStats } from './lib/core/card-logic.js';
 import { createDefaultSkillStats } from './lib/shared/validation.js';
+import { initDal } from './lib/core/dal.js';
 import { initVerification, checkWritingAnswer, generateMultipleChoiceOptions, checkMultipleChoiceAnswer, toggleVoiceRecognition, startVoiceRecognition, stopVoiceRecognition } from './lib/core/verification.js';
 import { initAuth, syncToServer, checkAuthStatus } from './lib/core/auth.js';
 
@@ -71,12 +72,21 @@ function initializeApp() {
         loadSelectedConfig,
     };
 
+    initDal();
     initConfigManager(dependencies);
     initSkillManager(dependencies);
     initCardLogic(dependencies);
     initVerification(dependencies);
     initAuth(dependencies);
 
+    function handleFlipAction() {
+        if (dom.multipleChoiceContainer && !dom.multipleChoiceContainer.classList.contains('hidden') && !dom.multipleChoiceContainer.classList.contains('answered')) {
+            markCardAsKnown(false);
+            showNextCard({ forceNew: true });
+        } else {
+            flipCard();
+        }
+    }
 
     // --- UI Layout & Tab Switching ---
     const updateLayout = () => {
@@ -289,7 +299,7 @@ function initializeApp() {
     if (dom.saveConfigButton) dom.saveConfigButton.addEventListener('click', saveConfig);
     if (dom.resetStatsButton) dom.resetStatsButton.addEventListener('click', resetDeckStats);
     if (dom.configSelector) dom.configSelector.addEventListener('change', () => loadSelectedConfig(dom.configSelector.value));
-    if (dom.flipCardButton) dom.flipCardButton.addEventListener('click', flipCard);
+    if (dom.flipCardButton) dom.flipCardButton.addEventListener('click', handleFlipAction);
     if (dom.nextCardButton) dom.nextCardButton.addEventListener('click', () => showNextCard());
     if (dom.prevCardButton) dom.prevCardButton.addEventListener('click', showPrevCard);
     if (dom.iKnowButton) dom.iKnowButton.addEventListener('click', async () => { await markCardAsKnown(true); await showNextCard(); });
@@ -776,7 +786,7 @@ function initializeApp() {
             case 'keydown':
                 switch (e.code) {
                     case 'Enter': { if (!dom.nextCardButton.classList.contains('hidden')) showNextCard(); break; }
-                    case 'Space': { e.preventDefault(); if (dom.card && !dom.card.classList.contains('flipped')) flipCard(); break; }
+                    case 'Space': { e.preventDefault(); if (dom.card && !dom.card.classList.contains('flipped')) handleFlipAction(); break; }
                     case 'ArrowRight': { showNextCard(); break; }
                     case 'ArrowLeft': { showPrevCard(); break; }
                     case 'KeyK': { markCardAsKnown(true); showNextCard(); break; }
@@ -837,7 +847,7 @@ function initializeApp() {
                 dom.card.style.transform = '';
             }
         } else {
-            if (Math.abs(diffY) > state.verticalDragThreshold) flipCard();
+            if (Math.abs(diffY) > state.verticalDragThreshold) handleFlipAction();
             dom.card.style.transform = '';
         }
     }
@@ -1023,13 +1033,13 @@ function initializeApp() {
         console.warn('Failed to re-init verification with updated dependencies', e);
     }
 
-    if ('serviceWorker' in navigator) {
-        window.addEventListener('load', () => {
-            navigator.serviceWorker.register('/sw.js')
-                .then(reg => console.log('ServiceWorker registration successful with scope: ', reg.scope))
-                .catch(err => console.log('ServiceWorker registration failed: ', err));
-        });
-    }
+    // if ('serviceWorker' in navigator) {
+    //     window.addEventListener('load', () => {
+    //         navigator.serviceWorker.register('/sw.js')
+    //             .then(reg => console.log('ServiceWorker registration successful with scope: ', reg.scope))
+    //             .catch(err => console.log('ServiceWorker registration failed: ', err));
+    //     });
+    // }
 }
 
 // --- Initialize The App ---

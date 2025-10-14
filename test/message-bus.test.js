@@ -26,6 +26,7 @@ describe('Message Bus and DAL', () => {
     });
 
     it('DAL.dispatch resolves on success message', async () => {
+        Bus.subscribe('data:config:load', () => {}); // Dummy subscriber
         const p = DAL.dispatch('data:config:load', { key: 'k' });
         // Simulate adapter responding
         Bus.publish('data:config:load:success', { key: 'k', value: { a: 1 } });
@@ -34,6 +35,7 @@ describe('Message Bus and DAL', () => {
     });
 
     it('DAL.dispatch rejects on failure message', async () => {
+        Bus.subscribe('data:config:load', () => {}); // Dummy subscriber
         const p = DAL.dispatch('data:config:load', { key: 'k' }).catch(e => e);
         Bus.publish('data:config:load:failure', { error: new Error('boom') });
         const err = await p;
