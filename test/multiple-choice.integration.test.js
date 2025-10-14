@@ -1,21 +1,22 @@
 import { expect } from 'chai';
-import jsdomGlobal from 'jsdom-global';
+import { JSDOM } from 'jsdom';
 
 // bring up a minimal DOM from index.html
 import fs from 'fs';
 import path from 'path';
 
 describe('Multiple Choice integration (DOM)', function () {
-  let cleanup;
   before(function () {
-    cleanup = jsdomGlobal();
     const html = fs.readFileSync(path.resolve('./index.html'), 'utf8');
-    document.body.innerHTML = html;
+    const dom = new JSDOM(html, { url: 'http://localhost' });
+    global.window = dom.window;
+    global.document = dom.window.document;
     // load app module after DOM is ready
   });
 
   after(function () {
-    if (cleanup) cleanup();
+    delete global.window;
+    delete global.document;
   });
 
   it('should generate multiple choice options and handle a click', async function () {

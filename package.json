@@ -25,7 +25,7 @@
     "sinon": "^21.0.0",
     "sql.js": "^1.13.0",
     "nodemon": "^3.0.1"
-    ,"jsdom-global": "^3.0.0"
+
   },
   "dependencies": {
     "connect-sqlite3": "^0.9.13",
