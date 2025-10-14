@@ -1,6 +1,5 @@
 import { expect } from 'chai';
 import jsdomGlobal from 'jsdom-global';
-import sinon from 'sinon';
 
 // bring up a minimal DOM from index.html
 import fs from 'fs';
@@ -21,7 +20,6 @@ describe('Multiple Choice integration (DOM)', function () {
 
   it('should generate multiple choice options and handle a click', async function () {
     // Import the parts we need
-    const verification = await import('../lib/core/verification.js');
     const dom = await import('../lib/ui/dom-elements.js');
     const stateMod = await import('../lib/core/state.js');
 
@@ -43,8 +41,6 @@ describe('Multiple Choice integration (DOM)', function () {
       configSelector.value = 'default';
     }
 
-    // Mock getCurrentSkillConfig to return validation column role pointing to index 1
-    const skillModule = await import('../lib/core/skill-manager.js');
     // Instead of full skill manager wiring, stub getCurrentSkillConfig used by verification
     const verificationModule = await import('../lib/core/verification.js');
 
