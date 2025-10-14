@@ -17,11 +17,15 @@
     "ttsBackColumn": "BASE_LANGUAGE",
     "ttsOnHotkeyOnly": false,
     "transforms": {
-        "front": {
-            "TARGET_LANGUAGE": {
-                "casing": "alternate"
-            }
+      "front": {
+        "TARGET_LANGUAGE": {
+          "hideString": false,
+          "hideStringColumn": "",
+          "suppressParentheses": false,
+          "font": "Random",
+          "casing": "random"
         }
+      }
     }
   },
   {
@@ -37,7 +41,11 @@
     "validationColumn": "TARGET_LANGUAGE",
     "ttsFrontColumn": "BASE_LANGUAGE",
     "ttsBackColumn": "TARGET_LANGUAGE",
-    "ttsOnHotkeyOnly": false
+    "ttsOnHotkeyOnly": false,
+    "transforms": {
+      "front": {},
+      "back": {}
+    }
   },
   {
     "id": "5b414b7c8891dd8384c20e7017a16141aabe9d4bc7379de712dca86e7d527b16",
@@ -55,7 +63,11 @@
     "validationColumn": "none",
     "ttsFrontColumn": "none",
     "ttsBackColumn": "EXAMPLE_SENTENCE",
-    "ttsOnHotkeyOnly": false
+    "ttsOnHotkeyOnly": false,
+    "transforms": {
+      "front": {},
+      "back": {}
+    }
   },
   {
     "id": "a771fa3da1b0947bbd9083ea8d8df9a9ae29fd04fcb4cc89f38bc97d5aeba8a4",
@@ -71,7 +83,11 @@
     "validationColumn": "none",
     "ttsFrontColumn": "TARGET_LANGUAGE",
     "ttsBackColumn": "COMMON_COLLOCATION",
-    "ttsOnHotkeyOnly": false
+    "ttsOnHotkeyOnly": false,
+    "transforms": {
+      "front": {},
+      "back": {}
+    }
   },
   {
     "id": "840c4cbbeb3b4dd2f708f1f943498a60cf442b214b2005348b22427977a8107d",
@@ -89,7 +105,11 @@
     "validationColumn": "TARGET_LANGUAGE",
     "ttsFrontColumn": "BASE_LANGUAGE",
     "ttsBackColumn": "TARGET_LANGUAGE",
-    "ttsOnHotkeyOnly": false
+    "ttsOnHotkeyOnly": false,
+    "transforms": {
+      "front": {},
+      "back": {}
+    }
   },
   {
     "id": "bca6f1f962fa4d6398fcc26ca4dc738bd69c45fdb41be242bd2f3789f2266a64",
@@ -107,7 +127,19 @@
     "validationColumn": "RELATED_WORD",
     "ttsFrontColumn": "TARGET_LANGUAGE",
     "ttsBackColumn": "RELATED_WORD",
-    "ttsOnHotkeyOnly": false
+    "ttsOnHotkeyOnly": false,
+    "transforms": {
+      "front": {
+        "TARGET_LANGUAGE": {
+          "hideString": false,
+          "hideStringColumn": "",
+          "suppressParentheses": false,
+          "font": "Random",
+          "casing": "random"
+        }
+      },
+      "back": {}
+    }
   },
   {
     "id": "e7d1afaee19dee8fe97256f3026773b7d1124761ec975e64f00ef4d9307e9a7f",
@@ -122,9 +154,21 @@
       "PRONUNCIATION"
     ],
     "validationColumn": "TARGET_LANGUAGE",
-    "ttsFrontColumn": "none",
+    "ttsFrontColumn": "",
     "ttsBackColumn": "TARGET_LANGUAGE",
-    "ttsOnHotkeyOnly": false
+    "ttsOnHotkeyOnly": false,
+    "transforms": {
+      "front": {
+        "TARGET_LANGUAGE": {
+          "hideString": false,
+          "hideStringColumn": "",
+          "suppressParentheses": false,
+          "font": "Random",
+          "casing": "random"
+        }
+      },
+      "back": {}
+    }
   },
   {
     "id": "71d97424906413da6a9d6111aa8776dcf4995ea5a9a07557b5965e1736343da0",
