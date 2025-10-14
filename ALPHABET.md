@@ -185,9 +185,7 @@ You are an expert front-end web developer. Your goal is to create a single, self
 
 # Technology Stack & CDN Links
 
-You must use the following JavaScript libraries. Include them in the `<head>` section of the HTML file using these exact CDN links.
-```html
 <script src="https://cdn.jsdelivr.net/npm/dexie@4.0.1/dist/dexie.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/gsap@3.13.0/dist/gsap.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/gsap@3.13.0/dist/DrawSVGPlugin.min.js"></script>
-```
+<script src="https://cdn.jsdelivr.net/npm/svg-path-parser@1.1.0/dist/svg-path-parser.min.js"></script>
